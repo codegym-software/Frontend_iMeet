@@ -1,0 +1,256 @@
+:root {
+  --bg-color: #ffffff;
+  --component-bg: #f1f3f4;
+  --hover-bg: #e5e5e5;
+  --border-color: #dadce0;
+  --text-color: #202124;
+  --muted-color: #5f6368;
+  --accent-color: #1a73e8;
+  --accent-hover: #1557b0;
+  --card-color: #ffffff;
+}
+
+[data-theme="dark"] {
+  --bg-color: #202124;
+  --component-bg: #303134;
+  --hover-bg: #35363a;
+  --border-color: #5f6368;
+  --text-color: #e8eaed;
+  --muted-color: #9aa0a6;
+  --accent-color: #1a73e8;
+  --accent-hover: #1557b0;
+  --card-color: #303134;
+}
+
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  height: 100vh;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  padding: 0 20px;
+}
+
+.main-content {
+  flex: 1;
+  overflow: hidden;
+  background: var(--bg-color); /* 🎯 dùng biến */
+  height: calc(100vh - 64px);
+  margin-top: 64px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Left Panel - Chiếm 30% chiều rộng */
+.left-panel {
+  flex: 0 0 30%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 8px 0;
+  background: transparent;
+}
+
+/* Right Panel - Chiếm 70% chiều rộng */
+.right-panel {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  padding: 8px 0;
+  background: var(--bg-color); /* 🎯 dùng biến */
+  border-radius: 8px;
+}
+
+/* Mini Calendar */
+.mini-calendar {
+  margin: 0;
+  padding: 0;
+}
+
+.calendar-container {
+  background: var(--component-bg);
+  border-radius: 8px;
+  padding: 16px;
+  border: none;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.calendar-header .month-display {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-color);
+}
+
+.calendar-header .nav-button {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-color);
+  transition: all 0.2s;
+}
+
+.calendar-header .nav-button:hover {
+  background: var(--hover-bg);
+  border-color: var(--bg-color);
+}
+
+.search-section,
+.time-insight,
+.other-schedule {
+  background: var(--component-bg);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  border: none;
+  color: var(--text-color);
+}
+
+.search-button {
+  background: var(--component-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  padding: 12px 16px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  color: var(--text-color);
+  font-weight: 400;
+}
+
+.search-button:hover {
+  background: var(--hover-bg);
+  border-color: var(--scrollbar-thumb-hover);
+}
+
+.time-table {
+  background: var(--component-bg);
+  border-radius: 8px;
+  padding: 16px;
+  height: 100%;
+  color: var(--text-color);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .left-panel {
+    flex: 0 0 35%;
+    max-width: 350px;
+  }
+
+  .container {
+    gap: 12px;
+    padding: 0 15px;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    padding-top: 56px;
+  }
+
+  .container {
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 10px;
+  }
+
+  .left-panel {
+    flex: none;
+    max-width: 100%;
+    height: auto;
+    max-height: 50vh;
+  }
+
+  .right-panel {
+    flex: none;
+    height: 50vh;
+    background: var(--bg-color); /* 🎯 */
+    border-radius: 8px;
+  }
+
+  .main-content {
+    height: calc(100vh - 56px);
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    gap: 8px;
+    padding: 0 8px;
+  }
+
+  .left-panel,
+  .right-panel {
+    padding: 4px 0;
+  }
+
+  .calendar-container,
+  .search-section,
+  .time-insight,
+  .other-schedule {
+    padding: 12px;
+    border-radius: 6px;
+  }
+}
