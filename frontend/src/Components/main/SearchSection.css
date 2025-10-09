@@ -1,0 +1,45 @@
+/* 🎯 GOOGLE CALENDAR STYLE - DARK THEME */
+.search-section {
+  background: var(--component-bg);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.search-button {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  padding: 12px 20px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  color: var(--muted-color);
+  font-weight: 400;
+}
+
+.search-button:hover {
+  background: var(--hover-bg);
+  border-color: var(--muted-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.search-button:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  background: var(--component-bg);
+}
+
+.search-text {
+  flex: 1;
+  text-align: left;
+}
+
+/* Search icon color */
+.search-icon {
+  color: var(--muted-color);
+}
