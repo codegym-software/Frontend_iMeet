@@ -209,7 +209,9 @@ class AdminService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      const json = await response.json();
+      // Backend wraps response in ApiResponse { success, message, data }
+      return json.data || [];
     } catch (error) {
       console.error('Error fetching rooms:', error);
       throw error;
@@ -309,10 +311,10 @@ class AdminService {
 
   // ===== DEVICE MANAGEMENT METHODS =====
 
-  // Lấy danh sách thiết bị (admin)
+  // Lấy danh sách thiết bị (admin) - TẤT CẢ không phân trang
   async getDevices() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/devices`, {
+      const response = await fetch(`${API_BASE_URL}/api/devices/all`, {
         method: 'GET',
         headers: this.getHeaders()
       });
@@ -321,15 +323,14 @@ class AdminService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Backend wraps responses with ApiResponse<T> { success, message, data }
+      // Backend wraps responses with ApiResponse<List<DeviceResponse>> { success, message, data }
       const json = await response.json();
-      // Expect json.data to be a page or a list. If it's a page, try to extract content
+      // json.data should be an array of all devices
       if (!json) return [];
       const payload = json.data;
       if (!payload) return [];
-      // If payload has 'content' (Page), return that; if it's an array, return it directly
+      // Return the array directly
       if (Array.isArray(payload)) return payload;
-      if (payload.content && Array.isArray(payload.content)) return payload.content;
       // Otherwise, return empty array as fallback
       return [];
     } catch (error) {
@@ -352,17 +353,10 @@ class AdminService {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      // Some endpoints wrap result in ApiResponse; others may return empty body
-      const text = await response.text();
-      if (!text) return { message: 'success' };
-      try {
-        const parsed = JSON.parse(text);
-        // If wrapped in ApiResponse, return parsed.data or parsed
-        if (parsed && parsed.data) return parsed.data;
-        return parsed;
-      } catch (e) {
-        return { message: 'success' };
-      }
+      // Backend returns ApiResponse<DeviceResponse> with structure: { success, message, data }
+      const json = await response.json();
+      // Return the full response so DeviceList can access json.data
+      return json;
     } catch (error) {
       console.error('Error creating device:', error);
       throw error;
@@ -383,15 +377,10 @@ class AdminService {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      const text = await response.text();
-      if (!text) return { message: 'success' };
-      try {
-        const parsed = JSON.parse(text);
-        if (parsed && parsed.data) return parsed.data;
-        return parsed;
-      } catch (e) {
-        return { message: 'success' };
-      }
+      // Backend returns ApiResponse<DeviceResponse> with structure: { success, message, data }
+      const json = await response.json();
+      // Return the full response so DeviceList can access json.data
+      return json;
     } catch (error) {
       console.error('Error updating device:', error);
       throw error;

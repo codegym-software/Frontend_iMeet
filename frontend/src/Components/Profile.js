@@ -314,6 +314,9 @@ export default function Profile({ onSave }) {
             
             // Cập nhật context để TopBar tự động cập nhật
             updateUser({ avatarUrl: e.target?.result });
+            
+            // Dispatch custom event để các component khác cập nhật avatar
+            window.dispatchEvent(new Event('avatarUpdated'));
           }
           
           // Gửi lên server để lưu database

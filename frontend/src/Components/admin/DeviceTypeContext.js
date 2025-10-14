@@ -23,14 +23,15 @@ export const DeviceTypeProvider = ({ children }) => {
   useEffect(() => {
     // Simulate API call
     setTimeout(() => {
-      // Use fixed device types matching the server ENUM: Mic, Cam, Laptop, Bảng, Màn hình, Khác
+      // Use fixed device types matching the server ENUM: Mic, Cam, Laptop, Bảng, Màn hình, Máy chiếu, Khác
       const initialData = [
         { id: 1, name: 'Mic', description: 'Microphone / Mic', createdAt: '2024-01-01' },
         { id: 2, name: 'Cam', description: 'Camera / Cam', createdAt: '2024-01-01' },
         { id: 3, name: 'Laptop', description: 'Laptop', createdAt: '2024-01-01' },
         { id: 4, name: 'Bảng', description: 'Bảng (whiteboard/board)', createdAt: '2024-01-01' },
         { id: 5, name: 'Màn hình', description: 'Màn hình', createdAt: '2024-01-01' },
-        { id: 6, name: 'Khác', description: 'Thiết bị khác', createdAt: '2024-01-01' }
+        { id: 6, name: 'Máy chiếu', description: 'Máy chiếu / Projector', createdAt: '2024-01-01' },
+        { id: 7, name: 'Khác', description: 'Thiết bị khác', createdAt: '2024-01-01' }
       ];
       setDeviceTypes(initialData);
       setLoading(false);
