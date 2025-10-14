@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import './Login.css'
-import '../../Components/common/PasswordToggleStyles.css'
-import ImgAsset from '../../assets'
+import './common/PasswordToggleStyles.css'
+import ImgAsset from '../public'
 import { Link, useHistory } from 'react-router-dom' 
-import { useAuth } from '../../contexts/AuthContext'
-import calendarLogo from '../../assets/calendar-logo.png'
+import { useAuth } from '../contexts/AuthContext'
+import calendarLogo from '../public/calendar-logo.png'
 
 export default function Login() {
 	const [email, setEmail] = useState('');
@@ -62,12 +62,17 @@ export default function Login() {
 					<div className='logo-section'>
 						<div className='logo'>
 							<img src={calendarLogo} alt='iMeet' className='logo-img' />
+							<div className='logo-text-container'>
+								<span className='logo-text'>iMeet</span>
+								<p className='logo-subtitle'>Hệ thống đặt lịch họp trực tuyến</p>
+							</div>
 						</div>
 					</div>
 					
 					<div className='login-header'>
-						<span className='welcome-text'>iMeet</span>
+						<span className='welcome-text'>Welcome back!</span>
 					</div>
+					<span className='sub-text'>Enter your credentials to access your account</span>
 
 					<form onSubmit={handleLogin}>
 						{/* Username/Email */}
@@ -91,7 +96,7 @@ export default function Login() {
 							<div className="password-input-container">
 								<input
 									id="password"
-type={showPassword ? "text" : "password"}
+									type={showPassword ? "text" : "password"}
 									placeholder="Enter your password"
 									className='input-field input-password'
 									value={password}
