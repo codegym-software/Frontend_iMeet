@@ -15,29 +15,31 @@
   left: 0;
   width: 100%;
   height: 64px;
-  background: var(--component-bg); /* nền */
+  background: var(--component-bg);
   border-bottom: 1px solid var(--border-color);
   z-index: 1000;
   display: flex;
   align-items: center;
   color: var(--text-color);
+
 }
 
 .top-bar-content {
-  width: 100%;
   display: flex;
   align-items: center;
+  width: 100%;
+  gap: 0;
   justify-content: space-between;
-  padding: 10px 5px;
-  margin: 0 auto;
 }
 
 /* Left Section */
 .top-bar-left {
   display: flex;
   align-items: center;
-  gap: 16px;
   flex: 1;
+  gap: 12px;
+  justify-content: flex-start;
+  min-width: 0; /* Allow shrinking */
 }
 
 .logo-section {
@@ -82,12 +84,15 @@
   letter-spacing: -0.5px;
 }
 
+/* Ensure date navigation doesn't push too far */
 .date-navigation {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-left: 16px;
+  margin-right: 0; /* Reset negative margin */
 }
+
 
 .nav-btn {
   padding: 8px 16px;
@@ -139,16 +144,16 @@
 
 /* Center Section - Search */
 .top-bar-center {
-  flex: 1;
   display: flex;
-  justify-content: center;
-  max-width: 600px;
+  align-items: center;
+  flex: 0 0 auto; /* Don't grow or shrink */
+  margin: 0 40px; /* Balanced spacing on both sides */
 }
 
 .search-container {
-  position: relative;
-  width: 100%;
-  max-width: 1200px;
+  flex: 1;
+  max-width: 500px;
+  margin-left: auto; /* Push search to the right */
 }
 
 .search-icon {
@@ -162,7 +167,7 @@
 
 .search-input {
   width: 100%;
-  padding: 10px 16px 10px 40px;
+  padding: 12px 16px 12px 40px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 14px;
@@ -183,12 +188,14 @@
 }
 
 /* Right Section */
+/* Right section - now contains search and other elements */
 .top-bar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
   flex: 1;
   justify-content: flex-end;
+  gap: 16px;
+  min-width: 0; /* Allow shrinking */
 }
 
 /* View Selector Dropdown */
@@ -237,7 +244,8 @@
 .view-dropdown {
   position: absolute;
   top: 100%;
-  left: 0;
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--component-bg);
   border: 2px solid var(--border-color);
   border-radius: 12px;
@@ -246,8 +254,10 @@
   z-index: 1001;
   margin-top: 8px;
   overflow: hidden;
-  animation: dropdownFadeIn 0.2s ease-out;
+  animation: dropdownFadeIn 0.15s ease-out forwards;
+  opacity: 0;
 }
+
 
 .dropdown-item {
   display: flex;
@@ -272,7 +282,7 @@
 
 .dropdown-item:hover {
   background-color: var(--hover-bg);
-  transform: translateX(4px);
+  transform: translateX(0) !important;
 }
 
 .dropdown-item.active {
@@ -505,16 +515,30 @@
 .profile-dropdown {
   position: absolute;
   top: 100%;
-  right: 0;
+  right: 0; /* Căn phải với container */
+  left: auto; /* Reset left */
+  transform: none; /* Bỏ transform */
   background: var(--card-color);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   min-width: 280px;
-  z-index: 1000;
+  z-index: 1002;
   margin-top: 8px;
   overflow: hidden;
-  animation: dropdownFadeIn 0.2s ease-out;
+  animation: profileDropdownFadeIn 0.15s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes profileDropdownFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .user-info {
@@ -600,15 +624,166 @@
   background: var(--danger-hover);
 }
 
+/* Create Button Container - Positioned between date navigation and search */
+.create-button-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.create-button.primary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  background: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  height: 52px;
+  white-space: nowrap;
+  min-width: 140px;
+  justify-content: center;
+}
+
+
+.create-button.primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+.create-button.primary:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+
+
+.create-text {
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  font-size: 15px;
+  text-transform: uppercase;
+}
+
+.create-button-extended {
+  position: relative;
+}
+
+
+
+
+
+/* Create Dropdown */
+.create-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  min-width: 220px;
+  z-index: 1000;
+  margin-top: 12px;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.2s ease-out;
+}
+
+.create-dropdown .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 20px;
+  border: none;
+  background: var(--card-color);
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.create-dropdown .dropdown-item:last-child {
+  border-bottom: none;
+}
+
+
+.create-dropdown .dropdown-item:hover {
+  background-color: var(--hover-bg);
+  transform: translateX(8px);
+}
+
+.create-dropdown .item-icon {
+  font-size: 18px;
+  width: 20px;
+  text-align: center;
+  color: var(--accent-color);
+}
+
+/* Updated layout structure */
+.top-bar-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 0;
+}
+
+/* Left section with date navigation */
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 12px;
+  padding-right: 20px;
+}
+
+/* Center section with create button and search */
+.top-bar-center {
+  display: flex;
+  align-items: center;
+  flex: 2;
+  justify-content: flex-start;
+  gap: 8px;
+  max-width: 800px;
+  margin: 0;
+  padding-left: 40px;
+}
+
+/* Search container takes remaining space */
+.search-container {
+  flex: 1;
+  max-width: 100%;
+}
+
+/* Right section */
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
 /* Animations */
+/* Animation fixed */
 @keyframes dropdownFadeIn {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateX(-50%) translateY(-5px);
   }
-  to {
+  100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(-50%) translateY(0);
   }
 }
 
@@ -618,11 +793,28 @@
     font-size: 18px;
     min-width: 180px;
   }
+  
+  .top-bar-center {
+    gap: 20px;
+  }
+  
+  .create-button-container {
+    margin: 0 20px;
+  }
 }
 
 @media (max-width: 1024px) {
   .top-bar-content {
     padding: 0 12px;
+  }
+  
+  .top-bar-center {
+    max-width: 600px;
+    gap: 16px;
+  }
+  
+  .create-button-container {
+    margin: 0 16px;
   }
 }
 
@@ -646,10 +838,38 @@
   .user-profile {
     padding: 4px;
   }
+  
+  .create-button .create-text {
+    display: none;
+  }
+  
+  .create-button {
+    padding: 12px;
+  }
+  
+  .create-icon {
+    font-size: 20px;
+  }
+  
+  .top-bar-center {
+    gap: 12px;
+  }
+  
+  .create-button-container {
+    margin: 0 12px;
+  }
 }
 
 @media (max-width: 480px) {
   .view-selector-text {
     display: none;
+  }
+  
+  .top-bar-center {
+    gap: 8px;
+  }
+  
+  .create-button-container {
+    margin: 0 8px;
   }
 }

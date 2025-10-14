@@ -7,6 +7,7 @@ export { default as DeviceList } from './DeviceList';
 export { default as DeviceTypeContext, DeviceTypeProvider, useDeviceTypes } from './DeviceTypeContext';
 export { default as HomePage } from './HomePage';
 export { default as Layout } from './Layout';
+export { default as MeetingList } from './MeetingList';
 export { default as RoomForms } from './RoomForms';
 export { default as RoomManagement } from './RoomManagement';
 export { default as Sidebar } from './Sidebar';

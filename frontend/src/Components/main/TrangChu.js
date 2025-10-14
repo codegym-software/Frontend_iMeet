@@ -6,15 +6,16 @@ import './TrangChu.css';
 import TopBar from './TopBar';
 import MiniCalendar from './MiniCalendar';
 import SearchSection from './SearchSection';
-import TimeInsight from './TimeInsight';
+import UpcomingMeetings from './UpcomingMeetings';
 import OtherSchedule from './OtherSchedule';
-import TimeTable from './TimeTable';
+import TimeTable from './MainCalendar/TimeTable';
 
 const Main = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewType, setViewType] = useState('day');
   const [theme, setTheme] = useState('light');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const history = useHistory();
 
   useEffect(() => {
@@ -40,6 +41,11 @@ const Main = () => {
     setCurrentMonth(newMonth);
   };
 
+  // Hàm xử lý khi tạo meeting thành công
+  const handleMeetingCreated = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   return (
     <div className="main">
       <TopBar 
@@ -49,7 +55,8 @@ const Main = () => {
         onViewChange={handleViewChange}
         theme={theme}
         toggleTheme={toggleTheme}
-        history={history} // Thêm history prop
+        history={history}
+        onMeetingCreated={handleMeetingCreated}
       />
       
       <div className="main-content">
@@ -89,7 +96,7 @@ const Main = () => {
             </div>
 
             <SearchSection />
-            <TimeInsight />
+            <UpcomingMeetings />
             <OtherSchedule />
           </div>
           
@@ -97,7 +104,8 @@ const Main = () => {
           <div className="right-panel">
             <TimeTable 
               selectedDate={selectedDate} 
-              viewType={viewType} 
+              viewType={viewType}
+              refreshTrigger={refreshTrigger}
             />
           </div>
         </div>
