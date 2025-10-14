@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useHistory } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import './Signup.css';
-import './common/PasswordToggleStyles.css';
-import ImgAsset from '../public';
-import calendarLogo from '../public/calendar-logo.png';
+import '../../Components/common/PasswordToggleStyles.css';
+import ImgAsset from '../../assets';
+import calendarLogo from '../../assets/calendar-logo.png';
 
 export default function Signup() {
   const [formData, setFormData] = useState({

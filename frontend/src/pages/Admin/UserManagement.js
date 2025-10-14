@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import adminService from '../../services/adminService';
 import { usePreloadedData } from './DataPreloaderContext';
 import { useActivity } from './ActivityContext';
+import { FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
 
 const UserManagement = () => {
   const { addActivity } = useActivity();
@@ -427,17 +428,23 @@ const UserManagement = () => {
         <button 
           onClick={() => setShowAddForm(true)}
           style={{ 
-            padding: '12px 24px', 
+            padding: '12px', 
             backgroundColor: '#007bff', 
             color: 'white', 
             border: 'none', 
             borderRadius: '8px',
             cursor: 'pointer',
-            fontSize: '16px',
-            fontWeight: '500'
+            fontSize: '20px',
+            fontWeight: '500',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '48px',
+            height: '48px'
           }}
+          title="Thêm người dùng mới"
         >
-          Thêm Người Dùng
+          <FaPlus />
         </button>
       </div>
 
@@ -695,33 +702,41 @@ const UserManagement = () => {
                       <button 
                         onClick={() => handleEdit(user)}
                         style={{ 
-                          padding: '8px 16px', 
+                          padding: '8px 12px', 
                           backgroundColor: '#007bff', 
                           color: 'white', 
                           border: 'none', 
                           borderRadius: '6px',
                           marginRight: '8px',
                           cursor: 'pointer',
-                          fontSize: '14px'
+                          fontSize: '16px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
                         }}
+                        title="Chỉnh sửa"
                       >
-                        Sửa
+                        <FaEdit />
                       </button>
                     )}
                     {/* Hiển thị nút Xóa cho tất cả users (trừ admin) */}
                     <button 
                       onClick={() => handleDelete(user.id)}
                       style={{ 
-                        padding: '8px 16px', 
+                        padding: '8px 12px', 
                         backgroundColor: '#dc3545', 
                         color: 'white', 
                         border: 'none', 
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        fontSize: '14px'
+                        fontSize: '16px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
                       }}
+                      title="Xóa"
                     >
-                      Xóa
+                      <FaTrash />
                     </button>
                   </td>
                 </tr>
@@ -841,9 +856,42 @@ const UserManagement = () => {
             width: '600px',
             maxWidth: '90vw',
             maxHeight: '90vh',
-            overflow: 'auto'
+            overflow: 'auto',
+            position: 'relative'
           }}>
-            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px' }}>
+            <button
+              onClick={() => setShowAddForm(false)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: 'none',
+                border: 'none',
+                fontSize: '28px',
+                color: '#999',
+                cursor: 'pointer',
+                padding: '0',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+                e.currentTarget.style.color = '#333';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#999';
+              }}
+              title="Đóng"
+            >
+              ×
+            </button>
+            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px', paddingRight: '40px' }}>
               Thêm Người Dùng Mới
             </h3>
             
@@ -1070,10 +1118,43 @@ const UserManagement = () => {
             backgroundColor: 'white', 
             borderRadius: '12px', 
             padding: '30px', 
-            width: '500px',
-            maxWidth: '90vw'
+            width: '600px',
+            maxWidth: '90vw',
+            position: 'relative'
           }}>
-            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px' }}>
+            <button
+              onClick={() => setShowEditForm(false)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: 'none',
+                border: 'none',
+                fontSize: '28px',
+                color: '#999',
+                cursor: 'pointer',
+                padding: '0',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+                e.currentTarget.style.color = '#333';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#999';
+              }}
+              title="Đóng"
+            >
+              ×
+            </button>
+            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px', paddingRight: '40px' }}>
               Chỉnh sửa Người Dùng
             </h3>
             

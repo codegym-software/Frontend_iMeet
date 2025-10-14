@@ -6,7 +6,7 @@ import './TopBar.css';
 import { MdSettings } from 'react-icons/md';
 import { IoSunny, IoMoon } from 'react-icons/io5';
 import { FaPlus } from 'react-icons/fa';
-import calendarLogo from '../../public/calendar-logo.png';
+import calendarLogo from '../../assets/calendar-logo.png';
 import MeetingForm from './MeetingForm'; // Import MeetingForm
 
 const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, toggleTheme, onCreateEvent, onMeetingCreated }) => {

@@ -3,17 +3,22 @@ import { usePreloadedData } from './DataPreloaderContext';
 import { useActivity } from './ActivityContext';
 import RoomForms from './RoomForms';
 import roomService from '../../services/roomService';
+import { FaEdit, FaTrash, FaPlus, FaLaptop } from 'react-icons/fa';
 
 // Component to display devices in a room with quantities
 const RoomDevicesList = ({ room, devices }) => {
   const [deviceInfo, setDeviceInfo] = useState({});
   const [loading, setLoading] = useState(true);
+  const [showAllDevices, setShowAllDevices] = useState(false);
+  const MAX_VISIBLE_DEVICES = 3;
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadDeviceInfo = async () => {
       try {
         const resp = await roomService.getDevicesByRoom(room.id);
-        if (resp && resp.success && Array.isArray(resp.data)) {
+        if (isMounted && resp && resp.success && Array.isArray(resp.data)) {
           const deviceMap = {};
           resp.data.forEach(rd => {
             const device = devices.find(d => d.id === rd.deviceId);
@@ -25,70 +30,243 @@ const RoomDevicesList = ({ room, devices }) => {
           setDeviceInfo(deviceMap);
         }
       } catch (err) {
-        console.error('Error loading device info:', err);
+        if (isMounted) {
+          console.error('Error loading device info:', err);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     if (room.id) {
       loadDeviceInfo();
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [room.id, devices]);
 
   if (loading) {
     return (
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ fontSize: '14px', fontWeight: '500', color: '#495057', marginBottom: '6px' }}>
-          🔧 Thiết bị: Đang tải...
-        </div>
-      </div>
+      <span style={{ fontSize: '13px', color: '#999' }}>Đang tải...</span>
     );
   }
 
   const deviceIds = Object.keys(deviceInfo);
   if (deviceIds.length === 0) return null;
 
+  const visibleDevices = deviceIds.slice(0, MAX_VISIBLE_DEVICES);
+  const hasMore = deviceIds.length > MAX_VISIBLE_DEVICES;
+
   return (
-    <div style={{ marginBottom: '16px' }}>
-      <div style={{ fontSize: '14px', fontWeight: '500', color: '#495057', marginBottom: '8px' }}>
-        🔧 Thiết bị ({deviceIds.length}):
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        {deviceIds.map(deviceId => {
+    <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+        {visibleDevices.map(deviceId => {
           const info = deviceInfo[deviceId];
           return (
-            <div key={deviceId} style={{
-              display: 'flex',
+            <span key={deviceId} style={{
+              display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 12px',
-              backgroundColor: '#f8f9fa',
-              borderRadius: '6px',
-              border: '1px solid #e9ecef'
+              gap: '4px',
+              padding: '4px 10px',
+              backgroundColor: '#e3f2fd',
+              color: '#1976d2',
+              borderRadius: '16px',
+              fontSize: '12px',
+              fontWeight: '500',
+              border: '1px solid #bbdefb'
             }}>
+              {info.name}
               <span style={{
-                fontSize: '13px',
-                color: '#495057',
-                fontWeight: '500'
-              }}>
-                {info.name}
-              </span>
-              <span style={{
-                fontSize: '12px',
-                color: '#6c757d',
-                backgroundColor: '#e9ecef',
-                padding: '2px 8px',
-                borderRadius: '12px',
+                backgroundColor: '#1976d2',
+                color: 'white',
+                padding: '1px 6px',
+                borderRadius: '10px',
+                fontSize: '11px',
                 fontWeight: '600'
               }}>
-                x{info.quantity}
+                {info.quantity}
               </span>
-            </div>
+            </span>
           );
         })}
+        {hasMore && (
+          <span 
+            onClick={() => setShowAllDevices(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '4px 10px',
+              backgroundColor: '#f5f5f5',
+              color: '#666',
+              borderRadius: '16px',
+              fontSize: '12px',
+              fontWeight: '600',
+              border: '1px solid #ddd',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#e0e0e0';
+              e.currentTarget.style.color = '#333';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#f5f5f5';
+              e.currentTarget.style.color = '#666';
+            }}
+            title={`Xem thêm ${deviceIds.length - MAX_VISIBLE_DEVICES} thiết bị`}
+          >
+            +{deviceIds.length - MAX_VISIBLE_DEVICES}
+          </span>
+        )}
       </div>
-    </div>
+
+      {/* Modal to show all devices */}
+      {showAllDevices && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000
+          }}
+          onClick={() => setShowAllDevices(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '2px solid #f0f0f0',
+              paddingBottom: '12px'
+            }}>
+              <h3 style={{ 
+                margin: 0, 
+                fontSize: '18px', 
+                fontWeight: '600',
+                color: '#2c3e50'
+              }}>
+                Thiết bị của {room.name}
+              </h3>
+              <button
+                onClick={() => setShowAllDevices(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#999',
+                  padding: '0',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f0f0f0';
+                  e.currentTarget.style.color = '#333';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = '#999';
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {deviceIds.map(deviceId => {
+                const info = deviceInfo[deviceId];
+                return (
+                  <div 
+                    key={deviceId} 
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      backgroundColor: '#f8f9fa',
+                      borderRadius: '8px',
+                      border: '1px solid #e9ecef'
+                    }}
+                  >
+                    <span style={{
+                      fontSize: '14px',
+                      color: '#2c3e50',
+                      fontWeight: '500'
+                    }}>
+                      {info.name}
+                    </span>
+                    <span style={{
+                      backgroundColor: '#1976d2',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '16px',
+                      fontSize: '12px',
+                      fontWeight: '600'
+                    }}>
+                      Số lượng: {info.quantity}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ 
+              marginTop: '20px',
+              paddingTop: '16px',
+              borderTop: '1px solid #f0f0f0',
+              textAlign: 'right'
+            }}>
+              <button
+                onClick={() => setShowAllDevices(false)}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#007bff'}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -117,6 +295,7 @@ const RoomManagement = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showAssignDeviceForm, setShowAssignDeviceForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [notification, setNotification] = useState(null);
@@ -126,7 +305,7 @@ const RoomManagement = () => {
     name: '',
     location: '',
     capacity: '',
-    status: 'available', // available, booked, in-use, maintenance
+    status: 'available', // available, maintenance
     selectedDevices: [], // Array of device IDs
     deviceQuantities: {}, // Object mapping deviceId to quantity
     description: ''
@@ -134,9 +313,7 @@ const RoomManagement = () => {
   const [formErrors, setFormErrors] = useState({});
 
   const roomStatuses = [
-    { value: 'available', label: 'Phòng trống', color: '#28a745', bgColor: '#d4edda' },
-    { value: 'booked', label: 'Đã đặt', color: '#ffc107', bgColor: '#fff3cd' },
-    { value: 'in-use', label: 'Đang sử dụng', color: '#dc3545', bgColor: '#f8d7da' },
+    { value: 'available', label: 'Có thể sử dụng', color: '#28a745', bgColor: '#d4edda' },
     { value: 'maintenance', label: 'Bảo trì', color: '#6c757d', bgColor: '#e2e3e5' }
   ];
 
@@ -253,6 +430,7 @@ const RoomManagement = () => {
     setFormErrors({});
     setShowAddForm(false);
     setShowEditForm(false);
+    setShowAssignDeviceForm(false);
     setEditingItem(null);
   };
 
@@ -357,6 +535,40 @@ const RoomManagement = () => {
       } finally {
         setActionLoading(false);
       }
+    }
+  };
+
+  // Handle Assign Device - Open form to assign devices only
+  const handleAssignDevice = async (room) => {
+    setEditingItem(room);
+    setFormData({
+      name: room.name,
+      location: room.location,
+      capacity: room.capacity.toString(),
+      status: room.status,
+      selectedDevices: room.selectedDevices,
+      deviceQuantities: {}, // Will be loaded async
+      description: room.description
+    });
+    setFormErrors({});
+    setShowAssignDeviceForm(true);
+    
+    // Load current device assignments with quantities
+    try {
+      const resp = await roomService.getDevicesByRoom(room.id);
+      if (resp && resp.success && Array.isArray(resp.data)) {
+        const deviceQuantities = {};
+        resp.data.forEach(rd => {
+          deviceQuantities[rd.deviceId] = rd.quantityAssigned || 1;
+        });
+        
+        setFormData(prev => ({
+          ...prev,
+          deviceQuantities: deviceQuantities
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to load device quantities:', err);
     }
   };
 
@@ -515,8 +727,10 @@ const RoomManagement = () => {
           if (hasDeviceChanges) {
             try {
               await reloadDevices();
+              // Also reload rooms to get updated device assignments
+              await reloadRooms();
             } catch (err) {
-              console.warn('Failed to reload devices:', err);
+              console.warn('Failed to reload devices/rooms:', err);
             }
           }
 
@@ -744,17 +958,23 @@ const RoomManagement = () => {
           <button 
             onClick={() => setShowAddForm(true)}
             style={{ 
-              padding: '12px 24px', 
+              padding: '12px', 
               backgroundColor: '#007bff', 
               color: 'white', 
               border: 'none', 
               borderRadius: '8px',
               cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: '500'
+              fontSize: '20px',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '48px',
+              height: '48px'
             }}
+            title="Thêm phòng mới"
           >
-            Thêm Phòng
+            <FaPlus />
           </button>
         </div>
       </div>
@@ -815,104 +1035,168 @@ const RoomManagement = () => {
         </div>
       </div>
 
-      {/* Room Cards Grid */}
+      {/* Room Table */}
       <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', 
-        gap: '20px', 
-        marginBottom: '30px' 
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+        overflow: 'auto',
+        marginBottom: '30px'
       }}>
-        {filteredRooms.map((room) => {
-          const statusInfo = getStatusInfo(room.status);
-          return (
-            <div key={room.id} style={{
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              padding: '20px',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-              border: '1px solid #f0f0f0',
-              transition: 'transform 0.2s ease, box-shadow 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.12)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.08)';
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#2c3e50', margin: 0 }}>
-                  {room.name}
-                </h3>
-                <span style={{
-                  padding: '4px 12px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  backgroundColor: statusInfo.bgColor,
-                  color: statusInfo.color
-                }}>
-                  {statusInfo.label}
-                </span>
-              </div>
-              
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '16px', marginRight: '8px' }}>📍</span>
-                  <span style={{ color: '#666', fontSize: '14px' }}>{room.location}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '16px', marginRight: '8px' }}>👥</span>
-                  <span style={{ color: '#666', fontSize: '14px' }}>Sức chứa: {room.capacity} người</span>
-                </div>
-              </div>
-              
-              <div style={{ marginBottom: '12px' }}>
-                <p style={{ color: '#666', fontSize: '14px', margin: 0, lineHeight: '1.4' }}>
-                  {((room.description || '').length > 100) 
-                    ? (room.description.substring(0, 100) + '...') 
-                    : (room.description || '')}
-                </p>
-              </div>
-              
-              {(room.selectedDevices || []).length > 0 && (
-                <RoomDevicesList room={room} devices={devices} />
-              )}
-              
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                <button 
-                  onClick={() => handleEdit(room)}
+        <table style={{ 
+          width: '100%', 
+          borderCollapse: 'collapse',
+          fontSize: '14px',
+          minWidth: '900px'
+        }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f8f9fa' }}>
+              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '2px solid #dee2e6', fontWeight: '600', color: '#495057', minWidth: '150px' }}>
+                Tên Phòng
+              </th>
+              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '2px solid #dee2e6', fontWeight: '600', color: '#495057', minWidth: '120px' }}>
+                Vị trí
+              </th>
+              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '2px solid #dee2e6', fontWeight: '600', color: '#495057', minWidth: '100px' }}>
+                Sức chứa
+              </th>
+              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '2px solid #dee2e6', fontWeight: '600', color: '#495057', minWidth: '200px' }}>
+                Thiết bị
+              </th>
+              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '2px solid #dee2e6', fontWeight: '600', color: '#495057', minWidth: '120px' }}>
+                Trạng thái
+              </th>
+              <th style={{ padding: '16px', textAlign: 'center', borderBottom: '2px solid #dee2e6', fontWeight: '600', color: '#495057', minWidth: '120px' }}>
+                Thao tác
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRooms.map((room) => {
+              const statusInfo = getStatusInfo(room.status);
+              return (
+                <tr 
+                  key={room.id} 
                   style={{ 
-                    padding: '8px 16px', 
-                    backgroundColor: '#007bff', 
-                    color: 'white', 
-                    border: 'none', 
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px'
+                    borderBottom: '1px solid #dee2e6',
+                    transition: 'background-color 0.2s ease'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  Sửa
-                </button>
-                <button 
-                  onClick={() => handleDelete(room.id)}
-                  style={{ 
-                    padding: '8px 16px', 
-                    backgroundColor: '#dc3545', 
-                    color: 'white', 
-                    border: 'none', 
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  Xóa
-                </button>
-              </div>
-            </div>
-          );
-        })}
+                  <td style={{ padding: '16px', fontWeight: '600', color: '#2c3e50' }}>
+                    {room.name}
+                  </td>
+                  <td style={{ padding: '16px', color: '#666' }}>
+                    {room.location}
+                  </td>
+                  <td style={{ padding: '16px', color: '#666' }}>
+                    {room.capacity} người
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    {(room.selectedDevices || []).length > 0 ? (
+                      <RoomDevicesList room={room} devices={devices} />
+                    ) : (
+                      <span style={{ color: '#999', fontSize: '13px' }}>Không có</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      backgroundColor: statusInfo.bgColor,
+                      color: statusInfo.color,
+                      display: 'inline-block'
+                    }}>
+                      {statusInfo.label}
+                    </span>
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                      <button 
+                        onClick={() => handleAssignDevice(room)}
+                        style={{ 
+                          padding: '8px 12px', 
+                          backgroundColor: '#28a745', 
+                          color: 'white', 
+                          border: 'none', 
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s',
+                          position: 'relative'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#218838'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#28a745'}
+                        title="Gắn thiết bị"
+                      >
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <FaLaptop style={{ fontSize: '16px' }} />
+                          <FaPlus style={{ 
+                            position: 'absolute', 
+                            top: '-4px', 
+                            right: '-6px', 
+                            fontSize: '10px',
+                            backgroundColor: '#28a745',
+                            borderRadius: '50%',
+                            padding: '1px'
+                          }} />
+                        </div>
+                      </button>
+                      <button 
+                        onClick={() => handleEdit(room)}
+                        style={{ 
+                          padding: '8px 12px', 
+                          backgroundColor: '#007bff', 
+                          color: 'white', 
+                          border: 'none', 
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#007bff'}
+                        title="Chỉnh sửa"
+                      >
+                        <FaEdit />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(room.id)}
+                        style={{ 
+                          padding: '8px 12px', 
+                          backgroundColor: '#dc3545', 
+                          color: 'white', 
+                          border: 'none', 
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#c82333'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc3545'}
+                        title="Xóa"
+                      >
+                        <FaTrash />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {filteredRooms.length === 0 && (
@@ -940,6 +1224,7 @@ const RoomManagement = () => {
       <RoomForms
         showAddForm={showAddForm}
         showEditForm={showEditForm}
+        showAssignDeviceForm={showAssignDeviceForm}
         formData={formData}
         setFormData={setFormData}
         formErrors={formErrors}
