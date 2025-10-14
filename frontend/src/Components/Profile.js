@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useHistory } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import authService from '../../services/authService';
+import { useAuth } from '../contexts/AuthContext';
+import authService from '../services/authService';
 import { FaRegCalendarAlt, FaCog, FaEdit, FaCheck, FaTimes, FaCamera } from 'react-icons/fa';
-import ChangePassword from '../../Components/ChangePassword';
+import ChangePassword from './ChangePassword';
 import './Profile.css';
-import calendarLogo from '../../assets/calendar-logo.png';
+import calendarLogo from '../public/calendar-logo.png';
 
 export default function Profile({ onSave }) {
   const history = useHistory();

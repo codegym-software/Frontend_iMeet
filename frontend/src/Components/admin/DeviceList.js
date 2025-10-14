@@ -4,299 +4,6 @@ import { useDevices } from './DeviceContext';
 import { usePreloadedData } from './DataPreloaderContext';
 import { useActivity } from './ActivityContext';
 import adminService from '../../services/adminService';
-import roomService from '../../services/roomService';
-import { FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
-
-// Component to display device quantity with assigned calculation
-const DeviceQuantityDisplay = ({ device }) => {
-  const [assignedQuantity, setAssignedQuantity] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadAssignedQuantity = async () => {
-      try {
-        const response = await roomService.getRoomsByDevice(device.id);
-        if (isMounted && response && response.success && Array.isArray(response.data)) {
-          // Calculate total assigned quantity from all rooms
-          const totalAssigned = response.data.reduce((sum, room) => {
-            return sum + (room.quantityAssigned || 0);
-          }, 0);
-          setAssignedQuantity(totalAssigned);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Error loading assigned quantity:', err);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    if (device.id) {
-      loadAssignedQuantity();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [device.id]);
-
-  const totalQuantity = device.quantity || 0;
-  const availableQuantity = totalQuantity - assignedQuantity;
-
-  if (loading) {
-    return <span style={{ fontSize: '13px', color: '#999' }}>...</span>;
-  }
-
-  return (
-    <span style={{ 
-      padding: '4px 8px', 
-      borderRadius: '4px', 
-      backgroundColor: '#e8f5e8',
-      color: '#2e7d32',
-      fontSize: '14px',
-      fontWeight: '600'
-    }}>
-      {availableQuantity}/{totalQuantity}
-    </span>
-  );
-};
-
-// Component to display rooms assigned to a device
-const DeviceRoomsList = ({ device }) => {
-  const [rooms, setRooms] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showAllRooms, setShowAllRooms] = useState(false);
-  const MAX_VISIBLE_ROOMS = 2;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadRooms = async () => {
-      try {
-        const response = await roomService.getRoomsByDevice(device.id);
-        if (isMounted && response && response.success && Array.isArray(response.data)) {
-          setRooms(response.data);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Error loading rooms for device:', err);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    if (device.id) {
-      loadRooms();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [device.id]);
-
-  if (loading) {
-    return <span style={{ fontSize: '13px', color: '#999' }}>Đang tải...</span>;
-  }
-
-  if (rooms.length === 0) {
-    return <span style={{ fontSize: '13px', color: '#999' }}>Chưa gán</span>;
-  }
-
-  const visibleRooms = rooms.slice(0, MAX_VISIBLE_ROOMS);
-  const hasMore = rooms.length > MAX_VISIBLE_ROOMS;
-
-  return (
-    <>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-        {visibleRooms.map(room => (
-          <span key={room.roomId} style={{
-            display: 'inline-block',
-            padding: '4px 10px',
-            backgroundColor: '#e8f5e9',
-            color: '#2e7d32',
-            borderRadius: '16px',
-            fontSize: '12px',
-            fontWeight: '500',
-            border: '1px solid #a5d6a7'
-          }}>
-            {room.name}
-          </span>
-        ))}
-        {hasMore && (
-          <span 
-            onClick={() => setShowAllRooms(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '4px 10px',
-              backgroundColor: '#f5f5f5',
-              color: '#666',
-              borderRadius: '16px',
-              fontSize: '12px',
-              fontWeight: '600',
-              border: '1px solid #ddd',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#e0e0e0';
-              e.currentTarget.style.color = '#333';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#f5f5f5';
-              e.currentTarget.style.color = '#666';
-            }}
-            title={`Xem thêm ${rooms.length - MAX_VISIBLE_ROOMS} phòng`}
-          >
-            +{rooms.length - MAX_VISIBLE_ROOMS}
-          </span>
-        )}
-      </div>
-
-      {/* Modal to show all rooms */}
-      {showAllRooms && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000
-          }}
-          onClick={() => setShowAllRooms(false)}
-        >
-          <div 
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              padding: '24px',
-              maxWidth: '500px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflow: 'auto',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              marginBottom: '20px',
-              borderBottom: '2px solid #f0f0f0',
-              paddingBottom: '12px'
-            }}>
-              <h3 style={{ 
-                margin: 0, 
-                fontSize: '18px', 
-                fontWeight: '600',
-                color: '#2c3e50'
-              }}>
-                Phòng sử dụng {device.name}
-              </h3>
-              <button
-                onClick={() => setShowAllRooms(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  color: '#999',
-                  padding: '0',
-                  width: '30px',
-                  height: '30px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '50%',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f0f0f0';
-                  e.currentTarget.style.color = '#333';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = '#999';
-                }}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {rooms.map(room => (
-                <div 
-                  key={room.roomId} 
-                  style={{
-                    padding: '12px 16px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '8px',
-                    border: '1px solid #e9ecef'
-                  }}
-                >
-                  <div style={{
-                    fontSize: '14px',
-                    color: '#2c3e50',
-                    fontWeight: '600',
-                    marginBottom: '4px'
-                  }}>
-                    {room.name}
-                  </div>
-                  <div style={{
-                    fontSize: '12px',
-                    color: '#666'
-                  }}>
-                    📍 {room.location}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ 
-              marginTop: '20px',
-              paddingTop: '16px',
-              borderTop: '1px solid #f0f0f0',
-              textAlign: 'right'
-            }}>
-              <button
-                onClick={() => setShowAllRooms(false)}
-                style={{
-                  padding: '10px 24px',
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#007bff'}
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
 
 const DeviceList = () => {
   const { addActivity } = useActivity();
@@ -836,23 +543,17 @@ const DeviceList = () => {
         <button 
           onClick={() => setShowAddForm(true)}
           style={{ 
-            padding: '12px', 
+            padding: '12px 24px', 
             backgroundColor: '#007bff', 
             color: 'white', 
             border: 'none', 
             borderRadius: '8px',
             cursor: 'pointer',
-            fontSize: '20px',
-            fontWeight: '500',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '48px',
-            height: '48px'
+            fontSize: '16px',
+            fontWeight: '500'
           }}
-          title="Thêm thiết bị mới"
         >
-          <FaPlus />
+          Thêm Thiết bị
         </button>
       </div>
 
@@ -972,42 +673,9 @@ const DeviceList = () => {
             borderRadius: '12px', 
             padding: '30px', 
             width: '600px',
-            maxWidth: '90vw',
-            position: 'relative'
+            maxWidth: '90vw'
           }}>
-            <button
-              onClick={() => setShowAddForm(false)}
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'none',
-                border: 'none',
-                fontSize: '28px',
-                color: '#999',
-                cursor: 'pointer',
-                padding: '0',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-                e.currentTarget.style.color = '#333';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#999';
-              }}
-              title="Đóng"
-            >
-              ×
-            </button>
-            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px', paddingRight: '40px' }}>
+            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px' }}>
               Thêm Thiết bị Mới
             </h3>
             
@@ -1133,7 +801,6 @@ const DeviceList = () => {
                   minHeight: '100px',
                   resize: 'vertical',
                   fontSize: '16px',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                   boxSizing: 'border-box',
                   outline: 'none'
                 }}
@@ -1203,42 +870,9 @@ const DeviceList = () => {
             borderRadius: '12px', 
             padding: '30px', 
             width: '600px',
-            maxWidth: '90vw',
-            position: 'relative'
+            maxWidth: '90vw'
           }}>
-            <button
-              onClick={() => setShowEditForm(false)}
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'none',
-                border: 'none',
-                fontSize: '28px',
-                color: '#999',
-                cursor: 'pointer',
-                padding: '0',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-                e.currentTarget.style.color = '#333';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#999';
-              }}
-              title="Đóng"
-            >
-              ×
-            </button>
-            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px', paddingRight: '40px' }}>
+            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px' }}>
               Chỉnh sửa Thiết bị
             </h3>
             
@@ -1362,7 +996,6 @@ const DeviceList = () => {
                   minHeight: '100px',
                   resize: 'vertical',
                   fontSize: '16px',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                   boxSizing: 'border-box',
                   outline: 'none'
                 }}
@@ -1439,7 +1072,7 @@ const DeviceList = () => {
                 Mô tả
               </th>
               <th style={{ padding: '16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
-                Phòng gán thiết bị
+                Ngày tạo
               </th>
               <th style={{ padding: '16px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
                 Thao tác
@@ -1470,56 +1103,56 @@ const DeviceList = () => {
                   </span>
                 </td>
                 <td style={{ padding: '16px', textAlign: 'center' }}>
-                  <DeviceQuantityDisplay device={device} />
+                  <span style={{ 
+                    padding: '4px 8px', 
+                    borderRadius: '4px', 
+                    backgroundColor: '#e8f5e8',
+                    color: '#2e7d32',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}>
+                    {device.quantity}
+                  </span>
                 </td>
                 <td style={{ padding: '16px', maxWidth: '300px', color: '#555' }}>
                   {((device?.description ?? '').length > 60)
                     ? (device.description.substring(0, 60) + '...')
                     : (device?.description ?? '')}
                 </td>
-                <td style={{ padding: '16px' }}>
-                  <DeviceRoomsList device={device} />
+                <td style={{ padding: '16px', color: '#666' }}>
+                  {device?.createdAt ? new Date(device.createdAt).toLocaleDateString('vi-VN') : ''}
                 </td>
                 <td style={{ padding: '16px', textAlign: 'center' }}>
                   <button 
                     onClick={() => handleEdit(device)}
                     style={{ 
-                      padding: '8px 12px', 
+                      padding: '8px 16px', 
                       backgroundColor: '#007bff', 
                       color: 'white', 
                       border: 'none', 
                       borderRadius: '6px',
                       marginRight: '8px',
                       cursor: actionLoading.deletingId ? 'not-allowed' : 'pointer',
-                      fontSize: '16px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
+                      fontSize: '14px'
                     }}
                     disabled={actionLoading.deletingId !== null}
-                    title="Chỉnh sửa"
                   >
-                    <FaEdit />
+                    Sửa
                   </button>
                   <button 
                     onClick={() => handleDeviceDelete(device?.id)}
                     style={{ 
-                      padding: '8px 12px', 
+                      padding: '8px 16px', 
                       backgroundColor: '#dc3545', 
                       color: 'white', 
                       border: 'none', 
                       borderRadius: '6px',
                       cursor: actionLoading.deletingId === device.id ? 'wait' : 'pointer',
-                      fontSize: '16px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: '36px'
+                      fontSize: '14px'
                     }}
                     disabled={actionLoading.deletingId !== null}
-                    title="Xóa"
                   >
-                    {actionLoading.deletingId === device.id ? '...' : <FaTrash />}
+                    {actionLoading.deletingId === device.id ? 'Đang xóa...' : 'Xóa'}
                   </button>
                 </td>
               </tr>

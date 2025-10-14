@@ -1,10 +1,34 @@
-import apiClient from './apiClient';
+import axios from 'axios';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+
+// Create axios instance with default config
+const axiosInstance = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add request interceptor to include auth token
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 const meetingService = {
   // Get all meetings
   getAllMeetings: async () => {
     try {
-      const response = await apiClient.get('/api/meetings');
+      const response = await axiosInstance.get('/meetings');
       return response.data;
     } catch (error) {
       console.error('Error fetching meetings:', error);
@@ -15,7 +39,7 @@ const meetingService = {
   // Get meeting by ID
   getMeetingById: async (meetingId) => {
     try {
-      const response = await apiClient.get(`/api/meetings/${meetingId}`);
+      const response = await axiosInstance.get(`/meetings/${meetingId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching meeting:', error);
@@ -26,19 +50,10 @@ const meetingService = {
   // Delete/Cancel meeting
   cancelMeeting: async (meetingId) => {
     try {
-      const url = `/api/meetings/${meetingId}`;
-      console.log('Calling DELETE:', url);
-      console.log('Full URL:', apiClient.defaults.baseURL + url);
-      console.log('Headers:', apiClient.defaults.headers);
-      
-      const response = await apiClient.delete(url);
-      console.log('Delete response:', response);
+      const response = await axiosInstance.delete(`/meetings/${meetingId}`);
       return response.data;
     } catch (error) {
       console.error('Error cancelling meeting:', error);
-      console.error('Error status:', error.response?.status);
-      console.error('Error data:', error.response?.data);
-      console.error('Error config:', error.config);
       throw error;
     }
   },
@@ -46,7 +61,7 @@ const meetingService = {
   // Update meeting status
   updateMeetingStatus: async (meetingId, status) => {
     try {
-      const response = await apiClient.patch(`/api/meetings/${meetingId}/status`, { status });
+      const response = await axiosInstance.patch(`/meetings/${meetingId}/status`, { status });
       return response.data;
     } catch (error) {
       console.error('Error updating meeting status:', error);
@@ -59,12 +74,12 @@ const meetingService = {
     try {
       // Convert status to uppercase for enum matching
       const statusEnum = status.toUpperCase();
-      const response = await apiClient.get(`/api/meetings/status/${statusEnum}`);
+      const response = await axiosInstance.get(`/meetings/status/${statusEnum}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching meetings by status:', error);
       console.error('Status value:', status);
-      console.error('API URL:', apiClient.defaults.baseURL);
+      console.error('API URL:', axiosInstance.defaults.baseURL);
       throw error;
     }
   },
@@ -72,7 +87,7 @@ const meetingService = {
   // Get meetings by room
   getMeetingsByRoom: async (roomId) => {
     try {
-      const response = await apiClient.get(`/api/meetings/room/${roomId}`);
+      const response = await axiosInstance.get(`/meetings/room/${roomId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching meetings by room:', error);
@@ -83,7 +98,7 @@ const meetingService = {
   // Get meetings by user
   getMeetingsByUser: async (userId) => {
     try {
-      const response = await apiClient.get(`/api/meetings/user/${userId}`);
+      const response = await axiosInstance.get(`/meetings/user/${userId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching meetings by user:', error);
@@ -94,7 +109,7 @@ const meetingService = {
   // Get upcoming meetings
   getUpcomingMeetings: async () => {
     try {
-      const response = await apiClient.get('/api/meetings/upcoming');
+      const response = await axiosInstance.get('/meetings/upcoming');
       return response.data;
     } catch (error) {
       console.error('Error fetching upcoming meetings:', error);
@@ -105,7 +120,7 @@ const meetingService = {
   // Get today's meetings
   getMeetingsToday: async () => {
     try {
-      const response = await apiClient.get('/api/meetings/today');
+      const response = await axiosInstance.get('/meetings/today');
       return response.data;
     } catch (error) {
       console.error('Error fetching today meetings:', error);
@@ -116,7 +131,7 @@ const meetingService = {
   // Search meetings by title
   searchMeetingsByTitle: async (title) => {
     try {
-      const response = await apiClient.get('/api/meetings/search', {
+      const response = await axiosInstance.get('/meetings/search', {
         params: { title }
       });
       return response.data;
@@ -129,7 +144,7 @@ const meetingService = {
   // Get meetings by date range
   getMeetingsByDateRange: async (startTime, endTime) => {
     try {
-      const response = await apiClient.get('/api/meetings/date-range', {
+      const response = await axiosInstance.get('/meetings/date-range', {
         params: { startTime, endTime }
       });
       return response.data;
@@ -142,7 +157,7 @@ const meetingService = {
   // Check room availability
   checkRoomAvailability: async (roomId, startTime, endTime) => {
     try {
-      const response = await apiClient.get('/api/meetings/check-availability', {
+      const response = await axiosInstance.get('/meetings/check-availability', {
         params: { roomId, startTime, endTime }
       });
       return response.data;
@@ -155,7 +170,7 @@ const meetingService = {
   // Get room schedule
   getRoomSchedule: async (roomId, startTime, endTime) => {
     try {
-      const response = await apiClient.get(`/api/meetings/room-schedule/${roomId}`, {
+      const response = await axiosInstance.get(`/meetings/room-schedule/${roomId}`, {
         params: { startTime, endTime }
       });
       return response.data;

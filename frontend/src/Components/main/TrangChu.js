@@ -1,14 +1,14 @@
 // src/Components/main/Main.js
 import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
-import { AuthProvider } from '../../contexts/AuthContext';
-import './Home.css';
-import TopBar from '../../Components/main/TopBar';
-import MiniCalendar from '../../Components/main/MiniCalendar';
-import SearchSection from '../../Components/main/SearchSection';
-import UpcomingMeetings from '../../Components/main/UpcomingMeetings';
-import OtherSchedule from '../../Components/main/OtherSchedule';
-import TimeTable from '../../Components/main/MainCalendar/TimeTable';
+import { AuthProvider } from '../../contexts/AuthContext'; // Điều chỉnh đường dẫn cho đúng
+import './TrangChu.css';
+import TopBar from './TopBar';
+import MiniCalendar from './MiniCalendar';
+import SearchSection from './SearchSection';
+import UpcomingMeetings from './UpcomingMeetings';
+import OtherSchedule from './OtherSchedule';
+import TimeTable from './MainCalendar/TimeTable';
 
 const Main = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
