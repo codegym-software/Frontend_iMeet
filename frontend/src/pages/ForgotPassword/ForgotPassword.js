@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import authService from '../services/authService';
+import authService from '../../services/authService';
 import './ForgotPassword.css';
 
 export default function ForgotPassword() {

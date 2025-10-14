@@ -18,8 +18,6 @@ class RoomService {
   mapStatusToBackend(frontendStatus) {
     const statusMap = {
       'available': 'AVAILABLE',
-      'booked': 'BOOKED', 
-      'in-use': 'IN_USE',
       'maintenance': 'MAINTENANCE'
     };
     return statusMap[frontendStatus] || 'AVAILABLE';
@@ -29,9 +27,10 @@ class RoomService {
   mapStatusToFrontend(backendStatus) {
     const statusMap = {
       'AVAILABLE': 'available',
-      'BOOKED': 'booked',
-      'IN_USE': 'in-use',
-      'MAINTENANCE': 'maintenance'
+      'MAINTENANCE': 'maintenance',
+      // Legacy status mapping for backward compatibility
+      'BOOKED': 'available',
+      'IN_USE': 'available'
     };
     return statusMap[backendStatus] || 'available';
   }
@@ -271,6 +270,39 @@ class RoomService {
       }
     } catch (error) {
       console.error('Error getting devices by room:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  // Lấy danh sách phòng đã gán thiết bị
+  async getRoomsByDevice(deviceId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/room-devices/device/${deviceId}`, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const apiResponse = await response.json();
+      if (apiResponse.success) {
+        // apiResponse.data is array of room-device assignments
+        // Need to extract room info from each assignment
+        const rooms = apiResponse.data.map(assignment => ({
+          roomId: assignment.roomId,
+          name: assignment.roomName || `Room ${assignment.roomId}`,
+          location: assignment.roomLocation || '',
+          capacity: assignment.roomCapacity || 0,
+          quantityAssigned: assignment.quantityAssigned || 0
+        }));
+        return { success: true, data: rooms, message: apiResponse.message };
+      } else {
+        throw new Error(apiResponse.message || 'Lỗi khi lấy phòng của thiết bị');
+      }
+    } catch (error) {
+      console.error('Error getting rooms by device:', error);
       return { success: false, error: error.message, data: [] };
     }
   }

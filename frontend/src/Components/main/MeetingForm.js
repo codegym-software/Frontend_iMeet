@@ -28,22 +28,31 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
 
   // Load rooms khi component mount
   useEffect(() => {
-    loadRooms();
-  }, []);
+    let isMounted = true;
 
-  // Load danh sách phòng từ API
-  const loadRooms = async () => {
-    try {
-      setLoadingRooms(true);
-      const roomsData = await roomAPI.getAvailableRooms();
-      setRooms(roomsData);
-    } catch (error) {
-      console.error('Error loading rooms:', error);
-      setErrors(prev => ({ ...prev, room: 'Không thể tải danh sách phòng' }));
-    } finally {
-      setLoadingRooms(false);
-    }
-  };
+    const loadRooms = async () => {
+      try {
+        if (isMounted) setLoadingRooms(true);
+        const roomsData = await roomAPI.getAvailableRooms();
+        if (isMounted) {
+          setRooms(roomsData);
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.error('Error loading rooms:', error);
+          setErrors(prev => ({ ...prev, room: 'Không thể tải danh sách phòng' }));
+        }
+      } finally {
+        if (isMounted) setLoadingRooms(false);
+      }
+    };
+
+    loadRooms();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Load thiết bị khi chọn phòng
   const handleRoomChange = async (e) => {
@@ -230,6 +239,11 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Prevent multiple submissions
+    if (isLoading) {
+      return;
+    }
+    
     // Validate form
     const newErrors = {};
     
@@ -258,6 +272,8 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
       return;
     }
     
+    setIsLoading(true);
+    
     try {
       // Convert date and time to ISO format
       const dateStr = formatDateForSubmission(formData.date);
@@ -280,11 +296,14 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
       // Call API to create meeting
       await calendarAPI.createMeeting(meetingData);
       
-      // Call parent onSubmit callback
-      onSubmit(meetingData);
+      // Call parent onSubmit callback (just to close form and refresh)
+      if (onSubmit) {
+        onSubmit(meetingData);
+      }
     } catch (error) {
       console.error('Error creating meeting:', error);
       setErrors({ submit: error.message || 'Không thể tạo cuộc họp. Vui lòng thử lại.' });
+      setIsLoading(false);
     }
   };
 
@@ -441,7 +460,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                 <option value="">Chọn phòng</option>
                 {rooms.map(room => (
                   <option key={room.roomId} value={room.roomId}>
-                    {room.roomName} - Sức chứa: {room.capacity} người
+                    {room.name} - Sức chứa: {room.capacity} người
                   </option>
                 ))}
               </select>
@@ -495,11 +514,11 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
 
           {/* Form Actions */}
           <div className="form-actions simple-actions">
-            <button type="button" className="cancel-btn" onClick={onClose}>
+            <button type="button" className="cancel-btn" onClick={onClose} disabled={isLoading}>
               Hủy
             </button>
-            <button type="submit" className="save-btn">
-              Lưu
+            <button type="submit" className="save-btn" disabled={isLoading}>
+              {isLoading ? 'Đang lưu...' : 'Lưu'}
             </button>
           </div>
         </form>

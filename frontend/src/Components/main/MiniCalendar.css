@@ -1,4 +1,12 @@
 /* MiniCalendar.css - DARK THEME */
+.calendar-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* CALENDAR */
 .calendar {
   background: var(--component-bg);
   border-radius: 12px;
@@ -7,104 +15,6 @@
   flex-shrink: 0;
   position: relative;
   color: var(--text-color);
-}
-
-.calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 15px;
-  gap: 15px;
-}
-
-.create-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: var(--accent-color);
-  border: none;
-  border-radius: 6px;
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-}
-
-.create-button:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-}
-
-.create-button:active {
-  transform: translateY(0);
-}
-
-.month-year {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text-color);
-  text-align: right;
-  flex: 1;
-  white-space: nowrap;
-}
-
-.dropdown-arrow {
-  font-size: 10px;
-  transition: transform 0.3s ease;
-  color: var(--text-color);
-}
-
-.create-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  background: var(--component-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  min-width: 150px;
-  z-index: 100;
-  margin-top: 5px;
-  overflow: hidden;
-  animation: dropdownFadeIn 0.2s ease-out;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 16px;
-  border: none;
-  background: var(--component-bg);
-  color: var(--text-color);
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.dropdown-item:hover {
-  background-color: var(--hover-bg);
-}
-
-@keyframes dropdownFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .week-days {
@@ -126,7 +36,6 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  margin-bottom: 15px;
 }
 
 .calendar-week {
@@ -224,18 +133,8 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-  .calendar-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-  
-  .month-year {
-    text-align: center;
-  }
-  
-  .create-button {
-    justify-content: center;
+  .calendar {
+    padding: 15px;
   }
   
   .calendar-navigation {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import meetingService from '../../services/meetingService';
 import { useActivity } from './ActivityContext';
+import { FaEye, FaTimes } from 'react-icons/fa';
 
 const MeetingList = () => {
   const { addActivity } = useActivity();
@@ -33,7 +34,11 @@ const MeetingList = () => {
       const response = await meetingService.getAllMeetings();
 
       if (response && response.success) {
-        const meetingsData = response.data || [];
+        const meetingsData = (response.data || []).map(meeting => ({
+          ...meeting,
+          // Normalize bookingStatus to lowercase for consistency
+          bookingStatus: meeting.bookingStatus?.toLowerCase() || 'booked'
+        }));
         setAllMeetings(meetingsData);
       }
     } catch (error) {
@@ -53,10 +58,19 @@ const MeetingList = () => {
     if (window.confirm(`Bạn có chắc chắn muốn hủy cuộc họp "${meeting.title}"?`)) {
       try {
         setCancellingId(meeting.meetingId);
-        const response = await meetingService.cancelMeeting(meeting.meetingId);
+        console.log('Full meeting object:', meeting);
+        console.log('Meeting ID:', meeting.meetingId, 'Type:', typeof meeting.meetingId);
         
-        if (response && response.success) {
-          showNotification('success', `✅ Đã hủy cuộc họp "${meeting.title}" thành công!`);
+        // Ensure meetingId is a number
+        const meetingId = parseInt(meeting.meetingId);
+        console.log('Parsed Meeting ID:', meetingId);
+        
+        const response = await meetingService.cancelMeeting(meetingId);
+        console.log('Cancel response:', response);
+        
+        // Check if response is successful (could be different formats)
+        if (response && (response.success || response.status === 'success' || response.message)) {
+          showNotification('success', `Đã hủy cuộc họp "${meeting.title}" thành công!`);
           
           // Log activity
           const startTime = new Date(meeting.startTime).toLocaleString('vi-VN');
@@ -66,11 +80,25 @@ const MeetingList = () => {
           // Reload meetings
           await loadMeetings();
         } else {
-          showNotification('error', `❌ ${response.message || 'Lỗi khi hủy cuộc họp'}`);
+          showNotification('error', `${response?.message || 'Lỗi khi hủy cuộc họp'}`);
         }
       } catch (error) {
         console.error('Error cancelling meeting:', error);
-        showNotification('error', `❌ Lỗi khi hủy cuộc họp: ${error.message}`);
+        console.error('Error details:', error.response?.data);
+        
+        // Check if meeting was already cancelled (backend returns 404 with this message)
+        if (error.response?.data?.message === 'Cuộc họp đã được hủy trước đó') {
+          showNotification('success', `Cuộc họp "${meeting.title}" đã được hủy!`);
+          // Reload meetings to update UI
+          await loadMeetings();
+        } else {
+          const errorMsg = error.response?.data?.message 
+            || error.response?.data?.error
+            || error.message 
+            || 'Không thể kết nối đến server';
+          
+          showNotification('error', `Lỗi khi hủy cuộc họp: ${errorMsg}`);
+        }
       } finally {
         setCancellingId(null);
       }
@@ -437,35 +465,43 @@ const MeetingList = () => {
                           <button
                             onClick={() => handleViewDetail(meeting)}
                             style={{
-                              padding: '8px 16px',
+                              padding: '8px 12px',
                               backgroundColor: '#17a2b8',
                               color: 'white',
                               border: 'none',
                               borderRadius: '6px',
                               cursor: 'pointer',
-                              fontSize: '13px',
+                              fontSize: '16px',
                               fontWeight: '500',
-                              transition: 'all 0.2s'
+                              transition: 'all 0.2s',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#138496'}
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#17a2b8'}
+                            title="Xem chi tiết"
                           >
-                            Chi tiết
+                            <FaEye />
                           </button>
                           {!isCancelled && (
                             <button
                               onClick={() => handleCancelMeeting(meeting)}
                               disabled={cancellingId === meeting.meetingId}
                               style={{
-                                padding: '8px 16px',
+                                padding: '8px 12px',
                                 backgroundColor: cancellingId === meeting.meetingId ? '#6c757d' : '#dc3545',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '6px',
                                 cursor: cancellingId === meeting.meetingId ? 'not-allowed' : 'pointer',
-                                fontSize: '13px',
+                                fontSize: '16px',
                                 fontWeight: '500',
-                                transition: 'all 0.2s'
+                                transition: 'all 0.2s',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minWidth: '36px'
                               }}
                               onMouseEnter={(e) => {
                                 if (cancellingId !== meeting.meetingId) {
@@ -477,8 +513,9 @@ const MeetingList = () => {
                                   e.currentTarget.style.backgroundColor = '#dc3545';
                                 }
                               }}
+                              title="Hủy cuộc họp"
                             >
-                              {cancellingId === meeting.meetingId ? 'Đang hủy...' : 'Hủy'}
+                              {cancellingId === meeting.meetingId ? '...' : <FaTimes />}
                             </button>
                           )}
                         </div>
