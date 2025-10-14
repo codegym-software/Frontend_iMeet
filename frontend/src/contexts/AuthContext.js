@@ -167,21 +167,22 @@ export const AuthProvider = ({ children }) => {
 
   // Đăng xuất
   const logout = async () => {
-    try {
-      await authService.logout();
-      setUser(null);
-      setIsAuthenticated(false);
-      setAuthType(null);
-      setUserRole(null);
-      // Chuyển hướng về trang login
-      window.location.href = '/login';
-    } catch (error) {
-      // Vẫn clear state local dù có lỗi
-      setUser(null);
-      setIsAuthenticated(false);
-      setAuthType(null);
-      setUserRole(null);
-    }
+    // Clear state và localStorage NGAY LẬP TỨC
+    setUser(null);
+    setIsAuthenticated(false);
+    setAuthType(null);
+    setUserRole(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('oauth2User');
+    
+    // Redirect ngay lập tức
+    window.location.href = '/login';
+    
+    // Gọi API logout trong background (không chờ)
+    authService.logout().catch(error => {
+      console.error('Background logout error:', error);
+    });
   };
 
   // Helper function để kiểm tra admin role

@@ -18,8 +18,6 @@ class RoomService {
   mapStatusToBackend(frontendStatus) {
     const statusMap = {
       'available': 'AVAILABLE',
-      'booked': 'BOOKED', 
-      'in-use': 'IN_USE',
       'maintenance': 'MAINTENANCE'
     };
     return statusMap[frontendStatus] || 'AVAILABLE';
@@ -29,9 +27,10 @@ class RoomService {
   mapStatusToFrontend(backendStatus) {
     const statusMap = {
       'AVAILABLE': 'available',
-      'BOOKED': 'booked',
-      'IN_USE': 'in-use',
-      'MAINTENANCE': 'maintenance'
+      'MAINTENANCE': 'maintenance',
+      // Legacy status mapping for backward compatibility
+      'BOOKED': 'available',
+      'IN_USE': 'available'
     };
     return statusMap[backendStatus] || 'available';
   }
@@ -44,7 +43,7 @@ class RoomService {
       location: backendRoom.location,
       capacity: backendRoom.capacity,
       status: this.mapStatusToFrontend(backendRoom.status),
-      selectedDevices: [], // TODO: Implement device mapping when available
+      selectedDevices: [],
       description: backendRoom.description || '',
       createdAt: backendRoom.createdAt ? backendRoom.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
       updatedAt: backendRoom.updatedAt
@@ -64,16 +63,21 @@ class RoomService {
       }
     }
 
-    return {
+    const payload = {
       name: frontendRoom.name ? frontendRoom.name.trim() : null,
       location: frontendRoom.location ? frontendRoom.location.trim() : null,
       capacity: capacity,
       description: frontendRoom.description ? frontendRoom.description.trim() : null,
-      // Include status when updating (backend will ignore on create since controller sets default)
-      status: frontendRoom.status ? this.mapStatusToBackend(frontendRoom.status) : undefined,
       // Include selected device IDs if present (backend currently ignores devices but keep for future)
       selectedDevices: Array.isArray(frontendRoom.selectedDevices) ? frontendRoom.selectedDevices : []
     };
+
+    // Include status when present (for updates)
+    if (frontendRoom.status) {
+      payload.status = this.mapStatusToBackend(frontendRoom.status);
+    }
+
+    return payload;
   }
 
   // Lấy tất cả phòng
@@ -216,6 +220,148 @@ class RoomService {
         error: error.message,
         data: null
       };
+    }
+  }
+
+  // Gán thiết bị cho phòng (RoomDevice)
+  async assignDeviceToRoom(roomId, deviceId, quantityAssigned = 1, notes = '') {
+    try {
+      const body = { roomId, deviceId, quantityAssigned, notes };
+      const response = await fetch(`${API_BASE_URL}/api/room-devices`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error((err && err.message) || `HTTP error! status: ${response.status}`);
+      }
+
+      const apiResponse = await response.json();
+      if (apiResponse.success) {
+        return { success: true, data: apiResponse.data, message: apiResponse.message };
+      } else {
+        throw new Error(apiResponse.message || 'Lỗi khi gán thiết bị cho phòng');
+      }
+    } catch (error) {
+      console.error('Error assigning device to room:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Lấy danh sách thiết bị đã gán cho phòng
+  async getDevicesByRoom(roomId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/room-devices/room/${roomId}`, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const apiResponse = await response.json();
+      if (apiResponse.success) {
+        return { success: true, data: apiResponse.data, message: apiResponse.message };
+      } else {
+        throw new Error(apiResponse.message || 'Lỗi khi lấy thiết bị của phòng');
+      }
+    } catch (error) {
+      console.error('Error getting devices by room:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  // Lấy danh sách phòng đã gán thiết bị
+  async getRoomsByDevice(deviceId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/room-devices/device/${deviceId}`, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const apiResponse = await response.json();
+      if (apiResponse.success) {
+        // apiResponse.data is array of room-device assignments
+        // Need to extract room info from each assignment
+        const rooms = apiResponse.data.map(assignment => ({
+          roomId: assignment.roomId,
+          name: assignment.roomName || `Room ${assignment.roomId}`,
+          location: assignment.roomLocation || '',
+          capacity: assignment.roomCapacity || 0,
+          quantityAssigned: assignment.quantityAssigned || 0
+        }));
+        return { success: true, data: rooms, message: apiResponse.message };
+      } else {
+        throw new Error(apiResponse.message || 'Lỗi khi lấy phòng của thiết bị');
+      }
+    } catch (error) {
+      console.error('Error getting rooms by device:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  // Cập nhật gán thiết bị (số lượng, ghi chú)
+  async updateRoomDevice(roomDeviceId, data) {
+    try {
+      const body = {
+        roomId: data.roomId,
+        deviceId: data.deviceId,
+        quantityAssigned: data.quantityAssigned || 1,
+        notes: data.notes || ''
+      };
+      
+      const response = await fetch(`${API_BASE_URL}/api/room-devices/${roomDeviceId}`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error((err && err.message) || `HTTP error! status: ${response.status}`);
+      }
+
+      const apiResponse = await response.json();
+      if (apiResponse.success) {
+        return { success: true, data: apiResponse.data, message: apiResponse.message };
+      } else {
+        throw new Error(apiResponse.message || 'Lỗi khi cập nhật gán thiết bị');
+      }
+    } catch (error) {
+      console.error('Error updating room device:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Xóa gán thiết bị theo roomDeviceId
+  async removeRoomDevice(roomDeviceId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/room-devices/${roomDeviceId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders()
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error((err && err.message) || `HTTP error! status: ${response.status}`);
+      }
+
+      const apiResponse = await response.json();
+      if (apiResponse.success) {
+        return { success: true, message: apiResponse.message };
+      } else {
+        throw new Error(apiResponse.message || 'Lỗi khi xóa gán thiết bị');
+      }
+    } catch (error) {
+      console.error('Error removing room device:', error);
+      return { success: false, error: error.message };
     }
   }
 

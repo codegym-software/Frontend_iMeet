@@ -5,13 +5,16 @@ import { useHistory } from 'react-router-dom';
 import './TopBar.css';
 import { MdSettings } from 'react-icons/md';
 import { IoSunny, IoMoon } from 'react-icons/io5';
-import calendarLogo from '../../public/calendar-logo.png';
+import { FaPlus } from 'react-icons/fa';
+import calendarLogo from '../../assets/calendar-logo.png';
+import MeetingForm from './MeetingForm'; // Import MeetingForm
 
-const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, toggleTheme }) => {
+const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, toggleTheme, onCreateEvent, onMeetingCreated }) => {
   const { logout, user } = useAuth();
   const history = useHistory();
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [showMeetingForm, setShowMeetingForm] = useState(false); // Thay thế create dropdown
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
@@ -20,14 +23,14 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
   const getUserData = () => {
     // Ưu tiên user từ context (quan trọng để tự động cập nhật)
     if (user) return user;
-    
+
     // Fallback: lấy từ localStorage
     const userData = localStorage.getItem('user');
     if (userData) {
       const parsedData = JSON.parse(userData);
       return parsedData;
     }
-    
+
     const oauth2Data = localStorage.getItem('oauth2User');
     if (oauth2Data) {
       const oauth2User = JSON.parse(oauth2Data);
@@ -40,25 +43,25 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
         avatarUrl: oauth2User.picture || oauth2User.avatarUrl
       };
     }
-    
+
     return null;
   };
-  
+
   const userData = getUserData();
-  
+
   // Xử lý hiển thị tên và email từ database
   let displayName = userData?.fullName || userData?.name || 'User';
   let userEmail = userData?.email || '';
-  
+
   // Nếu không có fullName, sử dụng username
   if (!userData?.fullName && !userData?.name && userData?.username) {
     displayName = userData.username;
   }
-  
+
   const avatarUrl = userData?.avatarUrl;
   const isGooglePicture = avatarUrl && avatarUrl.startsWith('https://');
   const isBase64Data = avatarUrl && avatarUrl.startsWith('data:');
-  
+
   // Tạo avatar từ tên hoặc email
   const getAvatarInitials = () => {
     if (userData?.fullName) {
@@ -74,7 +77,7 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
   const renderAvatar = () => {
     if (avatarUrl) {
       let imageSrc = avatarUrl;
-      
+
       if (isGooglePicture) {
         // Google picture URL
         imageSrc = avatarUrl;
@@ -85,10 +88,10 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
         // Fallback cho uploaded file (nếu có)
         imageSrc = `http://localhost:8081${avatarUrl}`;
       }
-      
+
       return (
-        <img 
-          src={imageSrc} 
+        <img
+          src={imageSrc}
           alt={displayName}
           className="avatar-image"
         />
@@ -125,6 +128,7 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
       case 'week': return 'Week';
       case 'month': return 'Month';
       case 'year': return 'Year';
+      case 'schedule': return 'Schedule';
       default: return 'Week';
     }
   };
@@ -137,8 +141,10 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
       newDate.setDate(newDate.getDate() - 7);
     } else if (viewType === 'month') {
       newDate.setMonth(newDate.getMonth() - 1);
-    } else {
+    } else if (viewType === 'year') {
       newDate.setFullYear(newDate.getFullYear() - 1);
+    } else if (viewType === 'schedule') {
+      newDate.setDate(newDate.getDate() - 7); // Schedule thường hiển thị theo tuần
     }
     onDateChange(newDate);
   };
@@ -151,8 +157,10 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
       newDate.setDate(newDate.getDate() + 7);
     } else if (viewType === 'month') {
       newDate.setMonth(newDate.getMonth() + 1);
-    } else {
+    } else if (viewType === 'year') {
       newDate.setFullYear(newDate.getFullYear() + 1);
+    } else if (viewType === 'schedule') {
+      newDate.setDate(newDate.getDate() + 7); // Schedule thường hiển thị theo tuần
     }
     onDateChange(newDate);
   };
@@ -175,12 +183,30 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
     setIsProfileDropdownOpen(false);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      setIsProfileDropdownOpen(false);
-    } catch (error) {
-      // Silent error handling
+  const handleLogout = () => {
+    logout();
+  };
+
+  // Xử lý Create button - mở form trực tiếp
+  const handleCreateClick = () => {
+    setShowMeetingForm(true);
+  };
+
+  const handleMeetingFormClose = () => {
+    setShowMeetingForm(false);
+  };
+
+  const handleMeetingFormSubmit = (meetingData) => {
+    setShowMeetingForm(false);
+    
+    // Gọi callback để refresh meetings
+    if (onMeetingCreated) {
+      onMeetingCreated();
+    }
+    
+    // Legacy callback
+    if (onCreateEvent) {
+      onCreateEvent('Event', selectedDate, meetingData);
     }
   };
 
@@ -215,17 +241,28 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
           </div>
         </div>
 
-        {/* Center Section - Search */}
+        {/* Center Section - Search và Create Button */}
         <div className="top-bar-center">
-            <div className="search-container">
-              <input
-                type="text"
-                placeholder="Search..."
-                className="search-input"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+          <div className="search-container">
+            <input
+              type="text"
+              placeholder="Search..."
+              className="search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          {/* Create Button - Mở form trực tiếp */}
+          <div className="create-button-container">
+            <button
+              className="create-button primary"
+              onClick={handleCreateClick}
+            >
+              <FaPlus className="create-icon" />
+              <span className="create-text">Create</span>
+            </button>
+          </div>
         </div>
 
         {/* Right Section - View Controls, Settings, User */}
@@ -275,14 +312,23 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
                   <span className="dropdown-item-text">Year</span>
                   {viewType === 'year' && <span className="checkmark">✓</span>}
                 </button>
+
+                {/* Thêm Schedule option */}
+                <button
+                  className={`dropdown-item ${viewType === 'schedule' ? 'active' : ''}`}
+                  onClick={() => handleViewSelect('schedule')}
+                >
+                  <span className="dropdown-item-text">Schedule</span>
+                  {viewType === 'schedule' && <span className="checkmark">✓</span>}
+                </button>
               </div>
             )}
           </div>
 
           <div className="top-actions">
             {/* Theme Toggle Button */}
-            <button 
-              className="action-btn theme-toggle-btn" 
+            <button
+              className="action-btn theme-toggle-btn"
               onClick={() => {
                 toggleTheme();
                 setIsProfileDropdownOpen(false);
@@ -296,7 +342,7 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
 
             {/* User Profile với Dropdown */}
             <div className="user-profile-container" ref={profileDropdownRef}>
-              <div 
+              <div
                 className="user-profile"
                 onClick={handleAvatarClick}
                 title={`${displayName} - Click to view profile`}
@@ -334,6 +380,15 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
           </div>
         </div>
       </div>
+
+      {/* Render Meeting Form Modal */}
+      {showMeetingForm && (
+        <MeetingForm
+          selectedDate={selectedDate}
+          onClose={handleMeetingFormClose}
+          onSubmit={handleMeetingFormSubmit}
+        />
+      )}
     </div>
   );
 };
