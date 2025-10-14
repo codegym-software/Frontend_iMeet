@@ -10,6 +10,7 @@ export default function ChangePassword({ onBack, onSave, onCancel }) {
   // const { user } = useAuth(); // Remove this if useAuth is not available
   const isMountedRef = useRef(true);
   
+  // State compatible with new UI but keeping backend logic
   const [form, setForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -17,12 +18,12 @@ export default function ChangePassword({ onBack, onSave, onCancel }) {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [userAvatar, setUserAvatar] = useState(null);
   
   // Password visibility states for new UI
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showRe, setShowRe] = useState(false);
+  
   // Keep original backend states but map from new UI
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -42,45 +43,6 @@ export default function ChangePassword({ onBack, onSave, onCancel }) {
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-    };
-  }, []);
-  
-  // Load user avatar on mount and listen for updates
-  useEffect(() => {
-    const loadUserAvatar = () => {
-      const userData = getUserData();
-      if (userData) {
-        // For OAuth2 users, use avatarUrl or picture
-        if (userData.authType === 'cognito-oauth2-server') {
-          setUserAvatar(userData.avatarUrl || userData.picture || null);
-        } else {
-          // For traditional users, use avatarUrl
-          setUserAvatar(userData.avatarUrl || null);
-        }
-      }
-    };
-    
-    loadUserAvatar();
-    
-    // Listen for storage changes (when avatar is updated in another component)
-    const handleStorageChange = (e) => {
-      if (e.key === 'user' || e.key === 'oauth2User') {
-        loadUserAvatar();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also listen for custom event for same-tab updates
-    const handleAvatarUpdate = () => {
-      loadUserAvatar();
-    };
-    
-    window.addEventListener('avatarUpdated', handleAvatarUpdate);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('avatarUpdated', handleAvatarUpdate);
     };
   }, []);
   
@@ -344,7 +306,7 @@ export default function ChangePassword({ onBack, onSave, onCancel }) {
           <div className="change-password-header-brand">
             <div className="change-password-header-logo-wrapper">
               <img 
-                src="/calendar-logo.png" 
+                src="/logo.png" 
                 alt="iMeet Logo" 
                 className="change-password-header-logo" 
               />
@@ -355,15 +317,12 @@ export default function ChangePassword({ onBack, onSave, onCancel }) {
         
         {/* Right side with avatar and settings */}
         <div className="change-password-header-right">
+          {/* Avatar */}
           <div className="change-password-avatar-container">
             <img 
               className="change-password-avatar" 
-              src={userAvatar || "https://placehold.co/180x180"} 
-              alt="User Avatar"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = "https://placehold.co/180x180";
-              }}
+              src="https://placehold.co/180x180" 
+              alt="User Avatar" 
             />
           </div>
           

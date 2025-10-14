@@ -1,35 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import adminService from '../../services/adminService';
-import { usePreloadedData } from './DataPreloaderContext';
-import { useActivity } from './ActivityContext';
 
 const UserManagement = () => {
-  const { addActivity } = useActivity();
-  
-  // Use preloaded data from context
-  const { 
-    users: preloadedUsers, 
-    userStats: preloadedStats,
-    usersTotalPages: preloadedTotalPages,
-    usersTotalElements: preloadedTotalElements,
-    usersCurrentPage: preloadedCurrentPage,
-    usersLoading: preloadedLoading,
-    loadUsers: reloadUsers,
-    loadUserStats: reloadStats,
-    setUsers: setPreloadedUsers,
-    setUserStats: setPreloadedStats
-  } = usePreloadedData();
-
-  const [allUsers, setAllUsers] = useState(preloadedUsers); // Store all users for client-side filtering
-  const [loading, setLoading] = useState(false); // Don't show loading if data is preloaded
-  const [actionLoading, setActionLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [notification, setNotification] = useState(null);
-  const [stats, setStats] = useState(preloadedStats);
+  const [stats, setStats] = useState(null);
   
   const itemsPerPage = 10;
 
@@ -44,63 +27,53 @@ const UserManagement = () => {
 
   const roles = [
     { value: 'USER', label: 'User', color: '#17a2b8', bgColor: '#d1ecf1' },
+    { value: 'STAFF', label: 'Staff', color: '#fd7e14', bgColor: '#fdebd6' },
     { value: 'ADMIN', label: 'Admin', color: '#dc3545', bgColor: '#f8d7da' }
   ];
 
-  // Sync with preloaded data
-  useEffect(() => {
-    setAllUsers(preloadedUsers);
-    setStats(preloadedStats);
-    // Only show loading if we don't have data yet
-    if (preloadedUsers.length === 0 && preloadedLoading) {
+  // Load users from API
+  const loadUsers = async (page = 0, search = '') => {
+    try {
       setLoading(true);
-    } else {
+      const response = await adminService.getUsers(page, itemsPerPage, 'createdAt', 'desc', search);
+      
+      setUsers(response.users || []);
+      setTotalPages(response.totalPages || 0);
+      setTotalElements(response.totalElements || 0);
+      setCurrentPage(response.currentPage || 0);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      showNotification('Lỗi khi tải danh sách users: ' + error.message, 'error');
+    } finally {
       setLoading(false);
     }
-  }, [preloadedUsers, preloadedLoading, preloadedStats]);
-
-  // Client-side search filter
-  const getFilteredUsers = () => {
-    if (!searchTerm.trim()) {
-      return allUsers;
-    }
-    
-    const searchLower = searchTerm.toLowerCase().trim();
-    return allUsers.filter(user => {
-      const email = (user.email || '').toLowerCase();
-      const fullName = (user.fullName || '').toLowerCase();
-      const role = (user.role || '').toLowerCase();
-      
-      return email.includes(searchLower) || 
-             fullName.includes(searchLower) || 
-             role.includes(searchLower);
-    });
   };
 
   // Load user stats
   const loadStats = async () => {
     try {
-      const response = await reloadStats();
+      const response = await adminService.getUserStats();
       setStats(response);
     } catch (error) {
       console.error('Error loading stats:', error);
     }
   };
 
-  // Reset to first page when search term changes
   useEffect(() => {
-    setCurrentPage(0);
+    loadUsers();
+    loadStats();
+  }, []);
+
+  // Load users when search term changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      loadUsers(0, searchTerm);
+    }, 500);
+    return () => clearTimeout(timeoutId);
   }, [searchTerm]);
 
-  // Get filtered users and apply pagination
-  const filteredUsers = getFilteredUsers();
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-  const totalElements = filteredUsers.length;
-  
-  // Get current page items
-  const startIndex = currentPage * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentItems = filteredUsers.slice(startIndex, endIndex);
+  // Pagination logic - now using API pagination
+  const currentItems = users;
 
   // Validation helpers
   const isStrongPassword = (password) => {
@@ -128,7 +101,7 @@ const UserManagement = () => {
       errors.email = 'Email không hợp lệ';
     } else {
       // Check duplicate email
-      const duplicateEmail = allUsers.find(user => 
+      const duplicateEmail = users.find(user => 
         user.email.toLowerCase() === formData.email.trim().toLowerCase() && 
         (!isEdit || user.id !== editingUser.id)
       );
@@ -192,7 +165,6 @@ const UserManagement = () => {
     
     if (Object.keys(errors).length === 0) {
       try {
-        setActionLoading(true);
         const userData = {
           email: formData.email.trim().toLowerCase(),
           fullName: formData.fullName.trim(),
@@ -202,23 +174,11 @@ const UserManagement = () => {
         
         await adminService.createUser(userData);
         showNotification('success', `✨ Đã thêm người dùng "${userData.fullName}" thành công!`);
-        
-        // Log activity
-        const roleLabel = roles.find(r => r.value === userData.role)?.label || userData.role;
-        addActivity('user', 'add', userData.fullName, `📧 Email: ${userData.email} | 🎭 Role: ${roleLabel}`);
-        
         resetForm();
-        setSearchTerm(''); // Clear search term
-        
-        // Reload all users data
-        const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
-        setAllUsers(response.users || []);
-        await loadStats();
-        setCurrentPage(0);
+        loadUsers(currentPage, searchTerm);
+        loadStats();
       } catch (error) {
         showNotification('error', `❌ Lỗi khi thêm người dùng: ${error.message}`);
-      } finally {
-        setActionLoading(false);
       }
     }
   };
@@ -244,7 +204,6 @@ const UserManagement = () => {
     
     if (Object.keys(errors).length === 0) {
       try {
-        setActionLoading(true);
         const userData = {
           email: formData.email.trim().toLowerCase(),
           fullName: formData.fullName.trim(),
@@ -258,72 +217,28 @@ const UserManagement = () => {
         const userId = editingUser.googleId || editingUser.id;
         await adminService.updateUser(userId, userData);
         showNotification('success', `📝 Đã cập nhật người dùng "${userData.fullName}" thành công!`);
-        
-        // Log activity - show what changed
-        const changes = [];
-        if (editingUser.fullName !== userData.fullName) changes.push(`Tên: "${editingUser.fullName}" → "${userData.fullName}"`);
-        if (editingUser.email !== userData.email) changes.push(`Email: "${editingUser.email}" → "${userData.email}"`);
-        if (editingUser.role !== userData.role) {
-          const oldRole = roles.find(r => r.value === editingUser.role)?.label || editingUser.role;
-          const newRole = roles.find(r => r.value === userData.role)?.label || userData.role;
-          changes.push(`Role: "${oldRole}" → "${newRole}"`);
-        }
-        if (formData.password && formData.password.trim()) changes.push('Đổi mật khẩu');
-        const changeDetail = changes.length > 0 ? changes.join(' | ') : 'Cập nhật thông tin';
-        addActivity('user', 'update', userData.fullName, changeDetail);
-        
         resetForm();
-        setSearchTerm(''); // Clear search term
-        
-        // Reload all users data
-        const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
-        setAllUsers(response.users || []);
-        await loadStats();
+        loadUsers(currentPage, searchTerm);
+        loadStats();
       } catch (error) {
         showNotification('error', `❌ Lỗi khi cập nhật người dùng: ${error.message}`);
-      } finally {
-        setActionLoading(false);
       }
     }
   };
 
   // Handle Delete
   const handleDelete = async (id) => {
-    const userToDelete = allUsers.find(user => user.id === id);
+    const userToDelete = users.find(user => user.id === id);
     if (window.confirm(`Bạn có chắc chắn muốn xóa người dùng "${userToDelete?.fullName}"?`)) {
       try {
-        setActionLoading(true);
         // Use correct ID for delete (Google ID for Google users, System ID for others)
         const userId = userToDelete?.googleId || userToDelete?.id;
         await adminService.deleteUser(userId);
         showNotification('success', `🗑️ Đã xóa người dùng "${userToDelete?.fullName}" thành công!`);
-        
-        // Log activity
-        const roleLabel = roles.find(r => r.value === userToDelete?.role)?.label || userToDelete?.role;
-        addActivity('user', 'delete', userToDelete?.fullName, `📧 Email: ${userToDelete?.email} | 🎭 Role: ${roleLabel}`);
-        
-        setSearchTerm(''); // Clear search term
-        
-        // Reload all users data
-        const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
-        setAllUsers(response.users || []);
-        await loadStats();
-        
-        // Adjust current page if needed
-        const newFilteredUsers = searchTerm ? response.users.filter(user => {
-          const searchLower = searchTerm.toLowerCase().trim();
-          return (user.email || '').toLowerCase().includes(searchLower) || 
-                 (user.fullName || '').toLowerCase().includes(searchLower) || 
-                 (user.role || '').toLowerCase().includes(searchLower);
-        }) : response.users;
-        const newTotalPages = Math.ceil(newFilteredUsers.length / itemsPerPage);
-        if (currentPage >= newTotalPages && newTotalPages > 0) {
-          setCurrentPage(newTotalPages - 1);
-        }
+        loadUsers(currentPage, searchTerm); // Reload current page
+        loadStats(); // Reload stats
       } catch (error) {
         showNotification('error', `❌ Lỗi khi xóa người dùng: ${error.message}`);
-      } finally {
-        setActionLoading(false);
       }
     }
   };
@@ -524,11 +439,6 @@ const UserManagement = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                }
-              }}
               placeholder="Tìm kiếm theo email, họ tên hoặc vai trò..."
               style={{
                 width: '100%',
@@ -730,7 +640,7 @@ const UserManagement = () => {
           </tbody>
         </table>
 
-        {currentItems.length === 0 && !loading && (
+        {users.length === 0 && !loading && (
           <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
             <div style={{ fontSize: '18px', marginBottom: '8px' }}>
@@ -758,7 +668,7 @@ const UserManagement = () => {
           gap: '12px'
         }}>
           <button
-            onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+            onClick={() => loadUsers(currentPage - 1, searchTerm)}
             disabled={currentPage === 0}
             style={{
               padding: '8px 12px',
@@ -780,7 +690,7 @@ const UserManagement = () => {
               return (
                 <button
                   key={pageNumber}
-                  onClick={() => setCurrentPage(pageNumber)}
+                  onClick={() => loadUsers(pageNumber, searchTerm)}
                   style={{
                     padding: '8px 12px',
                     border: '1px solid #dee2e6',
@@ -799,7 +709,7 @@ const UserManagement = () => {
           </div>
           
           <button
-            onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+            onClick={() => loadUsers(currentPage + 1, searchTerm)}
             disabled={currentPage >= totalPages - 1}
             style={{
               padding: '8px 12px',
@@ -815,7 +725,7 @@ const UserManagement = () => {
           </button>
           
           <div style={{ marginLeft: '20px', fontSize: '14px', color: '#666' }}>
-            Trang {currentPage + 1} / {totalPages} • Hiển thị {currentItems.length} / {totalElements} users
+            Trang {currentPage + 1} / {totalPages} • Hiển thị {users.length} / {totalElements} users
           </div>
         </div>
       )}
@@ -1183,33 +1093,6 @@ const UserManagement = () => {
                 Cập nhật
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Action Loading Overlay */}
-      {actionLoading && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '30px 40px',
-            borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '20px', color: '#666', marginBottom: '10px' }}>Đang xử lý...</div>
-            <div style={{ fontSize: '14px', color: '#999' }}>Vui lòng chờ trong giây lát</div>
           </div>
         </div>
       )}

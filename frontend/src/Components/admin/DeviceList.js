@@ -1,25 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useDeviceTypes } from './DeviceTypeContext';
 import { useDevices } from './DeviceContext';
-import { usePreloadedData } from './DataPreloaderContext';
-import { useActivity } from './ActivityContext';
 import adminService from '../../services/adminService';
 
 const DeviceList = () => {
-  const { addActivity } = useActivity();
   const { deviceTypes, loading: deviceTypesLoading, getDeviceTypeById, registerOnDeviceTypeAdded } = useDeviceTypes();
-  const { devices: contextDevices, loading: devicesLoading, setDevices: setContextDevices } = useDevices();
-  
-  // Use preloaded data
-  const { 
-    devices: preloadedDevices, 
-    devicesLoading: preloadedLoading,
-    loadDevices: reloadDevices,
-    setDevices: setPreloadedDevices
-  } = usePreloadedData();
-  
-  const [devices, setDevices] = useState(preloadedDevices);
-  const [loading, setLoading] = useState(false); // Don't show loading if data is preloaded
+  const { devices, loading: devicesLoading, setDevices } = useDevices();
+  const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -31,13 +18,7 @@ const DeviceList = () => {
   });
   const [formErrors, setFormErrors] = useState({});
   const [apiError, setApiError] = useState(null);
-  const [notification, setNotification] = useState(null);
   const [actionLoading, setActionLoading] = useState({ add: false, update: false, deletingId: null });
-  
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState('');
-  const [filteredDevices, setFilteredDevices] = useState([]);
 
   // Normalize backend device object to frontend shape
   function normalizeDevice(d) {
@@ -46,36 +27,19 @@ const DeviceList = () => {
     const name = d.name ?? '';
     const quantity = d.quantity ?? 0;
     const description = d.description ?? '';
-    
     // deviceType may be provided in different forms
     let deviceTypeName = '';
-    let deviceTypeId = d.deviceTypeId ?? null;
-    
     if (d.deviceType) {
       if (typeof d.deviceType === 'string') {
         // Backend may return enum name (e.g., "MIC", "MAY_CHIEU") or display name ("Mic", "Máy chiếu")
         const enumVal = d.deviceType;
-        // Map ALL known enum keys to display names - EXPANDED to include all types
+        // Map known enum keys to display names
         const enumToDisplay = {
-          MIC: 'Mic', 
-          CAM: 'Cam', 
-          LAPTOP: 'Laptop', 
-          BANG: 'Bảng', 
-          MAN_HINH: 'Màn hình', 
-          MAY_CHIEU: 'Máy chiếu', 
-          KHAC: 'Khác',
-          // Add more mappings to be safe
-          'MAN HINH': 'Màn hình',
-          'MAY CHIEU': 'Máy chiếu'
+          MIC: 'Mic', CAM: 'Cam', LAPTOP: 'Laptop', BANG: 'Bảng', MAN_HINH: 'Màn hình', MAY_CHIEU: 'Máy chiếu', KHAC: 'Khác'
         };
-        // Try to map, but if not found, use the original value (this ensures all types show)
-        deviceTypeName = enumToDisplay[enumVal] || enumToDisplay[String(enumVal).toUpperCase()] || enumVal;
+        deviceTypeName = enumToDisplay[enumVal] || enumToDisplay[String(enumVal).toUpperCase()] || d.deviceType;
       } else if (typeof d.deviceType === 'object') {
         deviceTypeName = d.deviceType.displayName ?? d.deviceType.name ?? String(d.deviceType);
-        // If deviceType is an object, it might have an id
-        if (d.deviceType.id) {
-          deviceTypeId = d.deviceType.id;
-        }
       } else {
         deviceTypeName = String(d.deviceType);
       }
@@ -84,106 +48,22 @@ const DeviceList = () => {
     }
 
     // Try to find a matching device type in local list by name (case-insensitive)
-    const typeObj = deviceTypes.find(t => 
-      String(t.name).toLowerCase() === String(deviceTypeName).toLowerCase()
-    );
-    
-    // Use typeObj.id if found, otherwise use existing deviceTypeId
-    if (typeObj) {
-      deviceTypeId = typeObj.id;
-      deviceTypeName = typeObj.name; // Use the exact name from deviceTypes
-    }
-    
-    // IMPORTANT: If deviceTypeName is still empty, use a fallback
-    if (!deviceTypeName && deviceTypeId) {
-      // Try to find by ID
-      const typeById = deviceTypes.find(t => String(t.id) === String(deviceTypeId));
-      if (typeById) {
-        deviceTypeName = typeById.name;
-      }
-    }
-    
-    // If still no deviceTypeName, use a placeholder to ensure device is visible
-    if (!deviceTypeName) {
-      deviceTypeName = 'Chưa phân loại';
-      console.warn('Device without type name:', { id, name, deviceTypeId, rawDeviceType: d.deviceType });
-    }
-    
+    const typeObj = deviceTypes.find(t => String(t.name).toLowerCase() === String(deviceTypeName).toLowerCase() || String(t.name).toLowerCase() === String(deviceTypeName).toLowerCase());
+    const deviceTypeId = typeObj ? typeObj.id : (d.deviceTypeId ?? null);
     const createdAt = d.createdAt ?? d.createdAtString ?? d.created_at ?? new Date().toISOString();
-    return { 
-      id, 
-      name, 
-      deviceTypeId, 
-      deviceTypeName: deviceTypeName || 'Chưa phân loại', 
-      quantity, 
-      description, 
-      createdAt 
-    };
+    return { id, name, deviceTypeId, deviceTypeName: deviceTypeName || (typeObj ? typeObj.name : ''), quantity, description, createdAt };
   }
 
-  // Sync with preloaded data
+  // Sync loading state with context
   useEffect(() => {
-    setDevices(preloadedDevices);
-    // Only show loading if we don't have data yet
-    if (preloadedDevices.length === 0 && (preloadedLoading || deviceTypesLoading)) {
-      setLoading(true);
-    } else {
-      setLoading(false);
-    }
-  }, [preloadedDevices, preloadedLoading, deviceTypesLoading]);
-
-  // Filter devices based on search query and type filter
-  useEffect(() => {
-    let filtered = [...devices];
-    
-    // Debug log
-    console.log('DeviceList - Total devices:', devices.length);
-    console.log('DeviceList - Device types:', devices.map(d => ({ name: d.name, type: d.deviceTypeName, typeId: d.deviceTypeId })));
-    console.log('DeviceList - Available deviceTypes:', deviceTypes.map(t => ({ id: t.id, name: t.name })));
-    
-    // Filter by device type
-    if (selectedTypeFilter) {
-      filtered = filtered.filter(device => 
-        String(device.deviceTypeId) === String(selectedTypeFilter)
-      );
-      console.log('DeviceList - Filtered by type:', selectedTypeFilter, 'Count:', filtered.length);
-    }
-    
-    // Filter by search query (name or description)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(device =>
-        device.name.toLowerCase().includes(query) ||
-        (device.description || '').toLowerCase().includes(query) ||
-        (device.deviceTypeName || '').toLowerCase().includes(query)
-      );
-      console.log('DeviceList - Filtered by search:', searchQuery, 'Count:', filtered.length);
-    }
-    
-    setFilteredDevices(filtered);
-  }, [devices, searchQuery, selectedTypeFilter, deviceTypes]);
-
-  // Re-normalize devices when deviceTypes are loaded (only once)
-  const [deviceTypesLoaded, setDeviceTypesLoaded] = useState(false);
-  useEffect(() => {
-    if (deviceTypes.length > 0 && !deviceTypesLoaded && preloadedDevices.length > 0) {
-      console.log('Re-normalizing devices with loaded deviceTypes');
-      console.log('Raw preloaded devices:', preloadedDevices.length);
-      const normalizedDevices = preloadedDevices.map(d => normalizeDevice(d)).filter(d => d !== null);
-      console.log('Normalized devices:', normalizedDevices.length);
-      console.log('Device type names:', normalizedDevices.map(d => d.deviceTypeName));
-      setDevices(normalizedDevices);
-      setContextDevices(normalizedDevices);
-      setPreloadedDevices(normalizedDevices);
-      setDeviceTypesLoaded(true);
-    }
-  }, [deviceTypes, deviceTypesLoaded, preloadedDevices]);
+    setLoading(deviceTypesLoading || devicesLoading);
+  }, [deviceTypesLoading, devicesLoading]);
 
   // Function để tạo thiết bị mẫu tự động khi có loại thiết bị mới (creates via API)
   const createSampleDevice = async (newDeviceType) => {
     try {
       setActionLoading(prev => ({ ...prev, add: true }));
-      // backend expects DeviceRequest.deviceType as enum (e.g., MIC, CAM, LAPTOP, BANG, MAN_HINH, MAY_CHIEU, KHAC)
+      // backend expects DeviceRequest.deviceType as enum (e.g., MIC, CAM, LAPTOP, BANG, MAN_HINH, KHAC)
       const mapToEnum = (displayName) => {
         const map = {
           'Mic': 'MIC',
@@ -191,7 +71,6 @@ const DeviceList = () => {
           'Laptop': 'LAPTOP',
           'Bảng': 'BANG',
           'Màn hình': 'MAN_HINH',
-          'Máy chiếu': 'MAY_CHIEU',
           'Khác': 'KHAC'
         };
         return map[displayName] || map[newDeviceType.name] || 'KHAC';
@@ -204,12 +83,10 @@ const DeviceList = () => {
         description: `Đây là thiết bị mẫu cho loại "${newDeviceType.name}". ${newDeviceType.description}`
       };
 
-      const result = await adminService.createDevice(sampleDeviceData);
-      // Refresh devices list from API and update both contexts
-      const list = await reloadDevices(deviceTypes);
-      setDevices(list);
-      setContextDevices(list);
-      setPreloadedDevices(list);
+  const result = await adminService.createDevice(sampleDeviceData);
+      // Refresh devices list from API
+  const list = await adminService.getDevices();
+  setDevices(Array.isArray(list) ? list.map(normalizeDevice).filter(Boolean) : []);
 
       // Clear API error on success
       setApiError(null);
@@ -238,6 +115,27 @@ const DeviceList = () => {
     };
     // Intentionally run only once on mount/unmount to avoid re-register loops
   }, []);
+
+  // Load devices from API on mount
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const list = await adminService.getDevices();
+        if (mounted) {
+          const normalized = Array.isArray(list) ? list.map(normalizeDevice).filter(Boolean) : [];
+          setDevices(normalized);
+        }
+      } catch (err) {
+        console.error('Error loading devices:', err);
+        if (mounted) {
+          setDevices([]);
+        }
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [setDevices]);
 
   // Validation function
   const validateDeviceForm = () => {
@@ -270,12 +168,6 @@ const DeviceList = () => {
     return errors;
   };
   
-  // Show notification
-  const showNotification = (type, message) => {
-    setNotification({ type, message });
-    setTimeout(() => setNotification(null), 5000);
-  };
-
   // Reset form
   const resetForm = () => {
     setFormData({ name: '', deviceTypeId: '', quantity: '', description: '' });
@@ -301,7 +193,6 @@ const DeviceList = () => {
             'Laptop': 'LAPTOP',
             'Bảng': 'BANG',
             'Màn hình': 'MAN_HINH',
-            'Máy chiếu': 'MAY_CHIEU',
             'Khác': 'KHAC'
           };
           return map[displayName] || 'KHAC';
@@ -315,26 +206,14 @@ const DeviceList = () => {
         };
 
         const result = await adminService.createDevice(newDeviceData);
-        
-        // Update local state directly without reloading
-        if (result && result.data) {
-          const normalizedDevice = normalizeDevice(result.data);
-          const updatedList = [normalizedDevice, ...devices];
-          setDevices(updatedList);
-          setContextDevices(updatedList);
-          setPreloadedDevices(updatedList);
-          showNotification('success', `✨ Thêm thiết bị "${formData.name}" thành công!`);
-          
-          // Log activity
-          const selectedType = getDeviceTypeById(formData.deviceTypeId);
-          addActivity('device', 'add', formData.name, `💻 Loại: ${selectedType?.name || 'N/A'} | 🔢 Số lượng: ${formData.quantity}`);
-        }
-        
-        setApiError(null);
+        // Refresh list
+  const list = await adminService.getDevices();
+  setDevices(Array.isArray(list) ? list.map(normalizeDevice).filter(Boolean) : []);
+  setApiError(null);
         resetForm();
       } catch (err) {
         console.error('Error adding device:', err);
-        setApiError(err.message || 'Lỗi khi thêm thiết bị');
+  setApiError(err.message || 'Lỗi khi thêm thiết bị');
       } finally {
         setActionLoading(prev => ({ ...prev, add: false }));
       }
@@ -343,25 +222,10 @@ const DeviceList = () => {
 
   // Handle Edit
   const handleEdit = (item) => {
-    console.log('Editing device:', item);
-    
-    // Find deviceTypeId from deviceTypeName if deviceTypeId is not available
-    let deviceTypeId = item?.deviceTypeId;
-    if (!deviceTypeId && item?.deviceTypeName) {
-      const matchingType = deviceTypes.find(t => 
-        t.name.toLowerCase() === item.deviceTypeName.toLowerCase()
-      );
-      if (matchingType) {
-        deviceTypeId = matchingType.id;
-      }
-    }
-    
-    console.log('Selected deviceTypeId:', deviceTypeId);
-    
     setEditingItem(item);
     setFormData({
       name: item?.name ?? '',
-      deviceTypeId: deviceTypeId ? String(deviceTypeId) : '',
+      deviceTypeId: (item && item.deviceTypeId !== undefined && item.deviceTypeId !== null) ? String(item.deviceTypeId) : '',
       quantity: (item && item.quantity !== undefined && item.quantity !== null) ? String(item.quantity) : '1',
       description: item?.description ?? ''
     });
@@ -385,7 +249,6 @@ const DeviceList = () => {
             'Laptop': 'LAPTOP',
             'Bảng': 'BANG',
             'Màn hình': 'MAN_HINH',
-            'Máy chiếu': 'MAY_CHIEU',
             'Khác': 'KHAC'
           };
           return map[displayName] || 'KHAC';
@@ -402,30 +265,9 @@ const DeviceList = () => {
           throw new Error('Không có thiết bị hợp lệ để cập nhật (id bị thiếu)');
         }
         const result = await adminService.updateDevice(editingItem.id, updatedData);
-        
-        // Update local state directly without reloading
-        if (result && result.data) {
-          const normalizedDevice = normalizeDevice(result.data);
-          const updatedList = devices.map(d => d.id === editingItem.id ? normalizedDevice : d);
-          setDevices(updatedList);
-          setContextDevices(updatedList);
-          setPreloadedDevices(updatedList);
-          showNotification('success', `📝 Cập nhật thiết bị "${formData.name}" thành công!`);
-          
-          // Log activity - show what changed
-          const changes = [];
-          if (editingItem.name !== formData.name) changes.push(`Tên: "${editingItem.name}" → "${formData.name}"`);
-          if (editingItem.deviceTypeId !== formData.deviceTypeId) {
-            const oldType = getDeviceTypeById(editingItem.deviceTypeId)?.name || 'N/A';
-            const newType = getDeviceTypeById(formData.deviceTypeId)?.name || 'N/A';
-            changes.push(`Loại: "${oldType}" → "${newType}"`);
-          }
-          if (editingItem.quantity !== parseInt(formData.quantity)) changes.push(`Số lượng: ${editingItem.quantity} → ${formData.quantity}`);
-          const changeDetail = changes.length > 0 ? changes.join(' | ') : 'Cập nhật mô tả';
-          addActivity('device', 'update', formData.name, changeDetail);
-        }
-        
-        setApiError(null);
+  const list = await adminService.getDevices();
+  setDevices(Array.isArray(list) ? list.map(normalizeDevice).filter(Boolean) : []);
+  setApiError(null);
         resetForm();
       } catch (err) {
         console.error('Error updating device:', err);
@@ -438,28 +280,16 @@ const DeviceList = () => {
 
   // Handle Delete
   const handleDeviceDelete = async (id) => {
-    const deviceToDelete = devices.find(d => d.id === id);
-    if (window.confirm(`Bạn có chắc chắn muốn xóa thiết bị "${deviceToDelete?.name}"?`)) {
+    if (window.confirm('Bạn có chắc chắn muốn xóa thiết bị này?')) {
       try {
         setActionLoading(prev => ({ ...prev, deletingId: id }));
         const result = await adminService.deleteDevice(id);
-        
-        // Update local state directly without reloading
-        const updatedList = devices.filter(d => d.id !== id);
-        setDevices(updatedList);
-        setContextDevices(updatedList);
-        setPreloadedDevices(updatedList);
-        setApiError(null);
-        showNotification('success', `🗑️ Xóa thiết bị "${deviceToDelete?.name}" thành công!`);
-        
-        // Log activity
-        const deviceType = getDeviceTypeById(deviceToDelete?.deviceTypeId)?.name || 'N/A';
-        addActivity('device', 'delete', deviceToDelete?.name, `💻 Loại: ${deviceType} | 🔢 Số lượng: ${deviceToDelete?.quantity}`);
+  const list = await adminService.getDevices();
+  setDevices(Array.isArray(list) ? list.map(normalizeDevice).filter(Boolean) : []);
+  setApiError(null);
       } catch (err) {
         console.error('Error deleting device:', err);
-        const errorMsg = err.message || 'Lỗi khi xóa thiết bị';
-        setApiError(errorMsg);
-        showNotification('error', errorMsg);
+  setApiError(err.message || 'Lỗi khi xóa thiết bị');
       } finally {
         setActionLoading(prev => ({ ...prev, deletingId: null }));
       }
@@ -476,44 +306,6 @@ const DeviceList = () => {
 
   return (
     <div>
-      {/* Notification Toast */}
-      {notification && (
-        <div style={{
-          position: 'fixed',
-          top: '20px',
-          right: '20px',
-          backgroundColor: notification.type === 'success' ? '#d4edda' : (notification.type === 'warning' ? '#fff3cd' : '#f8d7da'),
-          color: notification.type === 'success' ? '#155724' : (notification.type === 'warning' ? '#856404' : '#721c24'),
-          padding: '16px 20px',
-          borderRadius: '8px',
-          border: `1px solid ${notification.type === 'success' ? '#c3e6cb' : (notification.type === 'warning' ? '#ffeaa7' : '#f5c6cb')}`,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 10000,
-          minWidth: '350px',
-          maxWidth: '500px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ fontSize: '14px', lineHeight: '1.4' }}>
-              {notification.message}
-            </div>
-            <button
-              onClick={() => setNotification(null)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '18px',
-                cursor: 'pointer',
-                padding: '0',
-                marginLeft: '10px',
-                color: 'inherit'
-              }}
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Inline API error banner */}
       {apiError && (
         <div style={{
@@ -555,103 +347,6 @@ const DeviceList = () => {
         >
           Thêm Thiết bị
         </button>
-      </div>
-
-      {/* Filter Bar */}
-      <div style={{ 
-        backgroundColor: 'white', 
-        borderRadius: '12px', 
-        padding: '20px', 
-        marginBottom: '20px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-        border: '1px solid #f0f0f0'
-      }}>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Search Input */}
-          <div style={{ flex: '1', minWidth: '250px' }}>
-            <input
-              type="text"
-              placeholder="🔍 Tìm kiếm thiết bị..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '2px solid #e9ecef',
-                borderRadius: '8px',
-                fontSize: '15px',
-                outline: 'none',
-                transition: 'border-color 0.2s',
-                boxSizing: 'border-box'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#007bff'}
-              onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-            />
-          </div>
-
-          {/* Device Type Filter */}
-          <div style={{ minWidth: '200px' }}>
-            <select
-              value={selectedTypeFilter}
-              onChange={(e) => setSelectedTypeFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '2px solid #e9ecef',
-                borderRadius: '8px',
-                fontSize: '15px',
-                outline: 'none',
-                cursor: 'pointer',
-                backgroundColor: 'white',
-                boxSizing: 'border-box'
-              }}
-            >
-              <option value="">Tất cả loại thiết bị ({devices.length})</option>
-              {deviceTypes.map(type => {
-                const count = devices.filter(d => String(d.deviceTypeId) === String(type.id)).length;
-                return (
-                  <option key={type.id} value={type.id}>
-                    {type.name} ({count})
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
-          {/* Clear Filters Button */}
-          {(searchQuery || selectedTypeFilter) && (
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedTypeFilter('');
-              }}
-              style={{
-                padding: '12px 20px',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              Xóa bộ lọc
-            </button>
-          )}
-
-          {/* Results Count */}
-          <div style={{ 
-            marginLeft: 'auto', 
-            fontSize: '14px', 
-            color: '#666',
-            fontWeight: '500',
-            whiteSpace: 'nowrap'
-          }}>
-            Hiển thị: <strong>{filteredDevices.length}</strong> / {devices.length} thiết bị
-          </div>
-        </div>
       </div>
 
       {/* Add Form Modal */}
@@ -744,30 +439,10 @@ const DeviceList = () => {
                 Số lượng *
               </label>
               <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
+                type="number"
+                min="1"
                 value={formData.quantity}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Only allow positive integers
-                  if (value === '' || /^[1-9]\d*$/.test(value)) {
-                    setFormData({...formData, quantity: value});
-                  }
-                }}
-                onKeyDown={(e) => {
-                  // Prevent: e, E, +, -, .
-                  if (['e', 'E', '+', '-', '.'].includes(e.key)) {
-                    e.preventDefault();
-                  }
-                }}
-                onPaste={(e) => {
-                  // Prevent pasting non-numeric content
-                  const pasteData = e.clipboardData.getData('text');
-                  if (!/^[1-9]\d*$/.test(pasteData)) {
-                    e.preventDefault();
-                  }
-                }}
+                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
                 style={{ 
                   width: '200px', 
                   padding: '12px', 
@@ -940,30 +615,10 @@ const DeviceList = () => {
                 Số lượng *
               </label>
               <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
+                type="number"
+                min="1"
                 value={formData.quantity}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Only allow positive integers
-                  if (value === '' || /^[1-9]\d*$/.test(value)) {
-                    setFormData({...formData, quantity: value});
-                  }
-                }}
-                onKeyDown={(e) => {
-                  // Prevent: e, E, +, -, .
-                  if (['e', 'E', '+', '-', '.'].includes(e.key)) {
-                    e.preventDefault();
-                  }
-                }}
-                onPaste={(e) => {
-                  // Prevent pasting non-numeric content
-                  const pasteData = e.clipboardData.getData('text');
-                  if (!/^[1-9]\d*$/.test(pasteData)) {
-                    e.preventDefault();
-                  }
-                }}
+                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
                 style={{ 
                   width: '200px', 
                   padding: '12px', 
@@ -1080,7 +735,7 @@ const DeviceList = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredDevices.map((device, idx) => (
+            {devices.map((device, idx) => (
               <tr key={device?.id ?? `device-${idx}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
                 <td style={{ padding: '16px', color: '#666' }}>
                   {device?.id}
@@ -1159,12 +814,6 @@ const DeviceList = () => {
             ))}
           </tbody>
         </table>
-
-        {filteredDevices.length === 0 && devices.length > 0 && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
-            Không tìm thấy thiết bị nào phù hợp với bộ lọc
-          </div>
-        )}
 
         {devices.length === 0 && (
           <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>

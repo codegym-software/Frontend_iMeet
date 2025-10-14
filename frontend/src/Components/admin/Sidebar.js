@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLocation, useHistory } from 'react-router-dom';
 
-const Sidebar = ({ onLogout, user, isCollapsed, setIsCollapsed }) => {
+const Sidebar = ({ onLogout, user }) => {
   const location = useLocation();
   const history = useHistory();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const menuItems = [
     {
@@ -31,10 +32,22 @@ const Sidebar = ({ onLogout, user, isCollapsed, setIsCollapsed }) => {
       color: '#96CEB4'
     },
     {
+      name: 'Schedule Meeting',
+      path: '/admin/schedule',
+      icon: '📅',
+      color: '#FECA57'
+    },
+    {
       name: 'Meeting List',
       path: '/admin/meetings',
-      icon: '📅',
+      icon: '📋',
       color: '#48CAE4'
+    },
+    {
+      name: 'Notification',
+      path: '/admin/notifications',
+      icon: '🔔',
+      color: '#F38BA8'
     }
   ];
 
@@ -204,13 +217,7 @@ const Sidebar = ({ onLogout, user, isCollapsed, setIsCollapsed }) => {
 
       <div style={logoutStyle}>
         <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (onLogout) {
-              onLogout();
-            }
-          }}
+          onClick={onLogout}
           style={logoutButtonStyle}
           onMouseEnter={(e) => {
             e.target.style.backgroundColor = 'rgba(255,255,255,0.1)';

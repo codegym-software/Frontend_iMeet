@@ -1,124 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { usePreloadedData } from './DataPreloaderContext';
-import { useActivity } from './ActivityContext';
+import { useDevices } from './DeviceContext';
 import RoomForms from './RoomForms';
 import roomService from '../../services/roomService';
 
-// Component to display devices in a room with quantities
-const RoomDevicesList = ({ room, devices }) => {
-  const [deviceInfo, setDeviceInfo] = useState({});
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadDeviceInfo = async () => {
-      try {
-        const resp = await roomService.getDevicesByRoom(room.id);
-        if (resp && resp.success && Array.isArray(resp.data)) {
-          const deviceMap = {};
-          resp.data.forEach(rd => {
-            const device = devices.find(d => d.id === rd.deviceId);
-            deviceMap[rd.deviceId] = {
-              name: device ? device.name : `Device #${rd.deviceId}`,
-              quantity: rd.quantityAssigned || 1
-            };
-          });
-          setDeviceInfo(deviceMap);
-        }
-      } catch (err) {
-        console.error('Error loading device info:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (room.id) {
-      loadDeviceInfo();
-    }
-  }, [room.id, devices]);
-
-  if (loading) {
-    return (
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ fontSize: '14px', fontWeight: '500', color: '#495057', marginBottom: '6px' }}>
-          🔧 Thiết bị: Đang tải...
-        </div>
-      </div>
-    );
-  }
-
-  const deviceIds = Object.keys(deviceInfo);
-  if (deviceIds.length === 0) return null;
-
-  return (
-    <div style={{ marginBottom: '16px' }}>
-      <div style={{ fontSize: '14px', fontWeight: '500', color: '#495057', marginBottom: '8px' }}>
-        🔧 Thiết bị ({deviceIds.length}):
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        {deviceIds.map(deviceId => {
-          const info = deviceInfo[deviceId];
-          return (
-            <div key={deviceId} style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 12px',
-              backgroundColor: '#f8f9fa',
-              borderRadius: '6px',
-              border: '1px solid #e9ecef'
-            }}>
-              <span style={{
-                fontSize: '13px',
-                color: '#495057',
-                fontWeight: '500'
-              }}>
-                {info.name}
-              </span>
-              <span style={{
-                fontSize: '12px',
-                color: '#6c757d',
-                backgroundColor: '#e9ecef',
-                padding: '2px 8px',
-                borderRadius: '12px',
-                fontWeight: '600'
-              }}>
-                x{info.quantity}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
 const RoomManagement = () => {
-  const { addActivity } = useActivity();
-  
-  // Use devices from DataPreloaderContext instead of DeviceContext
-  const { 
-    devices: preloadedDevices,
-    loadDevices: reloadDevices,
-    setDevices: setPreloadedDevices
-  } = usePreloadedData();
-  const devices = preloadedDevices || [];
-  
-  // Use preloaded data
-  const { 
-    rooms: preloadedRooms, 
-    roomsLoading: preloadedLoading,
-    loadRooms: reloadRooms,
-    setRooms: setPreloadedRooms
-  } = usePreloadedData();
-  
-  const [rooms, setRooms] = useState(preloadedRooms);
-  const [filteredRooms, setFilteredRooms] = useState(preloadedRooms);
-  const [loading, setLoading] = useState(false); // Don't show loading if data is preloaded
-  const [actionLoading, setActionLoading] = useState(false);
+  const { devices } = useDevices();
+  const [rooms, setRooms] = useState([]);
+  const [filteredRooms, setFilteredRooms] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(8);
   const [notification, setNotification] = useState(null);
   const [apiError, setApiError] = useState(null);
 
@@ -128,7 +23,6 @@ const RoomManagement = () => {
     capacity: '',
     status: 'available', // available, booked, in-use, maintenance
     selectedDevices: [], // Array of device IDs
-    deviceQuantities: {}, // Object mapping deviceId to quantity
     description: ''
   });
   const [formErrors, setFormErrors] = useState({});
@@ -140,37 +34,22 @@ const RoomManagement = () => {
     { value: 'maintenance', label: 'Bảo trì', color: '#6c757d', bgColor: '#e2e3e5' }
   ];
 
-  // Sync with preloaded data
-  useEffect(() => {
-    let isMounted = true;
-    
-    if (isMounted) {
-      setRooms(preloadedRooms);
-      setFilteredRooms(preloadedRooms);
-      // Only show loading if we don't have data yet
-      if (preloadedRooms.length === 0 && preloadedLoading) {
-        setLoading(true);
-      } else {
-        setLoading(false);
-      }
-    }
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [preloadedRooms, preloadedLoading]);
-
-  // Load rooms from API (for refresh after CRUD operations)
+  // Load rooms from API (accepts mountedRef to avoid updating state after unmount)
   const loadRooms = async (mountedRef) => {
     // Ensure we only set component-level loading state (not a property on a primitive)
     if (!mountedRef || mountedRef.current) setLoading(true);
     setApiError(null);
     try {
-      const enrichedRooms = await reloadRooms();
+      const result = await roomService.getAllRooms();
       if (!mountedRef || mountedRef.current) {
-        setRooms(enrichedRooms);
-        setFilteredRooms(enrichedRooms);
-        setPreloadedRooms(enrichedRooms);
+        if (result && result.success) {
+          setRooms(result.data || []);
+          setFilteredRooms(result.data || []);
+        } else {
+          setApiError((result && (result.error || result.message)) || 'Lỗi khi tải danh sách phòng');
+          setRooms([]);
+          setFilteredRooms([]);
+        }
       }
     } catch (error) {
       console.error('Error loading rooms:', error);
@@ -184,18 +63,28 @@ const RoomManagement = () => {
     }
   };
 
+  useEffect(() => {
+    // Use mounted ref to avoid state updates after unmount
+    const mountedRef = { current: true };
+    loadRooms(mountedRef);
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Filter effect
   useEffect(() => {
-    if (searchTerm) {
-      const filtered = rooms.filter(room =>
-        room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        room.location.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredRooms(filtered);
-    } else {
-      setFilteredRooms(rooms);
-    }
+    const filtered = rooms.filter(room =>
+      room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      room.location.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredRooms(filtered);
+    setCurrentPage(1);
   }, [searchTerm, rooms]);
+
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredRooms.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredRooms.length / itemsPerPage);
 
   // Validation function
   const validateForm = () => {
@@ -247,7 +136,6 @@ const RoomManagement = () => {
       capacity: '',
       status: 'available',
       selectedDevices: [],
-      deviceQuantities: {},
       description: ''
     });
     setFormErrors({});
@@ -268,7 +156,7 @@ const RoomManagement = () => {
     setFormErrors(errors);
     
     if (Object.keys(errors).length === 0) {
-      setActionLoading(true);
+      setLoading(true);
       
       try {
   // Coerce capacity to number and ensure selectedDevices is an array
@@ -283,70 +171,9 @@ const RoomManagement = () => {
   const result = await roomService.createRoom(payload);
         
         if (result.success) {
-          // Sync device assignments for the new room (if any selected)
-          const newRoom = result.data;
-          const selected = Array.isArray(payload.selectedDevices) ? payload.selectedDevices : [];
-          let deviceSyncSuccess = true;
-          let deviceSyncMessage = '';
-          
-          if (selected.length > 0) {
-            try {
-              const newRoomId = newRoom.id;
-              const quantities = payload.deviceQuantities || {};
-              // Assign each selected device with specified quantity
-              const assignResults = await Promise.all(
-                selected.map(devId => {
-                  const quantity = quantities[devId] || 1;
-                  return roomService.assignDeviceToRoom(newRoomId, devId, quantity, '');
-                })
-              );
-              
-              // Check if all assignments succeeded
-              const failedAssignments = assignResults.filter(r => !r.success);
-              if (failedAssignments.length > 0) {
-                deviceSyncSuccess = false;
-                deviceSyncMessage = ` Tuy nhiên, ${failedAssignments.length}/${selected.length} thiết bị không thể gán.`;
-              } else {
-                deviceSyncMessage = ` Đã gán ${selected.length} thiết bị thành công.`;
-              }
-              
-              // Reflect assigned devices locally
-              newRoom.selectedDevices = selected.map(id => Number(id));
-            } catch (syncErr) {
-              console.warn('Device sync after create failed:', syncErr);
-              deviceSyncSuccess = false;
-              deviceSyncMessage = ` Lỗi khi gán thiết bị: ${syncErr.message || 'Không xác định'}`;
-              newRoom.selectedDevices = [];
-            }
-          } else {
-            newRoom.selectedDevices = [];
-          }
-
-          // Insert new room into local state so UI updates immediately
-          const updatedRoomsList = [newRoom, ...(preloadedRooms || [])];
-          setRooms(updatedRoomsList);
-          setPreloadedRooms(updatedRoomsList);
-          // filteredRooms will be updated by the useEffect that watches rooms
-
-          // Reload devices to update quantities after assignment
-          if (selected.length > 0) {
-            try {
-              await reloadDevices();
-            } catch (err) {
-              console.warn('Failed to reload devices:', err);
-            }
-          }
-
-          showNotification(
-            deviceSyncSuccess ? 'success' : 'warning',
-            `✨ ${result.message || 'Đã thêm phòng thành công!'}${deviceSyncMessage}`
-          );
-          
-          // Log activity
-          const deviceCount = formData.selectedDevices.length;
-          const deviceInfo = deviceCount > 0 ? `, ${deviceCount} thiết bị` : '';
-          addActivity('room', 'add', formData.name, `🏛️ Vị trí: ${formData.location} | 👥 Sức chứa: ${formData.capacity} người${deviceInfo}`);
-          
+          // Reload rooms to get updated list
+          await loadRooms();
+          showNotification('success', `✨ ${result.message || 'Đã thêm phòng thành công!'}`);
           resetForm();
         } else {
           showNotification('error', result.error || 'Lỗi khi thêm phòng');
@@ -355,14 +182,13 @@ const RoomManagement = () => {
         console.error('Error creating room:', error);
         showNotification('error', 'Lỗi kết nối đến server');
       } finally {
-        setActionLoading(false);
+        setLoading(false);
       }
     }
   };
 
   // Handle Edit
-  const handleEdit = async (room) => {
-    // Immediately show form with current data
+  const handleEdit = (room) => {
     setEditingItem(room);
     setFormData({
       name: room.name,
@@ -370,31 +196,10 @@ const RoomManagement = () => {
       capacity: room.capacity.toString(),
       status: room.status,
       selectedDevices: room.selectedDevices,
-      deviceQuantities: {}, // Will be loaded async
       description: room.description
     });
     setFormErrors({});
     setShowEditForm(true);
-    
-    // Load current device assignments with quantities in background
-    try {
-      const resp = await roomService.getDevicesByRoom(room.id);
-      if (resp && resp.success && Array.isArray(resp.data)) {
-        // Build deviceQuantities map from current assignments
-        const deviceQuantities = {};
-        resp.data.forEach(rd => {
-          deviceQuantities[rd.deviceId] = rd.quantityAssigned || 1;
-        });
-        
-        // Update form data with loaded quantities
-        setFormData(prev => ({
-          ...prev,
-          deviceQuantities: deviceQuantities
-        }));
-      }
-    } catch (err) {
-      console.warn('Failed to load device quantities:', err);
-    }
   };
 
   // Handle Update
@@ -403,7 +208,7 @@ const RoomManagement = () => {
     setFormErrors(errors);
     
     if (Object.keys(errors).length === 0) {
-      setActionLoading(true);
+      setLoading(true);
       
       try {
   const capacityNum2 = Number(String(formData.capacity).trim());
@@ -416,128 +221,9 @@ const RoomManagement = () => {
   const result = await roomService.updateRoom(editingItem.id, payload);
         
         if (result.success) {
-          // Sync device assignments: compare existing assignments and selected devices
-          let deviceSyncSuccess = true;
-          let deviceSyncMessage = '';
-          let hasDeviceChanges = false;
-          
-          try {
-            const roomId = editingItem.id;
-            const existingResp = await roomService.getDevicesByRoom(roomId);
-            if (existingResp && existingResp.success) {
-              const existing = existingResp.data || [];
-              const quantities = payload.deviceQuantities || {};
-              
-              // existing items are RoomDeviceResponse with deviceId, roomDeviceId, and quantityAssigned
-              const existingDeviceIds = existing.map(x => Number(x.deviceId));
-              const selectedDeviceIds = (payload.selectedDevices || []).map(id => Number(id));
-              
-              const toAdd = selectedDeviceIds.filter(id => !existingDeviceIds.includes(id));
-              const toRemove = existing.filter(x => !selectedDeviceIds.includes(Number(x.deviceId)));
-              const toUpdate = existing.filter(x => {
-                const deviceId = Number(x.deviceId);
-                if (!selectedDeviceIds.includes(deviceId)) return false;
-                const newQuantity = quantities[deviceId] || 1;
-                const oldQuantity = x.quantityAssigned || 1;
-                return newQuantity !== oldQuantity;
-              });
-
-              hasDeviceChanges = toAdd.length > 0 || toRemove.length > 0 || toUpdate.length > 0;
-
-              // Add new assignments with specified quantities
-              if (toAdd.length > 0) {
-                const addResults = await Promise.all(
-                  toAdd.map(devId => {
-                    const quantity = quantities[devId] || 1;
-                    return roomService.assignDeviceToRoom(roomId, devId, quantity, '');
-                  })
-                );
-                const failedAdds = addResults.filter(r => !r.success);
-                if (failedAdds.length > 0) {
-                  deviceSyncSuccess = false;
-                  deviceSyncMessage += ` ${failedAdds.length}/${toAdd.length} thiết bị không thể thêm.`;
-                }
-              }
-              
-              // Update quantities for existing assignments
-              if (toUpdate.length > 0) {
-                const updateResults = await Promise.all(
-                  toUpdate.map(rd => {
-                    const newQuantity = quantities[rd.deviceId] || 1;
-                    return roomService.updateRoomDevice(rd.roomDeviceId, {
-                      roomId: roomId,
-                      deviceId: rd.deviceId,
-                      quantityAssigned: newQuantity,
-                      notes: rd.notes || ''
-                    });
-                  })
-                );
-                const failedUpdates = updateResults.filter(r => !r.success);
-                if (failedUpdates.length > 0) {
-                  deviceSyncSuccess = false;
-                  deviceSyncMessage += ` ${failedUpdates.length}/${toUpdate.length} thiết bị không thể cập nhật số lượng.`;
-                }
-              }
-              
-              // Remove unselected assignments by roomDeviceId
-              if (toRemove.length > 0) {
-                const removeResults = await Promise.all(
-                  toRemove.map(rd => roomService.removeRoomDevice(rd.roomDeviceId))
-                );
-                const failedRemoves = removeResults.filter(r => !r.success);
-                if (failedRemoves.length > 0) {
-                  deviceSyncSuccess = false;
-                  deviceSyncMessage += ` ${failedRemoves.length}/${toRemove.length} thiết bị không thể xóa.`;
-                }
-              }
-              
-              if (deviceSyncSuccess && hasDeviceChanges) {
-                deviceSyncMessage = ` Đã cập nhật ${toAdd.length + toRemove.length + toUpdate.length} thiết bị.`;
-              }
-            }
-          } catch (syncErr) {
-            console.warn('Device sync after update failed:', syncErr);
-            deviceSyncSuccess = false;
-            deviceSyncMessage = ` Lỗi khi đồng bộ thiết bị: ${syncErr.message || 'Không xác định'}`;
-          }
-
-          // Update the specific room in local state so UI updates immediately without a full reload
-          const updatedRoom = result.data;
-          // Ensure selectedDevices reflect the current selection
-          updatedRoom.selectedDevices = Array.isArray(payload.selectedDevices) ? payload.selectedDevices.map(id => Number(id)) : [];
-
-          const updatedRoomsList = (preloadedRooms || []).map(r => (r.id === editingItem.id ? updatedRoom : r));
-          setRooms(updatedRoomsList);
-          setPreloadedRooms(updatedRoomsList);
-          // filteredRooms will be updated by the useEffect that watches rooms
-
-          // Reload devices to update quantities after any device changes
-          if (hasDeviceChanges) {
-            try {
-              await reloadDevices();
-            } catch (err) {
-              console.warn('Failed to reload devices:', err);
-            }
-          }
-
-          showNotification(
-            deviceSyncSuccess ? 'success' : 'warning',
-            `📝 ${result.message || 'Đã cập nhật phòng thành công!'}${deviceSyncMessage}`
-          );
-          
-          // Log activity - show what changed
-          const changes = [];
-          if (editingItem.name !== formData.name) changes.push(`Tên: "${editingItem.name}" → "${formData.name}"`);
-          if (editingItem.location !== formData.location) changes.push(`Vị trí: "${editingItem.location}" → "${formData.location}"`);
-          if (editingItem.capacity !== parseInt(formData.capacity)) changes.push(`Sức chứa: ${editingItem.capacity} → ${formData.capacity} người`);
-          if (editingItem.status !== formData.status) {
-            const oldStatus = roomStatuses.find(s => s.value === editingItem.status)?.label || editingItem.status;
-            const newStatus = roomStatuses.find(s => s.value === formData.status)?.label || formData.status;
-            changes.push(`Trạng thái: "${oldStatus}" → "${newStatus}"`);
-          }
-          const changeDetail = changes.length > 0 ? changes.join(' | ') : 'Cập nhật thiết bị';
-          addActivity('room', 'update', formData.name, changeDetail);
-          
+          // Reload rooms to get updated list
+          await loadRooms();
+          showNotification('success', `📝 ${result.message || 'Đã cập nhật phòng thành công!'}`);
           resetForm();
         } else {
           showNotification('error', result.error || 'Lỗi khi cập nhật phòng');
@@ -546,7 +232,7 @@ const RoomManagement = () => {
         console.error('Error updating room:', error);
         showNotification('error', 'Lỗi kết nối đến server');
       } finally {
-        setActionLoading(false);
+        setLoading(false);
       }
     }
   };
@@ -555,57 +241,23 @@ const RoomManagement = () => {
   const handleDelete = async (id) => {
     const roomToDelete = rooms.find(room => room.id === id);
     if (window.confirm(`Bạn có chắc chắn muốn xóa phòng "${roomToDelete?.name}"?`)) {
-      setActionLoading(true);
+      setLoading(true);
       
       try {
-        // First remove any assigned devices (room_device entries) to avoid FK constraint
-        let hasDevices = false;
-        try {
-          const resp = await roomService.getDevicesByRoom(id);
-          if (resp && resp.success && Array.isArray(resp.data) && resp.data.length > 0) {
-            hasDevices = true;
-            // Remove all room-device assignments
-            await Promise.all(resp.data.map(rd => roomService.removeRoomDevice(rd.roomDeviceId)));
-          }
-        } catch (cleanupErr) {
-          console.warn('Failed to cleanup room-device assignments before deleting room:', cleanupErr);
-          // Continue to attempt delete; backend may still fail but we attempted cleanup
-        }
-
         const result = await roomService.deleteRoom(id);
-
-        if (result && result.success) {
-          // Remove deleted room from local state so UI updates immediately
-          const updatedRoomsList = (preloadedRooms || []).filter(r => r.id !== id);
-          setRooms(updatedRoomsList);
-          setPreloadedRooms(updatedRoomsList);
-          // filteredRooms will be updated by the useEffect that watches rooms
-          
-          // Reload devices to update quantities after removal
-          if (hasDevices) {
-            try {
-              await reloadDevices();
-            } catch (err) {
-              console.warn('Failed to reload devices:', err);
-            }
-          }
-          
+        
+        if (result.success) {
+          // Reload rooms to get updated list
+          await loadRooms();
           showNotification('success', `🗑️ ${result.message || `Đã xóa phòng "${roomToDelete?.name}" thành công!`}`);
-          
-          // Log activity
-          addActivity('room', 'delete', roomToDelete?.name, `🏛️ ${roomToDelete?.location} | 👥 Sức chứa: ${roomToDelete?.capacity} người`);
         } else {
-          // If backend returns error object, show message
-          const errMsg = (result && result.error) || 'Lỗi khi xóa phòng';
-          showNotification('error', errMsg);
+          showNotification('error', result.error || 'Lỗi khi xóa phòng');
         }
       } catch (error) {
         console.error('Error deleting room:', error);
-        // Try to extract a helpful message from backend error
-        const msg = (error && error.message) ? error.message : 'Lỗi kết nối đến server';
-        showNotification('error', `Lỗi khi xóa phòng: ${msg}. Bạn có thể thử xóa các thiết bị gán cho phòng trước khi xóa.`);
+        showNotification('error', 'Lỗi kết nối đến server');
       } finally {
-        setActionLoading(false);
+        setLoading(false);
       }
     }
   };
@@ -631,18 +283,18 @@ const RoomManagement = () => {
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div>
       {/* Notification */}
       {notification && (
         <div style={{
           position: 'fixed',
           top: '20px',
           right: '20px',
-          backgroundColor: notification.type === 'success' ? '#d4edda' : (notification.type === 'warning' ? '#fff3cd' : '#f8d7da'),
-          color: notification.type === 'success' ? '#155724' : (notification.type === 'warning' ? '#856404' : '#721c24'),
+          backgroundColor: notification.type === 'success' ? '#d4edda' : '#f8d7da',
+          color: notification.type === 'success' ? '#155724' : '#721c24',
           padding: '16px 20px',
           borderRadius: '8px',
-          border: `1px solid ${notification.type === 'success' ? '#c3e6cb' : (notification.type === 'warning' ? '#ffeaa7' : '#f5c6cb')}`,
+          border: `1px solid ${notification.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           zIndex: 10000,
           minWidth: '350px',
@@ -822,7 +474,7 @@ const RoomManagement = () => {
         gap: '20px', 
         marginBottom: '30px' 
       }}>
-        {filteredRooms.map((room) => {
+        {currentItems.map((room) => {
           const statusInfo = getStatusInfo(room.status);
           return (
             <div key={room.id} style={{
@@ -877,7 +529,35 @@ const RoomManagement = () => {
               </div>
               
               {(room.selectedDevices || []).length > 0 && (
-                <RoomDevicesList room={room} devices={devices} />
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '500', color: '#495057', marginBottom: '6px' }}>
+                    🔧 Thiết bị ({room.selectedDevices.length}):
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {(room.selectedDevices || []).slice(0, 3).map(deviceId => (
+                      <span key={deviceId} style={{
+                        padding: '2px 8px',
+                        backgroundColor: '#e9ecef',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        color: '#495057'
+                      }}>
+                        {getDeviceName(deviceId)}
+                      </span>
+                    ))}
+                    {room.selectedDevices.length > 3 && (
+                      <span style={{
+                        padding: '2px 8px',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        borderRadius: '12px',
+                        fontSize: '12px'
+                      }}>
+                        +{room.selectedDevices.length - 3} thiết bị khác
+                      </span>
+                    )}
+                  </div>
+                </div>
               )}
               
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
@@ -935,6 +615,82 @@ const RoomManagement = () => {
         </div>
       )}
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ 
+          backgroundColor: 'white', 
+          borderRadius: '12px', 
+          padding: '20px',
+          marginTop: '20px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+          border: '1px solid #f0f0f0',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #dee2e6',
+              borderRadius: '6px',
+              backgroundColor: currentPage === 1 ? '#f8f9fa' : 'white',
+              color: currentPage === 1 ? '#6c757d' : '#495057',
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            ← Trước
+          </button>
+          
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[...Array(totalPages)].map((_, index) => {
+              const pageNumber = index + 1;
+              const isCurrentPage = pageNumber === currentPage;
+              return (
+                <button
+                  key={pageNumber}
+                  onClick={() => setCurrentPage(pageNumber)}
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid #dee2e6',
+                    borderRadius: '6px',
+                    backgroundColor: isCurrentPage ? '#007bff' : 'white',
+                    color: isCurrentPage ? 'white' : '#495057',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: isCurrentPage ? '600' : 'normal'
+                  }}
+                >
+                  {pageNumber}
+                </button>
+              );
+            })}
+          </div>
+          
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #dee2e6',
+              borderRadius: '6px',
+              backgroundColor: currentPage === totalPages ? '#f8f9fa' : 'white',
+              color: currentPage === totalPages ? '#6c757d' : '#495057',
+              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Tiếp →
+          </button>
+          
+          <div style={{ marginLeft: '20px', fontSize: '14px', color: '#666' }}>
+            Trang {currentPage} / {totalPages} • Hiển thị {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredRooms.length)} / {filteredRooms.length}
+          </div>
+        </div>
+      )}
 
       {/* Room Forms */}
       <RoomForms
@@ -949,33 +705,6 @@ const RoomManagement = () => {
         onUpdate={handleUpdate}
         onCancel={resetForm}
       />
-
-      {/* Action Loading Overlay */}
-      {actionLoading && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '30px 40px',
-            borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '20px', color: '#666', marginBottom: '10px' }}>Đang xử lý...</div>
-            <div style={{ fontSize: '14px', color: '#999' }}>Vui lòng chờ trong giây lát</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
