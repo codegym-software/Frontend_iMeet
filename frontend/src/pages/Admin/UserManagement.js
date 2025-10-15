@@ -2,7 +2,13 @@ import React, { useState, useEffect } from 'react';
 import adminService from '../../services/adminService';
 import { usePreloadedData } from './DataPreloaderContext';
 import { useActivity } from './ActivityContext';
-import { FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa';
+import UserFormModal from './components/UserFormModal';
+import UserTableRow from './components/UserTableRow';
+import UserStatsCards from './components/UserStatsCards';
+import UserSearchBar from './components/UserSearchBar';
+import Pagination from './components/Pagination';
+import './styles/UserManagement.css';
 
 const UserManagement = () => {
   const { addActivity } = useActivity();
@@ -376,39 +382,15 @@ const UserManagement = () => {
   }
 
   return (
-    <div>
+    <div className="user-management-container">
       {/* Notification */}
       {notification && (
-        <div style={{
-          position: 'fixed',
-          top: '20px',
-          right: '20px',
-          backgroundColor: notification.type === 'success' ? '#d4edda' : '#f8d7da',
-          color: notification.type === 'success' ? '#155724' : '#721c24',
-          padding: '16px 20px',
-          borderRadius: '8px',
-          border: `1px solid ${notification.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 9999,
-          minWidth: '350px',
-          maxWidth: '500px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ fontSize: '14px', lineHeight: '1.4' }}>
+        <div className={`notification-toast notification-${notification.type}`}>
+          <div className="notification-content">
+            <div className="notification-message">
               {notification.message}
             </div>
-            <button
-              onClick={() => setNotification(null)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '18px',
-                cursor: 'pointer',
-                padding: '0',
-                marginLeft: '10px',
-                color: 'inherit'
-              }}
-            >
+            <button onClick={() => setNotification(null)} className="notification-close">
               ×
             </button>
           </div>
@@ -416,342 +398,57 @@ const UserManagement = () => {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: '32px', fontWeight: '700', color: '#2c3e50', marginBottom: '8px' }}>
-            Quản lý Người Dùng
-          </h1>
-          <p style={{ fontSize: '16px', color: '#7f8c8d', margin: 0 }}>
-            Quản lý tài khoản và phân quyền người dùng trong hệ thống
-          </p>
+          <h1 className="page-title">Quản lý Người Dùng</h1>
+          <p className="page-subtitle">Quản lý tài khoản và phân quyền người dùng trong hệ thống</p>
         </div>
-        <button 
-          onClick={() => setShowAddForm(true)}
-          style={{ 
-            padding: '12px', 
-            backgroundColor: '#007bff', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '20px',
-            fontWeight: '500',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '48px',
-            height: '48px'
-          }}
-          title="Thêm người dùng mới"
-        >
+        <button onClick={() => setShowAddForm(true)} className="add-button" title="Thêm người dùng mới">
           <FaPlus />
         </button>
       </div>
 
       {/* Stats */}
-      {stats && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          marginBottom: '30px'
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-            border: '1px solid #f0f0f0',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#007bff', marginBottom: '8px' }}>
-              {stats.totalUsers || 0}
-            </div>
-            <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>Tổng Users</div>
-          </div>
-          
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-            border: '1px solid #f0f0f0',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#dc3545', marginBottom: '8px' }}>
-              {stats.adminCount || 0}
-            </div>
-            <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>Admin</div>
-          </div>
-          
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-            border: '1px solid #f0f0f0',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#17a2b8', marginBottom: '8px' }}>
-              {stats.userCount || 0}
-            </div>
-            <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>Users</div>
-          </div>
-          
-          {/* Google Users Card - Hidden */}
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-            border: '1px solid #f0f0f0',
-            textAlign: 'center',
-            display: 'none' // Ẩn card Google users
-          }}>
-            <div style={{ fontSize: '32px', fontWeight: '700', color: '#4285f4', marginBottom: '8px' }}>
-              #
-            </div>
-            <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>Google</div>
-          </div>
-        </div>
-      )}
+      <UserStatsCards stats={stats} loading={loading} />
 
       {/* Search Bar */}
-      <div style={{ 
-        backgroundColor: 'white', 
-        borderRadius: '12px', 
-        padding: '20px',
-        marginBottom: '20px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-        border: '1px solid #f0f0f0'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ position: 'relative', flex: 1 }}>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                }
-              }}
-              placeholder="Tìm kiếm theo email, họ tên hoặc vai trò..."
-              style={{
-                width: '100%',
-                padding: '12px 16px 12px 44px',
-                border: '2px solid #e9ecef',
-                borderRadius: '8px',
-                fontSize: '16px',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-            <div style={{
-              position: 'absolute',
-              left: '16px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              fontSize: '20px',
-              color: '#666'
-            }}>
-              🔍
-            </div>
-          </div>
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              style={{
-                padding: '12px 16px',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              Xóa bộ lọc
-            </button>
-          )}
-        </div>
-      </div>
+      <UserSearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
 
       {/* Users Table */}
-      <div style={{ 
-        backgroundColor: 'white', 
-        borderRadius: '12px', 
-        boxShadow: '0 2px 10px rgba(0,0,0,0.08)', 
-        border: '1px solid #f0f0f0',
-        overflow: 'hidden'
-      }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div className="users-table-container">
+        <table className="users-table">
           <thead>
-            <tr style={{ backgroundColor: '#f8f9fa' }}>
-              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
-                Avatar & User ID
-              </th>
-              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
-                Email
-              </th>
-              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
-                Họ tên
-              </th>
-              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
-                Vai trò
-              </th>
-              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
-                Ngày tạo
-              </th>
-              <th style={{ padding: '16px', textAlign: 'center', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
-                Thao tác
-              </th>
+            <tr>
+              <th>ID</th>
+              <th>Email</th>
+              <th>Họ tên</th>
+              <th>Vai trò</th>
+              <th>Ngày tạo</th>
+              <th className="center">Thao tác</th>
             </tr>
           </thead>
           <tbody>
-            {currentItems.map((user) => {
-              const roleInfo = getRoleInfo(user.role);
-              const userIdInfo = getUserIdInfo(user);
-              return (
-                <tr key={user.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  <td style={{ padding: '16px', color: '#666' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {user.avatarUrl ? (
-                        <img 
-                          src={user.avatarUrl} 
-                          alt={user.fullName || user.email}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            objectFit: 'cover',
-                            border: '2px solid #e9ecef'
-                          }}
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <div style={{ 
-                        display: user.avatarUrl ? 'none' : 'flex',
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        backgroundColor: user.googleId ? '#4285f4' : '#6c757d',
-                        color: 'white',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '14px',
-                        fontWeight: '600'
-                      }}>
-                        {(user.fullName || user.email || 'U').charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ 
-                          fontSize: '12px', 
-                          color: userIdInfo.color, 
-                          marginBottom: '2px',
-                          fontWeight: '500',
-                          backgroundColor: userIdInfo.bgColor,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          display: 'inline-block'
-                        }}>
-                          {userIdInfo.id}
-                        </div>
-                        <div style={{ 
-                          fontSize: '10px', 
-                          color: userIdInfo.color, 
-                          fontWeight: '500',
-                          marginTop: '2px'
-                        }}>
-                          {userIdInfo.type}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <span style={{ fontWeight: '500', color: '#2c3e50' }}>
-                      {user.email}
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <span style={{ fontWeight: '600', color: '#2c3e50' }}>
-                      {user.fullName}
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <span style={{
-                      padding: '4px 12px',
-                      borderRadius: '20px',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      backgroundColor: roleInfo.bgColor,
-                      color: roleInfo.color
-                    }}>
-                      {roleInfo.label}
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px', color: '#666' }}>
-                    {formatDate(user.createdAt)}
-                  </td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}>
-                    {/* Chỉ hiển thị nút Sửa cho Traditional users (không có googleId) */}
-                    {!user.googleId && (
-                      <button 
-                        onClick={() => handleEdit(user)}
-                        style={{ 
-                          padding: '8px 12px', 
-                          backgroundColor: '#007bff', 
-                          color: 'white', 
-                          border: 'none', 
-                          borderRadius: '6px',
-                          marginRight: '8px',
-                          cursor: 'pointer',
-                          fontSize: '16px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                        title="Chỉnh sửa"
-                      >
-                        <FaEdit />
-                      </button>
-                    )}
-                    {/* Hiển thị nút Xóa cho tất cả users (trừ admin) */}
-                    <button 
-                      onClick={() => handleDelete(user.id)}
-                      style={{ 
-                        padding: '8px 12px', 
-                        backgroundColor: '#dc3545', 
-                        color: 'white', 
-                        border: 'none', 
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '16px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      title="Xóa"
-                    >
-                      <FaTrash />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+            {currentItems.map((user) => (
+              <UserTableRow
+                key={user.id}
+                user={user}
+                roleInfo={getRoleInfo(user.role)}
+                userIdInfo={getUserIdInfo(user)}
+                formatDate={formatDate}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            ))}
           </tbody>
         </table>
 
         {currentItems.length === 0 && !loading && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
-            <div style={{ fontSize: '18px', marginBottom: '8px' }}>
+          <div className="empty-state">
+            <div className="empty-state-icon">👥</div>
+            <div className="empty-state-title">
               {searchTerm ? `Không tìm thấy người dùng nào với từ khóa "${searchTerm}"` : 'Chưa có người dùng nào'}
             </div>
-            <div style={{ fontSize: '14px', color: '#999' }}>
+            <div className="empty-state-subtitle">
               {searchTerm ? 'Hãy thử tìm kiếm với từ khóa khác' : 'Hãy thêm người dùng mới để bắt đầu!'}
             </div>
           </div>
@@ -759,538 +456,47 @@ const UserManagement = () => {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ 
-          backgroundColor: 'white', 
-          borderRadius: '12px', 
-          padding: '20px',
-          marginTop: '20px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-          border: '1px solid #f0f0f0',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-            disabled={currentPage === 0}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #dee2e6',
-              borderRadius: '6px',
-              backgroundColor: currentPage === 0 ? '#f8f9fa' : 'white',
-              color: currentPage === 0 ? '#6c757d' : '#495057',
-              cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            ← Trước
-          </button>
-          
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {[...Array(totalPages)].map((_, index) => {
-              const pageNumber = index;
-              const isCurrentPage = pageNumber === currentPage;
-              return (
-                <button
-                  key={pageNumber}
-                  onClick={() => setCurrentPage(pageNumber)}
-                  style={{
-                    padding: '8px 12px',
-                    border: '1px solid #dee2e6',
-                    borderRadius: '6px',
-                    backgroundColor: isCurrentPage ? '#007bff' : 'white',
-                    color: isCurrentPage ? 'white' : '#495057',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: isCurrentPage ? '600' : 'normal'
-                  }}
-                >
-                  {pageNumber + 1}
-                </button>
-              );
-            })}
-          </div>
-          
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
-            disabled={currentPage >= totalPages - 1}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #dee2e6',
-              borderRadius: '6px',
-              backgroundColor: currentPage >= totalPages - 1 ? '#f8f9fa' : 'white',
-              color: currentPage >= totalPages - 1 ? '#6c757d' : '#495057',
-              cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Tiếp →
-          </button>
-          
-          <div style={{ marginLeft: '20px', fontSize: '14px', color: '#666' }}>
-            Trang {currentPage + 1} / {totalPages} • Hiển thị {currentItems.length} / {totalElements} users
-          </div>
-        </div>
-      )}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalElements={totalElements}
+        currentItems={currentItems}
+        onPageChange={setCurrentPage}
+      />
 
       {/* Add Form Modal */}
       {showAddForm && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '12px', 
-            padding: '30px', 
-            width: '600px',
-            maxWidth: '90vw',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            position: 'relative'
-          }}>
-            <button
-              onClick={() => setShowAddForm(false)}
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'none',
-                border: 'none',
-                fontSize: '28px',
-                color: '#999',
-                cursor: 'pointer',
-                padding: '0',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-                e.currentTarget.style.color = '#333';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#999';
-              }}
-              title="Đóng"
-            >
-              ×
-            </button>
-            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px', paddingRight: '40px' }}>
-              Thêm Người Dùng Mới
-            </h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  style={{ 
-                    width: '100%', 
-                    padding: '12px', 
-                    border: `2px solid ${formErrors.email ? '#dc3545' : '#e9ecef'}`, 
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                  placeholder="VD: user@company.com"
-                />
-                {formErrors.email && (
-                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                    {formErrors.email}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                  Họ tên *
-                </label>
-                <input
-                  type="text"
-                  value={formData.fullName}
-                  onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-                  style={{ 
-                    width: '100%', 
-                    padding: '12px', 
-                    border: `2px solid ${formErrors.fullName ? '#dc3545' : '#e9ecef'}`, 
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                  placeholder="VD: Nguyễn Văn A"
-                />
-                {formErrors.fullName && (
-                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                    {formErrors.fullName}
-                  </div>
-                )}
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  {formData.fullName.length}/100 ký tự
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                  Mật khẩu *
-                </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  style={{ 
-                    width: '100%', 
-                    padding: '12px', 
-                    border: `2px solid ${formErrors.password ? '#dc3545' : '#e9ecef'}`, 
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                  placeholder="Mật khẩu mạnh (ít nhất 8 ký tự)"
-                />
-                {formData.password && (
-                  <div style={{ 
-                    marginTop: '8px', 
-                    padding: '8px', 
-                    borderRadius: '4px', 
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #e9ecef'
-                  }}>
-                    <div style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>Độ mạnh mật khẩu:</div>
-                    <div style={{ 
-                      height: '4px', 
-                      backgroundColor: '#e9ecef', 
-                      borderRadius: '2px', 
-                      overflow: 'hidden' 
-                    }}>
-                      <div style={{ 
-                        height: '100%', 
-                        width: `${(getPasswordStrength(formData.password).strength / 5) * 100}%`,
-                        backgroundColor: getPasswordStrength(formData.password).color,
-                        transition: 'all 0.3s ease'
-                      }} />
-                    </div>
-                    <div style={{ 
-                      fontSize: '12px', 
-                      color: getPasswordStrength(formData.password).color,
-                      marginTop: '4px',
-                      fontWeight: '500'
-                    }}>
-                      {getPasswordStrength(formData.password).label}
-                    </div>
-                  </div>
-                )}
-                {formErrors.password && (
-                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                    {formErrors.password}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                  Nhập lại mật khẩu *
-                </label>
-                <input
-                  type="password"
-                  value={formData.rePassword}
-                  onChange={(e) => setFormData({...formData, rePassword: e.target.value})}
-                  style={{ 
-                    width: '100%', 
-                    padding: '12px', 
-                    border: `2px solid ${formErrors.rePassword ? '#dc3545' : (formData.rePassword && formData.password === formData.rePassword ? '#28a745' : '#e9ecef')}`, 
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                  placeholder="Nhập lại mật khẩu"
-                />
-                {formData.rePassword && formData.password === formData.rePassword && (
-                  <div style={{ color: '#28a745', fontSize: '14px', marginTop: '4px' }}>
-                    ✓ Mật khẩu khớp
-                  </div>
-                )}
-                {formErrors.rePassword && (
-                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                    {formErrors.rePassword}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '30px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                Vai trò
-              </label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
-                style={{ 
-                  width: '100%', 
-                  padding: '12px', 
-                  border: '2px solid #e9ecef', 
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  boxSizing: 'border-box',
-                  outline: 'none'
-                }}
-              >
-                {roles.map(role => (
-                  <option key={role.value} value={role.value}>{role.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button 
-                onClick={resetForm}
-                style={{ 
-                  padding: '12px 24px', 
-                  backgroundColor: '#6c757d', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '16px'
-                }}
-              >
-                Hủy
-              </button>
-              <button 
-                onClick={handleAdd}
-                style={{ 
-                  padding: '12px 24px', 
-                  backgroundColor: '#28a745', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '16px'
-                }}
-              >
-                Thêm
-              </button>
-            </div>
-          </div>
-        </div>
+        <UserFormModal
+          isEdit={false}
+          formData={formData}
+          setFormData={setFormData}
+          formErrors={formErrors}
+          roles={roles}
+          onSubmit={handleAdd}
+          onCancel={resetForm}
+          getPasswordStrength={getPasswordStrength}
+        />
       )}
 
       {/* Edit Form Modal */}
       {showEditForm && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '12px', 
-            padding: '30px', 
-            width: '600px',
-            maxWidth: '90vw',
-            position: 'relative'
-          }}>
-            <button
-              onClick={() => setShowEditForm(false)}
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'none',
-                border: 'none',
-                fontSize: '28px',
-                color: '#999',
-                cursor: 'pointer',
-                padding: '0',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-                e.currentTarget.style.color = '#333';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#999';
-              }}
-              title="Đóng"
-            >
-              ×
-            </button>
-            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px', paddingRight: '40px' }}>
-              Chỉnh sửa Người Dùng
-            </h3>
-            
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                Email *
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                style={{ 
-                  width: '100%', 
-                  padding: '12px', 
-                  border: `2px solid ${formErrors.email ? '#dc3545' : '#e9ecef'}`, 
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  boxSizing: 'border-box',
-                  outline: 'none'
-                }}
-              />
-              {formErrors.email && (
-                <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                  {formErrors.email}
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                Họ tên *
-              </label>
-              <input
-                type="text"
-                value={formData.fullName}
-                onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-                style={{ 
-                  width: '100%', 
-                  padding: '12px', 
-                  border: `2px solid ${formErrors.fullName ? '#dc3545' : '#e9ecef'}`, 
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  boxSizing: 'border-box',
-                  outline: 'none'
-                }}
-              />
-              {formErrors.fullName && (
-                <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                  {formErrors.fullName}
-                </div>
-              )}
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                {formData.fullName.length}/100 ký tự
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '30px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                Vai trò
-              </label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
-                style={{ 
-                  width: '100%', 
-                  padding: '12px', 
-                  border: '2px solid #e9ecef', 
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  boxSizing: 'border-box',
-                  outline: 'none'
-                }}
-              >
-                {roles.map(role => (
-                  <option key={role.value} value={role.value}>{role.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button 
-                onClick={resetForm}
-                style={{ 
-                  padding: '12px 24px', 
-                  backgroundColor: '#6c757d', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '16px'
-                }}
-              >
-                Hủy
-              </button>
-              <button 
-                onClick={handleUpdate}
-                style={{ 
-                  padding: '12px 24px', 
-                  backgroundColor: '#007bff', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '16px'
-                }}
-              >
-                Cập nhật
-              </button>
-            </div>
-          </div>
-        </div>
+        <UserFormModal
+          isEdit={true}
+          formData={formData}
+          setFormData={setFormData}
+          formErrors={formErrors}
+          roles={roles}
+          onSubmit={handleUpdate}
+          onCancel={resetForm}
+        />
       )}
 
       {/* Action Loading Overlay */}
       {actionLoading && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '30px 40px',
-            borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '20px', color: '#666', marginBottom: '10px' }}>Đang xử lý...</div>
-            <div style={{ fontSize: '14px', color: '#999' }}>Vui lòng chờ trong giây lát</div>
+        <div className="action-loading-overlay">
+          <div className="action-loading-content">
+            <div className="action-loading-title">Đang xử lý...</div>
+            <div className="action-loading-subtitle">Vui lòng chờ trong giây lát</div>
           </div>
         </div>
       )}

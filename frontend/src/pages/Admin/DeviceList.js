@@ -4,299 +4,13 @@ import { useDevices } from './DeviceContext';
 import { usePreloadedData } from './DataPreloaderContext';
 import { useActivity } from './ActivityContext';
 import adminService from '../../services/adminService';
-import roomService from '../../services/roomService';
-import { FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
-
-// Component to display device quantity with assigned calculation
-const DeviceQuantityDisplay = ({ device }) => {
-  const [assignedQuantity, setAssignedQuantity] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadAssignedQuantity = async () => {
-      try {
-        const response = await roomService.getRoomsByDevice(device.id);
-        if (isMounted && response && response.success && Array.isArray(response.data)) {
-          // Calculate total assigned quantity from all rooms
-          const totalAssigned = response.data.reduce((sum, room) => {
-            return sum + (room.quantityAssigned || 0);
-          }, 0);
-          setAssignedQuantity(totalAssigned);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Error loading assigned quantity:', err);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    if (device.id) {
-      loadAssignedQuantity();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [device.id]);
-
-  const totalQuantity = device.quantity || 0;
-  const availableQuantity = totalQuantity - assignedQuantity;
-
-  if (loading) {
-    return <span style={{ fontSize: '13px', color: '#999' }}>...</span>;
-  }
-
-  return (
-    <span style={{ 
-      padding: '4px 8px', 
-      borderRadius: '4px', 
-      backgroundColor: '#e8f5e8',
-      color: '#2e7d32',
-      fontSize: '14px',
-      fontWeight: '600'
-    }}>
-      {availableQuantity}/{totalQuantity}
-    </span>
-  );
-};
-
-// Component to display rooms assigned to a device
-const DeviceRoomsList = ({ device }) => {
-  const [rooms, setRooms] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showAllRooms, setShowAllRooms] = useState(false);
-  const MAX_VISIBLE_ROOMS = 2;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadRooms = async () => {
-      try {
-        const response = await roomService.getRoomsByDevice(device.id);
-        if (isMounted && response && response.success && Array.isArray(response.data)) {
-          setRooms(response.data);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Error loading rooms for device:', err);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    if (device.id) {
-      loadRooms();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [device.id]);
-
-  if (loading) {
-    return <span style={{ fontSize: '13px', color: '#999' }}>Đang tải...</span>;
-  }
-
-  if (rooms.length === 0) {
-    return <span style={{ fontSize: '13px', color: '#999' }}>Chưa gán</span>;
-  }
-
-  const visibleRooms = rooms.slice(0, MAX_VISIBLE_ROOMS);
-  const hasMore = rooms.length > MAX_VISIBLE_ROOMS;
-
-  return (
-    <>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-        {visibleRooms.map(room => (
-          <span key={room.roomId} style={{
-            display: 'inline-block',
-            padding: '4px 10px',
-            backgroundColor: '#e8f5e9',
-            color: '#2e7d32',
-            borderRadius: '16px',
-            fontSize: '12px',
-            fontWeight: '500',
-            border: '1px solid #a5d6a7'
-          }}>
-            {room.name}
-          </span>
-        ))}
-        {hasMore && (
-          <span 
-            onClick={() => setShowAllRooms(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '4px 10px',
-              backgroundColor: '#f5f5f5',
-              color: '#666',
-              borderRadius: '16px',
-              fontSize: '12px',
-              fontWeight: '600',
-              border: '1px solid #ddd',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#e0e0e0';
-              e.currentTarget.style.color = '#333';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#f5f5f5';
-              e.currentTarget.style.color = '#666';
-            }}
-            title={`Xem thêm ${rooms.length - MAX_VISIBLE_ROOMS} phòng`}
-          >
-            +{rooms.length - MAX_VISIBLE_ROOMS}
-          </span>
-        )}
-      </div>
-
-      {/* Modal to show all rooms */}
-      {showAllRooms && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000
-          }}
-          onClick={() => setShowAllRooms(false)}
-        >
-          <div 
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              padding: '24px',
-              maxWidth: '500px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflow: 'auto',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              marginBottom: '20px',
-              borderBottom: '2px solid #f0f0f0',
-              paddingBottom: '12px'
-            }}>
-              <h3 style={{ 
-                margin: 0, 
-                fontSize: '18px', 
-                fontWeight: '600',
-                color: '#2c3e50'
-              }}>
-                Phòng sử dụng {device.name}
-              </h3>
-              <button
-                onClick={() => setShowAllRooms(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  color: '#999',
-                  padding: '0',
-                  width: '30px',
-                  height: '30px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '50%',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f0f0f0';
-                  e.currentTarget.style.color = '#333';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = '#999';
-                }}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {rooms.map(room => (
-                <div 
-                  key={room.roomId} 
-                  style={{
-                    padding: '12px 16px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '8px',
-                    border: '1px solid #e9ecef'
-                  }}
-                >
-                  <div style={{
-                    fontSize: '14px',
-                    color: '#2c3e50',
-                    fontWeight: '600',
-                    marginBottom: '4px'
-                  }}>
-                    {room.name}
-                  </div>
-                  <div style={{
-                    fontSize: '12px',
-                    color: '#666'
-                  }}>
-                    📍 {room.location}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ 
-              marginTop: '20px',
-              paddingTop: '16px',
-              borderTop: '1px solid #f0f0f0',
-              textAlign: 'right'
-            }}>
-              <button
-                onClick={() => setShowAllRooms(false)}
-                style={{
-                  padding: '10px 24px',
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#007bff'}
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+import { FaPlus } from 'react-icons/fa';
+import DeviceFormModal from './components/DeviceFormModal';
+import DeviceTableRow from './components/DeviceTableRow';
+import DeviceQuantityDisplay from './components/DeviceQuantityDisplay';
+import DeviceRoomsList from './components/DeviceRoomsList';
+import { normalizeDevice, mapToEnum, validateDeviceForm } from './utils/deviceUtils';
+import './styles/DeviceList.css';
 
 const DeviceList = () => {
   const { addActivity } = useActivity();
@@ -332,87 +46,6 @@ const DeviceList = () => {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('');
   const [filteredDevices, setFilteredDevices] = useState([]);
 
-  // Normalize backend device object to frontend shape
-  function normalizeDevice(d) {
-    if (!d) return null;
-    const id = d.deviceId ?? d.id ?? d.device_id ?? null;
-    const name = d.name ?? '';
-    const quantity = d.quantity ?? 0;
-    const description = d.description ?? '';
-    
-    // deviceType may be provided in different forms
-    let deviceTypeName = '';
-    let deviceTypeId = d.deviceTypeId ?? null;
-    
-    if (d.deviceType) {
-      if (typeof d.deviceType === 'string') {
-        // Backend may return enum name (e.g., "MIC", "MAY_CHIEU") or display name ("Mic", "Máy chiếu")
-        const enumVal = d.deviceType;
-        // Map ALL known enum keys to display names - EXPANDED to include all types
-        const enumToDisplay = {
-          MIC: 'Mic', 
-          CAM: 'Cam', 
-          LAPTOP: 'Laptop', 
-          BANG: 'Bảng', 
-          MAN_HINH: 'Màn hình', 
-          MAY_CHIEU: 'Máy chiếu', 
-          KHAC: 'Khác',
-          // Add more mappings to be safe
-          'MAN HINH': 'Màn hình',
-          'MAY CHIEU': 'Máy chiếu'
-        };
-        // Try to map, but if not found, use the original value (this ensures all types show)
-        deviceTypeName = enumToDisplay[enumVal] || enumToDisplay[String(enumVal).toUpperCase()] || enumVal;
-      } else if (typeof d.deviceType === 'object') {
-        deviceTypeName = d.deviceType.displayName ?? d.deviceType.name ?? String(d.deviceType);
-        // If deviceType is an object, it might have an id
-        if (d.deviceType.id) {
-          deviceTypeId = d.deviceType.id;
-        }
-      } else {
-        deviceTypeName = String(d.deviceType);
-      }
-    } else if (d.deviceTypeName) {
-      deviceTypeName = d.deviceTypeName;
-    }
-
-    // Try to find a matching device type in local list by name (case-insensitive)
-    const typeObj = deviceTypes.find(t => 
-      String(t.name).toLowerCase() === String(deviceTypeName).toLowerCase()
-    );
-    
-    // Use typeObj.id if found, otherwise use existing deviceTypeId
-    if (typeObj) {
-      deviceTypeId = typeObj.id;
-      deviceTypeName = typeObj.name; // Use the exact name from deviceTypes
-    }
-    
-    // IMPORTANT: If deviceTypeName is still empty, use a fallback
-    if (!deviceTypeName && deviceTypeId) {
-      // Try to find by ID
-      const typeById = deviceTypes.find(t => String(t.id) === String(deviceTypeId));
-      if (typeById) {
-        deviceTypeName = typeById.name;
-      }
-    }
-    
-    // If still no deviceTypeName, use a placeholder to ensure device is visible
-    if (!deviceTypeName) {
-      deviceTypeName = 'Chưa phân loại';
-      console.warn('Device without type name:', { id, name, deviceTypeId, rawDeviceType: d.deviceType });
-    }
-    
-    const createdAt = d.createdAt ?? d.createdAtString ?? d.created_at ?? new Date().toISOString();
-    return { 
-      id, 
-      name, 
-      deviceTypeId, 
-      deviceTypeName: deviceTypeName || 'Chưa phân loại', 
-      quantity, 
-      description, 
-      createdAt 
-    };
-  }
 
   // Sync with preloaded data
   useEffect(() => {
@@ -462,7 +95,7 @@ const DeviceList = () => {
     if (deviceTypes.length > 0 && !deviceTypesLoaded && preloadedDevices.length > 0) {
       console.log('Re-normalizing devices with loaded deviceTypes');
       console.log('Raw preloaded devices:', preloadedDevices.length);
-      const normalizedDevices = preloadedDevices.map(d => normalizeDevice(d)).filter(d => d !== null);
+      const normalizedDevices = preloadedDevices.map(d => normalizeDevice(d, deviceTypes)).filter(d => d !== null);
       console.log('Normalized devices:', normalizedDevices.length);
       console.log('Device type names:', normalizedDevices.map(d => d.deviceTypeName));
       setDevices(normalizedDevices);
@@ -476,19 +109,6 @@ const DeviceList = () => {
   const createSampleDevice = async (newDeviceType) => {
     try {
       setActionLoading(prev => ({ ...prev, add: true }));
-      // backend expects DeviceRequest.deviceType as enum (e.g., MIC, CAM, LAPTOP, BANG, MAN_HINH, MAY_CHIEU, KHAC)
-      const mapToEnum = (displayName) => {
-        const map = {
-          'Mic': 'MIC',
-          'Cam': 'CAM',
-          'Laptop': 'LAPTOP',
-          'Bảng': 'BANG',
-          'Màn hình': 'MAN_HINH',
-          'Máy chiếu': 'MAY_CHIEU',
-          'Khác': 'KHAC'
-        };
-        return map[displayName] || map[newDeviceType.name] || 'KHAC';
-      };
 
       const sampleDeviceData = {
         name: `${newDeviceType.name} Mẫu`,
@@ -532,36 +152,6 @@ const DeviceList = () => {
     // Intentionally run only once on mount/unmount to avoid re-register loops
   }, []);
 
-  // Validation function
-  const validateDeviceForm = () => {
-    const errors = {};
-    
-    if (!formData.name.trim()) {
-      errors.name = 'Tên thiết bị là bắt buộc';
-    } else if (formData.name.trim().length > 100) {
-      errors.name = 'Tên thiết bị không được quá 100 ký tự';
-    }
-    
-    if (!formData.deviceTypeId) {
-      errors.deviceTypeId = 'Vui lòng chọn loại thiết bị';
-    }
-    
-    if (!formData.quantity) {
-      errors.quantity = 'Số lượng là bắt buộc';
-    } else if (parseInt(formData.quantity) < 1) {
-      errors.quantity = 'Số lượng phải lớn hơn 0';
-    } else if (parseInt(formData.quantity) > 1000) {
-      errors.quantity = 'Số lượng không được quá 1000';
-    }
-    
-    if (!formData.description.trim()) {
-      errors.description = 'Mô tả là bắt buộc';
-    } else if (formData.description.trim().length > 500) {
-      errors.description = 'Mô tả không được quá 500 ký tự';
-    }
-    
-    return errors;
-  };
   
   // Show notification
   const showNotification = (type, message) => {
@@ -580,7 +170,7 @@ const DeviceList = () => {
 
   // Handle Add
   const handleAdd = async () => {
-    const errors = validateDeviceForm();
+    const errors = validateDeviceForm(formData);
     setFormErrors(errors);
 
     if (Object.keys(errors).length === 0) {
@@ -664,7 +254,7 @@ const DeviceList = () => {
 
   // Handle Update
   const handleUpdate = async () => {
-    const errors = validateDeviceForm();
+    const errors = validateDeviceForm(formData);
     setFormErrors(errors);
 
     if (Object.keys(errors).length === 0) {
@@ -758,14 +348,6 @@ const DeviceList = () => {
       }
     }
   };
-
-  if (loading) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <div style={{ fontSize: '20px', color: '#666' }}>Đang tải dữ liệu...</div>
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -955,461 +537,30 @@ const DeviceList = () => {
 
       {/* Add Form Modal */}
       {showAddForm && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '12px', 
-            padding: '30px', 
-            width: '600px',
-            maxWidth: '90vw',
-            position: 'relative'
-          }}>
-            <button
-              onClick={() => setShowAddForm(false)}
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'none',
-                border: 'none',
-                fontSize: '28px',
-                color: '#999',
-                cursor: 'pointer',
-                padding: '0',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-                e.currentTarget.style.color = '#333';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#999';
-              }}
-              title="Đóng"
-            >
-              ×
-            </button>
-            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px', paddingRight: '40px' }}>
-              Thêm Thiết bị Mới
-            </h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                  Tên thiết bị *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  style={{ 
-                    width: '100%', 
-                    padding: '12px', 
-                    border: `2px solid ${formErrors.name ? '#dc3545' : '#e9ecef'}`, 
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                  placeholder="VD: MacBook Pro 2023"
-                />
-                {formErrors.name && (
-                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                    {formErrors.name}
-                  </div>
-                )}
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  {formData.name.length}/100 ký tự
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                  Loại thiết bị *
-                </label>
-                <select
-                  value={formData.deviceTypeId}
-                  onChange={(e) => setFormData({...formData, deviceTypeId: e.target.value})}
-                  style={{ 
-                    width: '100%', 
-                    padding: '12px', 
-                    border: `2px solid ${formErrors.deviceTypeId ? '#dc3545' : '#e9ecef'}`, 
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                >
-                  <option value="">Chọn loại thiết bị</option>
-                  {deviceTypes.map(type => (
-                    <option key={type.id} value={type.id}>{type.name}</option>
-                  ))}
-                </select>
-                {formErrors.deviceTypeId && (
-                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                    {formErrors.deviceTypeId}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                Số lượng *
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={formData.quantity}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Only allow positive integers
-                  if (value === '' || /^[1-9]\d*$/.test(value)) {
-                    setFormData({...formData, quantity: value});
-                  }
-                }}
-                onKeyDown={(e) => {
-                  // Prevent: e, E, +, -, .
-                  if (['e', 'E', '+', '-', '.'].includes(e.key)) {
-                    e.preventDefault();
-                  }
-                }}
-                onPaste={(e) => {
-                  // Prevent pasting non-numeric content
-                  const pasteData = e.clipboardData.getData('text');
-                  if (!/^[1-9]\d*$/.test(pasteData)) {
-                    e.preventDefault();
-                  }
-                }}
-                style={{ 
-                  width: '200px', 
-                  padding: '12px', 
-                  border: `2px solid ${formErrors.quantity ? '#dc3545' : '#e9ecef'}`, 
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  boxSizing: 'border-box',
-                  outline: 'none'
-                }}
-                placeholder="1"
-              />
-              {formErrors.quantity && (
-                <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                  {formErrors.quantity}
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: '30px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                Mô tả *
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                style={{ 
-                  width: '100%', 
-                  padding: '12px', 
-                  border: `2px solid ${formErrors.description ? '#dc3545' : '#e9ecef'}`, 
-                  borderRadius: '8px',
-                  minHeight: '100px',
-                  resize: 'vertical',
-                  fontSize: '16px',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                  boxSizing: 'border-box',
-                  outline: 'none'
-                }}
-                placeholder="Mô tả chi tiết về thiết bị này..."
-              />
-              {formErrors.description && (
-                <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                  {formErrors.description}
-                </div>
-              )}
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                {formData.description.length}/500 ký tự
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button 
-                onClick={resetForm}
-                style={{ 
-                  padding: '12px 24px', 
-                  backgroundColor: '#6c757d', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '16px'
-                }}
-              >
-                Hủy
-              </button>
-              <button 
-                onClick={handleAdd}
-                style={{ 
-                  padding: '12px 24px', 
-                  backgroundColor: '#28a745', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  cursor: actionLoading.add ? 'wait' : 'pointer',
-                  fontSize: '16px'
-                }}
-                disabled={actionLoading.add}
-              >
-                {actionLoading.add ? 'Đang thêm...' : 'Thêm'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeviceFormModal
+          isEdit={false}
+          formData={formData}
+          setFormData={setFormData}
+          formErrors={formErrors}
+          deviceTypes={deviceTypes}
+          onSubmit={handleAdd}
+          onCancel={resetForm}
+          actionLoading={actionLoading}
+        />
       )}
 
       {/* Edit Form Modal */}
       {showEditForm && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '12px', 
-            padding: '30px', 
-            width: '600px',
-            maxWidth: '90vw',
-            position: 'relative'
-          }}>
-            <button
-              onClick={() => setShowEditForm(false)}
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'none',
-                border: 'none',
-                fontSize: '28px',
-                color: '#999',
-                cursor: 'pointer',
-                padding: '0',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-                e.currentTarget.style.color = '#333';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#999';
-              }}
-              title="Đóng"
-            >
-              ×
-            </button>
-            <h3 style={{ fontSize: '24px', fontWeight: '600', color: '#2c3e50', marginBottom: '20px', paddingRight: '40px' }}>
-              Chỉnh sửa Thiết bị
-            </h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                  Tên thiết bị *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  style={{ 
-                    width: '100%', 
-                    padding: '12px', 
-                    border: `2px solid ${formErrors.name ? '#dc3545' : '#e9ecef'}`, 
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                />
-                {formErrors.name && (
-                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                    {formErrors.name}
-                  </div>
-                )}
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  {formData.name.length}/100 ký tự
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                  Loại thiết bị *
-                </label>
-                <select
-                  value={formData.deviceTypeId}
-                  onChange={(e) => setFormData({...formData, deviceTypeId: e.target.value})}
-                  style={{ 
-                    width: '100%', 
-                    padding: '12px', 
-                    border: `2px solid ${formErrors.deviceTypeId ? '#dc3545' : '#e9ecef'}`, 
-                    borderRadius: '8px',
-                    fontSize: '16px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                >
-                  <option value="">Chọn loại thiết bị</option>
-                  {deviceTypes.map(type => (
-                    <option key={type.id} value={type.id}>{type.name}</option>
-                  ))}
-                </select>
-                {formErrors.deviceTypeId && (
-                  <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                    {formErrors.deviceTypeId}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                Số lượng *
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={formData.quantity}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Only allow positive integers
-                  if (value === '' || /^[1-9]\d*$/.test(value)) {
-                    setFormData({...formData, quantity: value});
-                  }
-                }}
-                onKeyDown={(e) => {
-                  // Prevent: e, E, +, -, .
-                  if (['e', 'E', '+', '-', '.'].includes(e.key)) {
-                    e.preventDefault();
-                  }
-                }}
-                onPaste={(e) => {
-                  // Prevent pasting non-numeric content
-                  const pasteData = e.clipboardData.getData('text');
-                  if (!/^[1-9]\d*$/.test(pasteData)) {
-                    e.preventDefault();
-                  }
-                }}
-                style={{ 
-                  width: '200px', 
-                  padding: '12px', 
-                  border: `2px solid ${formErrors.quantity ? '#dc3545' : '#e9ecef'}`, 
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  boxSizing: 'border-box',
-                  outline: 'none'
-                }}
-              />
-              {formErrors.quantity && (
-                <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                  {formErrors.quantity}
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: '30px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-                Mô tả *
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                style={{ 
-                  width: '100%', 
-                  padding: '12px', 
-                  border: `2px solid ${formErrors.description ? '#dc3545' : '#e9ecef'}`, 
-                  borderRadius: '8px',
-                  minHeight: '100px',
-                  resize: 'vertical',
-                  fontSize: '16px',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                  boxSizing: 'border-box',
-                  outline: 'none'
-                }}
-              />
-              {formErrors.description && (
-                <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '4px' }}>
-                  {formErrors.description}
-                </div>
-              )}
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                {formData.description.length}/500 ký tự
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button 
-                onClick={resetForm}
-                style={{ 
-                  padding: '12px 24px', 
-                  backgroundColor: '#6c757d', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '16px'
-                }}
-              >
-                Hủy
-              </button>
-              <button 
-                onClick={handleUpdate}
-                style={{ 
-                  padding: '12px 24px', 
-                  backgroundColor: '#007bff', 
-                  color: 'white', 
-                  border: 'none', 
-                  borderRadius: '8px',
-                  cursor: actionLoading.update ? 'wait' : 'pointer',
-                  fontSize: '16px'
-                }}
-                disabled={actionLoading.update}
-              >
-                {actionLoading.update ? 'Đang cập nhật...' : 'Cập nhật'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeviceFormModal
+          isEdit={true}
+          formData={formData}
+          setFormData={setFormData}
+          formErrors={formErrors}
+          deviceTypes={deviceTypes}
+          onSubmit={handleUpdate}
+          onCancel={resetForm}
+          actionLoading={actionLoading}
+        />
       )}
 
       {/* Devices Table */}
@@ -1423,9 +574,6 @@ const DeviceList = () => {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: '#f8f9fa' }}>
-              <th style={{ padding: '16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
-                ID
-              </th>
               <th style={{ padding: '16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>
                 Tên thiết bị
               </th>
@@ -1448,81 +596,15 @@ const DeviceList = () => {
           </thead>
           <tbody>
             {filteredDevices.map((device, idx) => (
-              <tr key={device?.id ?? `device-${idx}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                <td style={{ padding: '16px', color: '#666' }}>
-                  {device?.id}
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <span style={{ fontWeight: '600', color: '#2c3e50' }}>
-                    {device.name}
-                  </span>
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <span style={{ 
-                    padding: '4px 8px', 
-                    borderRadius: '4px', 
-                    backgroundColor: '#e3f2fd',
-                    color: '#1565c0',
-                    fontSize: '12px',
-                    fontWeight: '500'
-                  }}>
-                    {device.deviceTypeName}
-                  </span>
-                </td>
-                <td style={{ padding: '16px', textAlign: 'center' }}>
-                  <DeviceQuantityDisplay device={device} />
-                </td>
-                <td style={{ padding: '16px', maxWidth: '300px', color: '#555' }}>
-                  {((device?.description ?? '').length > 60)
-                    ? (device.description.substring(0, 60) + '...')
-                    : (device?.description ?? '')}
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <DeviceRoomsList device={device} />
-                </td>
-                <td style={{ padding: '16px', textAlign: 'center' }}>
-                  <button 
-                    onClick={() => handleEdit(device)}
-                    style={{ 
-                      padding: '8px 12px', 
-                      backgroundColor: '#007bff', 
-                      color: 'white', 
-                      border: 'none', 
-                      borderRadius: '6px',
-                      marginRight: '8px',
-                      cursor: actionLoading.deletingId ? 'not-allowed' : 'pointer',
-                      fontSize: '16px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                    disabled={actionLoading.deletingId !== null}
-                    title="Chỉnh sửa"
-                  >
-                    <FaEdit />
-                  </button>
-                  <button 
-                    onClick={() => handleDeviceDelete(device?.id)}
-                    style={{ 
-                      padding: '8px 12px', 
-                      backgroundColor: '#dc3545', 
-                      color: 'white', 
-                      border: 'none', 
-                      borderRadius: '6px',
-                      cursor: actionLoading.deletingId === device.id ? 'wait' : 'pointer',
-                      fontSize: '16px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: '36px'
-                    }}
-                    disabled={actionLoading.deletingId !== null}
-                    title="Xóa"
-                  >
-                    {actionLoading.deletingId === device.id ? '...' : <FaTrash />}
-                  </button>
-                </td>
-              </tr>
+              <DeviceTableRow
+                key={device?.id ?? `device-${idx}`}
+                device={device}
+                onEdit={handleEdit}
+                onDelete={handleDeviceDelete}
+                actionLoading={actionLoading}
+                DeviceQuantityDisplay={DeviceQuantityDisplay}
+                DeviceRoomsList={DeviceRoomsList}
+              />
             ))}
           </tbody>
         </table>

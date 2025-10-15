@@ -183,13 +183,8 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
     setIsProfileDropdownOpen(false);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      setIsProfileDropdownOpen(false);
-    } catch (error) {
-      // Silent error handling
-    }
+  const handleLogout = () => {
+    logout();
   };
 
   // Xử lý Create button - mở form trực tiếp

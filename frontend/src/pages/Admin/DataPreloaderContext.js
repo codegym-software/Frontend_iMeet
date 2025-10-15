@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import adminService from '../../services/adminService';
 import roomService from '../../services/roomService';
+import meetingService from '../../services/meetingService';
 
 // Tạo Context
 const DataPreloaderContext = createContext();
@@ -31,6 +32,10 @@ export const DataPreloaderProvider = ({ children }) => {
   // Rooms data
   const [rooms, setRooms] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
+
+  // Meetings data
+  const [meetings, setMeetings] = useState([]);
+  const [meetingsLoading, setMeetingsLoading] = useState(true);
 
   // Global loading state
   const [isPreloading, setIsPreloading] = useState(true);
@@ -76,60 +81,62 @@ export const DataPreloaderProvider = ({ children }) => {
   }, []);
 
   // Load users
-  const loadUsers = useCallback(async (page = 0, size = 10, sortBy = 'createdAt', sortDir = 'desc', search = '') => {
+  const loadUsers = useCallback(async (page = 0, size = 10, sortBy = 'createdAt', sortDir = 'desc', search = '', isMounted = { current: true }) => {
     try {
-      setUsersLoading(true);
+      if (isMounted.current) setUsersLoading(true);
       const response = await adminService.getUsers(page, size, sortBy, sortDir, search);
       
-      setUsers(response.users || []);
-      setUsersTotalPages(response.totalPages || 0);
-      setUsersTotalElements(response.totalElements || 0);
-      setUsersCurrentPage(response.currentPage || 0);
+      if (isMounted.current) {
+        setUsers(response.users || []);
+        setUsersTotalPages(response.totalPages || 0);
+        setUsersTotalElements(response.totalElements || 0);
+        setUsersCurrentPage(response.currentPage || 0);
+      }
       
       return response;
     } catch (error) {
       console.error('Error loading users:', error);
-      setUsers([]);
+      if (isMounted.current) setUsers([]);
       throw error;
     } finally {
-      setUsersLoading(false);
+      if (isMounted.current) setUsersLoading(false);
     }
   }, []);
 
   // Load user stats
-  const loadUserStats = useCallback(async () => {
+  const loadUserStats = useCallback(async (isMounted = { current: true }) => {
     try {
       const response = await adminService.getUserStats();
-      setUserStats(response);
+      if (isMounted.current) setUserStats(response);
       return response;
     } catch (error) {
       console.error('Error loading user stats:', error);
-      setUserStats(null);
+      if (isMounted.current) setUserStats(null);
       throw error;
     }
   }, []);
 
   // Load devices
-  const loadDevices = useCallback(async (deviceTypes = []) => {
+  const loadDevices = useCallback(async (deviceTypes = [], isMounted = { current: true }) => {
     try {
-      setDevicesLoading(true);
+      if (isMounted.current) setDevicesLoading(true);
       const list = await adminService.getDevices();
       const normalized = Array.isArray(list) ? list.map(d => normalizeDevice(d, deviceTypes)).filter(Boolean) : [];
-      setDevices(normalized);
+      if (isMounted.current) setDevices(normalized);
       return normalized;
     } catch (error) {
       console.error('Error loading devices:', error);
-      setDevices([]);
+      if (isMounted.current) setDevices([]);
       throw error;
     } finally {
-      setDevicesLoading(false);
+      if (isMounted.current) setDevicesLoading(false);
     }
   }, [normalizeDevice]);
 
   // Load rooms
-  const loadRooms = useCallback(async () => {
+  const loadRooms = useCallback(async (isMounted = { current: true }) => {
     try {
-      setRoomsLoading(true);
+      if (isMounted.current) setRoomsLoading(true);
       const result = await roomService.getAllRooms();
       
       if (result && result.success) {
@@ -150,50 +157,91 @@ export const DataPreloaderProvider = ({ children }) => {
             return { ...r, selectedDevices: ids };
           });
           console.log('Rooms enriched with devices:', enriched);
-          setRooms(enriched);
+          if (isMounted.current) setRooms(enriched);
           return enriched;
         } catch (enrichErr) {
           console.warn('Failed to enrich rooms with devices:', enrichErr);
           // Still set rooms with empty selectedDevices array
           const roomsWithEmptyDevices = roomsList.map(r => ({ ...r, selectedDevices: [] }));
-          setRooms(roomsWithEmptyDevices);
+          if (isMounted.current) setRooms(roomsWithEmptyDevices);
           return roomsWithEmptyDevices;
         }
       } else {
-        setRooms([]);
+        if (isMounted.current) setRooms([]);
         return [];
       }
     } catch (error) {
       console.error('Error loading rooms:', error);
-      setRooms([]);
+      if (isMounted.current) setRooms([]);
       throw error;
     } finally {
-      setRoomsLoading(false);
+      if (isMounted.current) setRoomsLoading(false);
+    }
+  }, []);
+
+  // Load meetings
+  const loadMeetings = useCallback(async (isMounted = { current: true }) => {
+    try {
+      if (isMounted.current) setMeetingsLoading(true);
+      const response = await meetingService.getAllMeetings();
+      
+      if (response && response.success) {
+        const meetingsData = (response.data || []).map(meeting => ({
+          ...meeting,
+          bookingStatus: meeting.bookingStatus?.toLowerCase() || 'booked'
+        }));
+        if (isMounted.current) {
+          setMeetings(meetingsData);
+          console.log('Meetings Result:', meetingsData);
+        }
+        return meetingsData;
+      } else {
+        if (isMounted.current) setMeetings([]);
+        return [];
+      }
+    } catch (error) {
+      console.error('Error loading meetings:', error);
+      if (isMounted.current) setMeetings([]);
+      throw error;
+    } finally {
+      if (isMounted.current) setMeetingsLoading(false);
     }
   }, []);
 
   // Preload all data on mount
   useEffect(() => {
+    const isMountedRef = { current: true };
+
     const preloadAllData = async () => {
-      setIsPreloading(true);
+      if (isMountedRef.current) setIsPreloading(true);
       
       try {
-        // Load all data in parallel
-        await Promise.all([
-          loadUsers(),
-          loadUserStats(),
-          loadDevices(),
-          loadRooms()
+        // Load all data in parallel with isMounted check
+        const results = await Promise.all([
+          loadUsers(0, 10, 'createdAt', 'desc', '', isMountedRef),
+          loadUserStats(isMountedRef),
+          loadDevices([], isMountedRef),
+          loadRooms(isMountedRef),
+          loadMeetings(isMountedRef)
         ]);
+        
+        console.log('Stats Result:', results[1]);
+        console.log('Rooms Result:', results[3]);
+        console.log('Devices Result:', results[2]);
+        console.log('Meetings Result:', results[4]);
       } catch (error) {
         console.error('Error preloading data:', error);
       } finally {
-        setIsPreloading(false);
+        if (isMountedRef.current) setIsPreloading(false);
       }
     };
 
     preloadAllData();
-  }, [loadUsers, loadUserStats, loadDevices, loadRooms]);
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadUsers, loadUserStats, loadDevices, loadRooms, loadMeetings]);
 
   const value = {
     // Users
@@ -219,6 +267,12 @@ export const DataPreloaderProvider = ({ children }) => {
     roomsLoading,
     loadRooms,
     setRooms,
+    
+    // Meetings
+    meetings,
+    meetingsLoading,
+    loadMeetings,
+    setMeetings,
     
     // Global
     isPreloading

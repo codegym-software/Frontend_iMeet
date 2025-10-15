@@ -31,27 +31,34 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Check if response is a redirect to Cognito (CORS error indicates redirect)
-    // or if it's a 401 Unauthorized error
-    if (error.message === 'Network Error' || 
-        (error.response && error.response.status === 401) ||
-        (error.config && error.config.url && error.config.url.includes('cognito'))) {
+    // Check for authentication/session errors:
+    // 1. 401 Unauthorized
+    // 2. Network Error (CORS from redirect)
+    // 3. Failed to fetch (CORS error - session expired)
+    // 4. TypeError: Failed to fetch
+    const isAuthError = 
+      (error.response && error.response.status === 401) ||
+      error.message === 'Network Error' ||
+      error.message === 'Failed to fetch' ||
+      (error.name === 'TypeError' && error.message.includes('fetch'));
+    
+    if (isAuthError) {
+      console.warn('Session expired or authentication error, redirecting to login');
       
-      console.warn('Authentication error detected, clearing auth data and redirecting to login');
-      
-      // Clear auth data
+      // Clear auth data immediately
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('oauth2User');
       
-      // Redirect to login only if not already on login page
-      if (window.location.pathname !== '/login' && 
-          window.location.pathname !== '/' &&
-          window.location.pathname !== '/signup' &&
-          window.location.pathname !== '/forgot-password') {
+      // Redirect to login only if not already on public pages
+      const publicPaths = ['/login', '/', '/signup', '/forgot-password'];
+      const currentPath = window.location.pathname;
+      
+      if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/reset-password')) {
         window.location.href = '/login';
       }
     }
+    
     return Promise.reject(error);
   }
 );

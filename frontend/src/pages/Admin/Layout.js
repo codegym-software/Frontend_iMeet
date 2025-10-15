@@ -11,18 +11,7 @@ const Layout = ({ children }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleLogout = () => {
-    // Clear auth immediately
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    sessionStorage.clear();
-    
-    // Force immediate redirect
-    window.location.href = '/login';
-    
-    // Cleanup in background (won't block redirect)
-    logout().catch(error => {
-      console.error('Logout error:', error);
-    });
+    logout();
   };
   
   const layoutStyle = {
