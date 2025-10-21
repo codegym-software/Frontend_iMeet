@@ -26,29 +26,44 @@ const DayView = React.memo(({
       const endMinutes = event.end.getHours() * 60 + event.end.getMinutes();
       const duration = endMinutes - startMinutes;
 
-      const top = (startMinutes / 60) * 60;
-      const height = Math.max((duration / 60) * 60, 20);
+      // Calculate exact pixel position: 1 minute = 1 pixel, plus 48px offset for GMT header
+      const top = startMinutes + 48;
+      const height = Math.max(duration, 20);
 
       return (
         <div
           key={event.id}
-          className="calendar-event timed-event"
+          className={`calendar-event timed-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
           style={{
             top: `${top}px`,
             height: `${height}px`,
             backgroundColor: event.color,
-            borderLeft: `3px solid ${event.color}`
+            borderLeft: `3px solid ${event.color}`,
+            opacity: event.opacity || 1
           }}
           onClick={(e) => handleEventClick(event, e)}
           onMouseEnter={(e) => handleEventMouseEnter(event, e)}
           onMouseLeave={handleEventMouseLeave}
         >
           <div className="event-content">
-            <div className="event-time">
-              {formatTime(event.start)}
-            </div>
-            <div className="event-title">{event.title}</div>
-            <div className="event-calendar">{event.calendar}</div>
+            {duration < 60 ? (
+              // Short meeting: single line format "Title (10:00 AM - 11:00 AM)"
+              <div className="event-title-inline">
+                {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
+                {event.title} ({formatTime(event.start)} - {formatTime(event.end)})
+              </div>
+            ) : (
+              // Long meeting: multi-line format
+              <>
+                <div className="event-title">
+                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
+                  {event.title}
+                </div>
+                <div className="event-time">
+                  {formatTime(event.start)} - {formatTime(event.end)}
+                </div>
+              </>
+            )}
           </div>
         </div>
       );
@@ -88,16 +103,20 @@ const DayView = React.memo(({
             {allDayEvents.map(event => (
               <div
                 key={event.id}
-                className="calendar-event all-day-event"
+                className={`calendar-event all-day-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
                 style={{
                   backgroundColor: event.color,
-                  borderLeft: `3px solid ${event.color}`
+                  borderLeft: `3px solid ${event.color}`,
+                  opacity: event.opacity || 1
                 }}
                 onClick={(e) => handleEventClick(event, e)}
                 onMouseEnter={(e) => handleEventMouseEnter(event, e)}
                 onMouseLeave={handleEventMouseLeave}
               >
-                <div className="event-title">{event.title}</div>
+                <div className="event-title">
+                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
+                  {event.title}
+                </div>
               </div>
             ))}
           </div>
@@ -106,11 +125,17 @@ const DayView = React.memo(({
 
       <div className="time-slots-container" ref={timeSlotsRef}>
         <div className="time-slots">
+          {/* GMT+7 Label */}
+          <div className="time-slot-hour gmt-header">
+            <div className="hour-label gmt-label">GMT+7</div>
+            <div className="hour-slot gmt-spacer"></div>
+          </div>
+
           {/* Current Time Indicator */}
           {isToday && (
             <div
               className="current-time-indicator"
-              style={{ top: `${(currentHour * 60 + currentMinute)}px` }}
+              style={{ top: `${(currentHour * 60 + currentMinute + 48)}px` }}
             >
               <div className="current-time-dot"></div>
               <div className="current-time-line"></div>

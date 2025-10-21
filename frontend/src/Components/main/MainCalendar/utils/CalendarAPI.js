@@ -1,15 +1,27 @@
 // API service module
 const API_BASE_URL = 'http://localhost:8081/api';
 
+// Helper function to get headers with auth token
+const getHeaders = () => {
+  const token = localStorage.getItem('token');
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
 export const calendarAPI = {
   // Lấy tất cả meetings
   async getAllMeetings() {
     try {
       const response = await fetch(`${API_BASE_URL}/meetings`, {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch meetings');
       const data = await response.json();
@@ -27,9 +39,7 @@ export const calendarAPI = {
         `${API_BASE_URL}/meetings/date-range?startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`,
         {
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getHeaders(),
         }
       );
       if (!response.ok) throw new Error('Failed to fetch meetings by date range');
@@ -46,9 +56,7 @@ export const calendarAPI = {
     try {
       const response = await fetch(`${API_BASE_URL}/meetings/today`, {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch today meetings');
       const data = await response.json();
@@ -64,9 +72,7 @@ export const calendarAPI = {
     try {
       const response = await fetch(`${API_BASE_URL}/meetings/upcoming`, {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch upcoming meetings');
       const data = await response.json();
@@ -82,9 +88,7 @@ export const calendarAPI = {
     try {
       const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}`, {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to fetch meeting');
       const data = await response.json();
@@ -101,9 +105,7 @@ export const calendarAPI = {
       const response = await fetch(`${API_BASE_URL}/meetings`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
         body: JSON.stringify(meetingData),
       });
       if (!response.ok) {
@@ -124,9 +126,7 @@ export const calendarAPI = {
       const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}`, {
         method: 'PUT',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
         body: JSON.stringify(meetingData),
       });
       if (!response.ok) {
@@ -147,9 +147,7 @@ export const calendarAPI = {
       const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}`, {
         method: 'DELETE',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -168,9 +166,7 @@ export const calendarAPI = {
       const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/status`, {
         method: 'PATCH',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
         body: JSON.stringify({ status }),
       });
       if (!response.ok) throw new Error('Failed to update meeting status');
@@ -189,9 +185,7 @@ export const calendarAPI = {
         `${API_BASE_URL}/meetings/check-availability?roomId=${roomId}&startTime=${startTime.toISOString()}&endTime=${endTime.toISOString()}`,
         {
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getHeaders(),
         }
       );
       if (!response.ok) throw new Error('Failed to check room availability');
@@ -208,15 +202,53 @@ export const calendarAPI = {
     try {
       const response = await fetch(`${API_BASE_URL}/meetings/search?title=${encodeURIComponent(title)}`, {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getHeaders(),
       });
       if (!response.ok) throw new Error('Failed to search meetings');
       const data = await response.json();
       return data.data || [];
     } catch (error) {
       console.error('API Error - searchMeetings:', error);
+      throw error;
+    }
+  },
+
+  // Admin duyệt meeting
+  async approveMeeting(meetingId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/approve`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getHeaders(),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to approve meeting');
+      }
+      const data = await response.json();
+      return data.data;
+    } catch (error) {
+      console.error('API Error - approveMeeting:', error);
+      throw error;
+    }
+  },
+
+  // Admin từ chối meeting
+  async rejectMeeting(meetingId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/reject`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getHeaders(),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to reject meeting');
+      }
+      const data = await response.json();
+      return data.data;
+    } catch (error) {
+      console.error('API Error - rejectMeeting:', error);
       throw error;
     }
   },

@@ -255,10 +255,10 @@ const RoomFormModal = ({
             backgroundColor: '#f8f9fa',
             color: '#666'
           }}>
-            Phòng trống (mặc định)
+            Có thể sử dụng (mặc định)
           </div>
           <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-            Trạng thái sẽ được thiết lập là "Phòng trống" khi tạo mới
+            Trạng thái sẽ được thiết lập là "Có thể sử dụng" khi tạo mới
           </div>
         </div>
       )}

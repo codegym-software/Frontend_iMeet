@@ -9,6 +9,7 @@ import SearchSection from '../../Components/main/SearchSection';
 import UpcomingMeetings from '../../Components/main/UpcomingMeetings';
 import OtherSchedule from '../../Components/main/OtherSchedule';
 import TimeTable from '../../Components/main/MainCalendar/TimeTable';
+import Toast from '../../Components/common/Toast';
 
 const Main = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -16,6 +17,7 @@ const Main = () => {
   const [viewType, setViewType] = useState('day');
   const [theme, setTheme] = useState('light');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
   const history = useHistory();
 
   useEffect(() => {
@@ -42,8 +44,22 @@ const Main = () => {
   };
 
   // Hàm xử lý khi tạo meeting thành công
-  const handleMeetingCreated = () => {
-    setRefreshTrigger(prev => prev + 1);
+  const handleMeetingCreated = (meetingData, message) => {
+    console.log('handleMeetingCreated called, refreshing calendar...');
+    setRefreshTrigger(prev => {
+      const newValue = prev + 1;
+      console.log('refreshTrigger updated:', prev, '->', newValue);
+      return newValue;
+    });
+    
+    // Show toast if message provided
+    if (message) {
+      setToast({
+        isOpen: true,
+        message: message,
+        type: 'success'
+      });
+    }
   };
 
   return (
@@ -106,10 +122,20 @@ const Main = () => {
               selectedDate={selectedDate} 
               viewType={viewType}
               refreshTrigger={refreshTrigger}
+              onDateSelect={handleDateChange}
+              onMeetingUpdated={handleMeetingCreated}
             />
           </div>
         </div>
       </div>
+      
+      {/* Toast Notification */}
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isOpen: false })}
+      />
     </div>
   );
 };

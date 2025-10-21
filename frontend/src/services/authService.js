@@ -353,12 +353,28 @@ class AuthService {
   // Đổi mật khẩu
   async changePassword(currentPassword, newPassword, confirmPassword) {
     try {
+      // Kiểm tra xem user có phải OAuth2 không
+      const oauth2User = localStorage.getItem('oauth2User');
+      console.log('changePassword - OAuth2 User:', oauth2User);
+      
+      if (oauth2User) {
+        // OAuth2 users không thể đổi mật khẩu
+        throw new Error('Tài khoản Google không thể đổi mật khẩu tại đây. Vui lòng đổi mật khẩu trên Google.');
+      }
+      
       // Lấy token từ localStorage
       const token = localStorage.getItem('token');
+      console.log('changePassword - Token:', token ? 'Exists (length: ' + token.length + ')' : 'None');
       
       if (!token) {
         throw new Error('Không có token. Vui lòng đăng nhập lại.');
       }
+      
+      console.log('changePassword - Sending request with:', {
+        currentPassword: '***',
+        newPassword: '***',
+        confirmPassword: '***'
+      });
       
       const response = await apiClient.post('/api/auth/change-password', {
         currentPassword,
@@ -370,9 +386,22 @@ class AuthService {
         }
       });
       
+      console.log('changePassword - Response:', response.data);
       return response.data;
     } catch (error) {
-      throw error.response?.data || error.message;
+      console.error('changePassword - Error:', error);
+      console.error('changePassword - Error response:', error.response?.data);
+      console.error('changePassword - Error response status:', error.response?.status);
+      console.error('changePassword - Full error object:', JSON.stringify(error.response?.data, null, 2));
+      
+      // Throw error với message rõ ràng
+      if (error.response?.data) {
+        throw error.response.data;
+      } else if (error.message) {
+        throw { message: error.message };
+      } else {
+        throw { message: 'Có lỗi xảy ra khi đổi mật khẩu' };
+      }
     }
   }
 

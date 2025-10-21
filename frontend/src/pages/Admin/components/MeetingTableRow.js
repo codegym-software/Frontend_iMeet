@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaEye, FaTimes } from 'react-icons/fa';
+import { FaEye, FaTimes, FaCheck } from 'react-icons/fa';
 
 const MeetingTableRow = ({ 
   meeting, 
@@ -8,10 +8,16 @@ const MeetingTableRow = ({
   formatDuration, 
   onViewDetail, 
   onCancel, 
-  cancellingId 
+  onApprove,
+  onReject,
+  cancellingId,
+  processingId
 }) => {
-  const status = statusConfig[meeting.bookingStatus] || statusConfig.booked;
-  const isCancelled = meeting.bookingStatus === 'cancelled';
+  const status = statusConfig[meeting.bookingStatus?.toLowerCase()] || statusConfig.pending;
+  const isCancelled = meeting.bookingStatus?.toLowerCase() === 'cancelled';
+  const bookingStatusLower = meeting.bookingStatus?.toLowerCase();
+  const isPending = bookingStatusLower === 'pending' || bookingStatusLower === 'booked'; // Support old BOOKED status
+  const isRejected = meeting.bookingStatus?.toLowerCase() === 'rejected';
 
   return (
     <tr
@@ -112,7 +118,7 @@ const MeetingTableRow = ({
 
       {/* Actions */}
       <td style={{ padding: '16px', textAlign: 'center' }}>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => onViewDetail(meeting)}
             style={{
@@ -135,7 +141,79 @@ const MeetingTableRow = ({
           >
             <FaEye />
           </button>
-          {!isCancelled && (
+          
+          {/* PENDING: Show Approve + Reject buttons */}
+          {isPending && onApprove && onReject && (
+            <>
+              <button
+                onClick={() => onApprove(meeting)}
+                disabled={processingId === meeting.meetingId}
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: processingId === meeting.meetingId ? '#6c757d' : '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: processingId === meeting.meetingId ? 'not-allowed' : 'pointer',
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: '36px'
+                }}
+                onMouseEnter={(e) => {
+                  if (processingId !== meeting.meetingId) {
+                    e.currentTarget.style.backgroundColor = '#218838';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (processingId !== meeting.meetingId) {
+                    e.currentTarget.style.backgroundColor = '#28a745';
+                  }
+                }}
+                title="Duyệt cuộc họp"
+              >
+                {processingId === meeting.meetingId ? '...' : <FaCheck />}
+              </button>
+              <button
+                onClick={() => onReject(meeting)}
+                disabled={processingId === meeting.meetingId}
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: processingId === meeting.meetingId ? '#6c757d' : '#ffc107',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: processingId === meeting.meetingId ? 'not-allowed' : 'pointer',
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: '36px'
+                }}
+                onMouseEnter={(e) => {
+                  if (processingId !== meeting.meetingId) {
+                    e.currentTarget.style.backgroundColor = '#e0a800';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (processingId !== meeting.meetingId) {
+                    e.currentTarget.style.backgroundColor = '#ffc107';
+                  }
+                }}
+                title="Từ chối cuộc họp"
+              >
+                {processingId === meeting.meetingId ? '...' : <FaTimes />}
+              </button>
+            </>
+          )}
+          
+          {/* CONFIRMED: Show Cancel button */}
+          {meeting.bookingStatus?.toLowerCase() === 'confirmed' && onCancel && (
             <button
               onClick={() => onCancel(meeting)}
               disabled={cancellingId === meeting.meetingId}

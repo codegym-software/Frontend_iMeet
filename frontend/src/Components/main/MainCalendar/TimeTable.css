@@ -105,6 +105,16 @@
   position: relative;
 }
 
+.time-slot-hour.gmt-header {
+  min-height: 48px;
+  background: var(--bg-color);
+}
+
+.hour-slot.gmt-spacer {
+  height: 48px;
+  background: var(--bg-color);
+}
+
 .hour-label {
   width: 80px;
   padding: 8px 16px;
@@ -117,6 +127,14 @@
   position: relative;
   z-index: 2;
   flex-shrink: 0;
+}
+
+.hour-label.gmt-label {
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .hour-slot {
@@ -141,44 +159,17 @@
   border-bottom: 1px solid var(--component-bg);
 }
 
-.time-slot.half-hour::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--border-color);
-}
-
-/* Current Time Indicator - FIXED POSITION */
+/* Current Time Indicator - HIDDEN */
 .current-time-indicator {
-  position: absolute;
-  left: 80px;
-  right: 0;
-  height: 2px;
-  z-index: 10;
-  pointer-events: none;
+  display: none;
 }
 
 .current-time-line {
-  height: 2px;
-  background: var(--danger-color);
-  position: absolute;
-  left: 0;
-  right: 0;
+  display: none;
 }
 
 .current-time-dot {
-  width: 12px;
-  height: 12px;
-  background: var(--danger-color);
-  border-radius: 50%;
-  position: absolute;
-  left: -6px;
-  top: -5px;
-  border: 2px solid var(--bg-color);
-  box-shadow: 0 0 0 1px var(--danger-color);
+  display: none;
 }
 
 /* Event Styles */
@@ -223,6 +214,15 @@
   font-weight: 500;
   line-height: 1.3;
   font-size: 13px;
+}
+
+.event-title-inline {
+  font-weight: 500;
+  line-height: 1.3;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .event-calendar {
@@ -322,13 +322,24 @@
   font-weight: 600;
   background: var(--bg-color);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+}
+
+.gmt-label-small {
+  font-size: 10px;
+  color: var(--muted-color);
+  font-weight: 500;
+  opacity: 0.8;
 }
 
 .week-all-day-content {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  min-width: min-content;
+  gap: 0;
 }
 
 .week-all-day-cell {
@@ -337,7 +348,6 @@
   min-height: 44px;
   background: var(--bg-color);
   position: relative;
-  min-width: 140px;
   cursor: pointer;
   transition: background-color 0.1s;
 }
@@ -362,6 +372,32 @@
   white-space: nowrap;
   font-weight: 500;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Week Day Headers Row - FIXED AT TOP */
+.week-day-headers-row {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-color);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  width: 100%;
+}
+
+.week-time-label-spacer {
+  width: 80px;
+  border-right: 1px solid var(--border-color);
+  background: var(--bg-color);
+  flex-shrink: 0;
+}
+
+.week-day-headers-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
 }
 
 /* Week Time Section - SYNCHRONIZED SCROLLING */
@@ -397,6 +433,7 @@
   flex-shrink: 0;
 }
 
+
 .week-days-content {
   flex: 1;
   overflow: auto;
@@ -406,7 +443,7 @@
 .week-days-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  min-width: min-content;
+  gap: 0;
 }
 
 .week-day-column {
@@ -421,15 +458,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid var(--border-color);
   border-right: 1px solid var(--border-color);
   cursor: pointer;
   transition: background-color 0.1s;
   background: var(--bg-color);
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  min-width: 140px;
 }
 
 .week-day-header:hover {
@@ -480,6 +514,8 @@
 .week-day-time-cells {
   position: relative;
   min-height: 1440px; /* 24 hours * 60px */
+  display: flex;
+  flex-direction: column;
 }
 
 .week-time-cell {
@@ -492,8 +528,28 @@
   transition: background-color 0.1s;
 }
 
+.week-gmt-spacer {
+  height: 48px;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-color);
+  flex-shrink: 0;
+}
+
 .week-time-cell:hover {
   background: var(--hover-bg);
+}
+
+/* Add half-hour line for better visibility */
+.week-time-cell::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--component-bg);
+  pointer-events: none;
 }
 
 /* Week Timed Events */

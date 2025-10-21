@@ -218,7 +218,7 @@ export const DataPreloaderProvider = ({ children }) => {
       try {
         // Load all data in parallel with isMounted check
         const results = await Promise.all([
-          loadUsers(0, 10, 'createdAt', 'desc', '', isMountedRef),
+          loadUsers(0, 1000, 'createdAt', 'desc', '', isMountedRef),
           loadUserStats(isMountedRef),
           loadDevices([], isMountedRef),
           loadRooms(isMountedRef),

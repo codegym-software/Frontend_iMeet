@@ -55,8 +55,8 @@ const MonthView = React.memo(({
 
       <div className="month-calendar">
         <div className="month-week-days">
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
-            <div key={day} className="month-week-day">{day}</div>
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+            <div key={index} className="month-week-day">{day}</div>
           ))}
         </div>
 

@@ -64,6 +64,7 @@
 .calendar-day.selected {
   background-color: var(--accent-color);
   color: white;
+  font-weight: 600;
 }
 
 .calendar-day.other-month {
@@ -71,9 +72,18 @@
 }
 
 .calendar-day.today {
+  background-color: transparent;
+  color: var(--accent-color);
+  font-weight: 600;
+  border: 2px solid var(--accent-color);
+  box-sizing: border-box;
+}
+
+/* When today is also selected */
+.calendar-day.today.selected {
   background-color: var(--accent-color);
   color: white;
-  font-weight: 600;
+  border: 2px solid var(--accent-color);
 }
 
 /* Navigation buttons - ĐẶT NGOÀI CALENDAR */

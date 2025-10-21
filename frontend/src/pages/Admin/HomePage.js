@@ -133,13 +133,17 @@ const HomePage = () => {
         <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#2c3e50', marginBottom: '16px' }}>Quick Actions</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <a href="/admin/devices" style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', textDecoration: 'none', color: '#2c3e50', transition: 'all 0.2s' }}>
-              <span style={{ marginRight: '12px', fontSize: '20px' }}>💻</span>
-              <span>Manage Equipment</span>
+            <a href="/admin/rooms" style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', textDecoration: 'none', color: '#2c3e50', transition: 'all 0.2s' }}>
+              <span style={{ marginRight: '12px', fontSize: '20px' }}>🏢</span>
+              <span>Rooms</span>
             </a>
             <a href="/admin/users" style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', textDecoration: 'none', color: '#2c3e50', transition: 'all 0.2s' }}>
               <span style={{ marginRight: '12px', fontSize: '20px' }}>👥</span>
               <span>User Management</span>
+            </a>
+            <a href="/admin/devices" style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', textDecoration: 'none', color: '#2c3e50', transition: 'all 0.2s' }}>
+              <span style={{ marginRight: '12px', fontSize: '20px' }}>💻</span>
+              <span>Equipments</span>
             </a>
           </div>
         </div>

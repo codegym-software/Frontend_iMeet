@@ -40,7 +40,8 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
         fullName: oauth2User.name || oauth2User.fullName,
         email: oauth2User.email,
         username: oauth2User.username || oauth2User.email?.split('@')[0],
-        avatarUrl: oauth2User.picture || oauth2User.avatarUrl
+        picture: oauth2User.picture, // Giữ picture riêng
+        avatarUrl: oauth2User.picture || oauth2User.avatarUrl // Fallback
       };
     }
 
@@ -58,7 +59,8 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
     displayName = userData.username;
   }
 
-  const avatarUrl = userData?.avatarUrl;
+  // Ưu tiên picture từ OAuth2, sau đó avatarUrl
+  const avatarUrl = userData?.picture || userData?.avatarUrl;
   const isGooglePicture = avatarUrl && avatarUrl.startsWith('https://');
   const isBase64Data = avatarUrl && avatarUrl.startsWith('data:');
 

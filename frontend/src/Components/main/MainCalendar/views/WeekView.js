@@ -76,10 +76,16 @@ const WeekView = React.memo(({
     });
 
     events.forEach(event => {
-      const eventDate = new Date(event.start);
-      const dayIndex = weekDays.findIndex(day =>
-        day.toDateString() === eventDate.toDateString()
-      );
+      // Ensure event.start is a Date object
+      const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
+      
+      // Compare dates by setting time to midnight for accurate day matching
+      const eventDateOnly = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
+      
+      const dayIndex = weekDays.findIndex(day => {
+        const dayDateOnly = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+        return dayDateOnly.getTime() === eventDateOnly.getTime();
+      });
 
       if (dayIndex !== -1) {
         if (event.allDay) {
@@ -106,9 +112,34 @@ const WeekView = React.memo(({
       </div>
 
       <div className="week-grid">
+        {/* Day Headers - Fixed at top */}
+        <div className="week-day-headers-row">
+          <div className="week-time-label-spacer"></div>
+          <div className="week-day-headers-grid">
+            {weekDays.map((day, dayIndex) => {
+              const isToday = day.toDateString() === today.toDateString();
+              return (
+                <div
+                  key={dayIndex}
+                  className={`week-day-header ${isToday ? 'today' : ''}`}
+                  onClick={() => onDateSelect && onDateSelect(day)}
+                >
+                  <div className="week-day-name">
+                    {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                  </div>
+                  <div className="week-day-number">{day.getDate()}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* All day row */}
         <div className="week-all-day-section" ref={allDayRef}>
-          <div className="week-all-day-label">All day</div>
+          <div className="week-all-day-label">
+            <div>All day</div>
+            <div className="gmt-label-small">GMT+7</div>
+          </div>
           <div className="week-all-day-content">
             {weekDays.map((day, dayIndex) => {
               const isToday = day.toDateString() === today.toDateString();
@@ -121,10 +152,11 @@ const WeekView = React.memo(({
                   {weekEvents[dayIndex]?.allDay.map((event, eventIndex) => (
                     <div
                       key={`${event.id}-all-day`}
-                      className="calendar-event week-all-day-event"
+                      className={`calendar-event week-all-day-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
                       style={{
                         backgroundColor: event.color,
-                        borderLeft: `3px solid ${event.color}`
+                        borderLeft: `3px solid ${event.color}`,
+                        opacity: event.opacity || 1
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -133,7 +165,10 @@ const WeekView = React.memo(({
                       onMouseEnter={(e) => handleEventMouseEnter(event, e)}
                       onMouseLeave={handleEventMouseLeave}
                     >
-                      <div className="event-title">{event.title}</div>
+                      <div className="event-title">
+                        {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
+                        {event.title}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -146,7 +181,7 @@ const WeekView = React.memo(({
         <div className="week-time-section">
           {/* Time labels - scrollable và sync với content */}
           <div className="week-time-labels" ref={timeLabelsRef}>
-            {Array.from({ length: 25 }, (_, hour) => (
+            {Array.from({ length: 24 }, (_, hour) => (
               <div key={hour} className="week-time-label">
                 {hour === 0 ? '12 AM' : 
                  hour < 12 ? `${hour} AM` : 
@@ -167,16 +202,6 @@ const WeekView = React.memo(({
                     key={dayIndex}
                     className={`week-day-column ${isToday ? 'today' : ''}`}
                   >
-                    <div
-                      className="week-day-header"
-                      onClick={() => onDateSelect && onDateSelect(day)}
-                    >
-                      <div className="week-day-name">
-                        {day.toLocaleDateString('en-US', { weekday: 'short' })}
-                      </div>
-                      <div className="week-day-number">{day.getDate()}</div>
-                    </div>
-
                     <div className="week-day-time-cells">
                       {Array.from({ length: 24 }, (_, hour) => {
                         const hourEvents = dayEvents.filter(event => {
@@ -205,25 +230,26 @@ const WeekView = React.memo(({
                               const isLastHour = eventEndHour === hour;
                               const duration = eventEndHour - eventStartHour;
 
-                              // Tính toán vị trí và chiều cao
-                              const top = isFirstHour ? (eventStartMinute / 60) * 60 : 0;
+                              // Calculate exact pixel position: 1 minute = 1 pixel
+                              const top = isFirstHour ? eventStartMinute : 0;
                               const height = isFirstHour && isLastHour 
-                                ? ((eventEndMinute - eventStartMinute) / 60) * 60 
+                                ? (eventEndMinute - eventStartMinute) 
                                 : isFirstHour 
-                                  ? 60 - top 
+                                  ? 60 - eventStartMinute 
                                   : isLastHour 
-                                    ? (eventEndMinute / 60) * 60 
+                                    ? eventEndMinute 
                                     : 60;
 
                               return (
                                 <div
                                   key={event.id}
-                                  className="calendar-event week-timed-event"
+                                  className={`calendar-event week-timed-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
                                   style={{
                                     top: `${top}px`,
                                     height: `${height}px`,
                                     backgroundColor: event.color,
-                                    borderLeft: `3px solid ${event.color}`
+                                    borderLeft: `3px solid ${event.color}`,
+                                    opacity: event.opacity || 1
                                   }}
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -234,10 +260,27 @@ const WeekView = React.memo(({
                                 >
                                   {isFirstHour && (
                                     <div className="event-content">
-                                      <div className="event-time">
-                                        {formatTime(event.start)}
-                                      </div>
-                                      <div className="event-title">{event.title}</div>
+                                      {(() => {
+                                        const duration = (event.end - event.start) / (1000 * 60);
+                                        return duration < 60 ? (
+                                          // Short meeting: single line
+                                          <div className="event-title-inline">
+                                            {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
+                                            {event.title} ({formatTime(event.start)} - {formatTime(event.end)})
+                                          </div>
+                                        ) : (
+                                          // Long meeting: multi-line
+                                          <>
+                                            <div className="event-title">
+                                              {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
+                                              {event.title}
+                                            </div>
+                                            <div className="event-time">
+                                              {formatTime(event.start)} - {formatTime(event.end)}
+                                            </div>
+                                          </>
+                                        );
+                                      })()}
                                     </div>
                                   )}
                                 </div>

@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import './TimeTable.css';
 import { calendarAPI } from './utils/CalendarAPI';
 import { CalendarHelpers } from './utils/CalendarHelpers';
+import EditMeetingForm from '../EditMeetingForm';
+import ConfirmDialog from '../../common/ConfirmDialog';
+import Toast from '../../common/Toast';
 
 // Import các components đã tách
 import DayView from './views/DayView';
@@ -9,7 +12,7 @@ import WeekView from './views/WeekView';
 import MonthView from './views/MonthView';
 import YearView from './views/YearView';
 
-const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger }) => {
+const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMeetingUpdated }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -20,6 +23,14 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger }) => 
   const [pinnedEvent, setPinnedEvent] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const tooltipRef = useRef(null);
+  
+  // State cho edit meeting form
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState(null);
+  
+  // States cho confirm dialog và toast
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, meetingId: null });
+  const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
 
   // Custom functions cho event management
   const handleEventMouseEnter = useCallback((event, mouseEvent) => {
@@ -71,17 +82,28 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger }) => 
 
   // Handle edit meeting
   const handleEditMeeting = useCallback((event) => {
-    // TODO: Implement edit functionality
     console.log('Edit meeting:', event);
-    alert('Edit functionality will be implemented soon');
+    setEditingMeeting(event);
+    setShowEditForm(true);
+    resetEventStates();
+  }, [resetEventStates]);
+
+  // Handle delete meeting from tooltip
+  const handleDeleteMeeting = useCallback((meetingId) => {
+    // Show confirm dialog
+    setConfirmDialog({
+      isOpen: true,
+      meetingId: meetingId
+    });
   }, []);
-
-  // Handle delete meeting
-  const handleDeleteMeeting = useCallback(async (meetingId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa cuộc họp này?')) {
-      return;
-    }
-
+  
+  // Confirm delete meeting
+  const confirmDeleteMeeting = useCallback(async () => {
+    const meetingId = confirmDialog.meetingId;
+    
+    // Close confirm dialog
+    setConfirmDialog({ isOpen: false, meetingId: null });
+    
     try {
       await calendarAPI.deleteMeeting(meetingId);
       
@@ -91,12 +113,65 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger }) => 
       // Reset tooltip states
       resetEventStates();
       
-      alert('Xóa cuộc họp thành công!');
+      console.log('Meeting deleted successfully');
+      
+      // Show success toast
+      setToast({
+        isOpen: true,
+        message: 'Xóa cuộc họp thành công!',
+        type: 'success'
+      });
+      
+      // Trigger parent refresh
+      if (onMeetingUpdated) {
+        onMeetingUpdated();
+      }
     } catch (error) {
       console.error('Error deleting meeting:', error);
-      alert('Không thể xóa cuộc họp. Vui lòng thử lại.');
+      
+      // Show error toast
+      setToast({
+        isOpen: true,
+        message: 'Không thể xóa cuộc họp. Vui lòng thử lại.',
+        type: 'error'
+      });
     }
-  }, [resetEventStates]);
+  }, [confirmDialog.meetingId, resetEventStates, onMeetingUpdated]);
+  
+  // Handle delete meeting from edit form (kept for compatibility)
+  const handleDeleteMeetingFromForm = useCallback((meetingId) => {
+    // Remove from local state
+    setEvents(prevEvents => prevEvents.filter(e => e.id !== meetingId));
+    
+    // Reset tooltip states
+    resetEventStates();
+    
+    console.log('Meeting deleted, triggering calendar refresh');
+    
+    // Trigger parent refresh
+    if (onMeetingUpdated) {
+      onMeetingUpdated();
+    }
+  }, [resetEventStates, onMeetingUpdated]);
+  
+  // Handle update meeting from edit form
+  const handleUpdateMeeting = useCallback((updatedMeeting, message) => {
+    console.log('Meeting updated, triggering calendar refresh');
+    
+    // Show success toast
+    if (message) {
+      setToast({
+        isOpen: true,
+        message: message,
+        type: 'success'
+      });
+    }
+    
+    // Trigger parent refresh
+    if (onMeetingUpdated) {
+      onMeetingUpdated();
+    }
+  }, [onMeetingUpdated]);
 
   // Cập nhật thời gian hiện tại mỗi phút
   useEffect(() => {
@@ -110,6 +185,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger }) => 
   useEffect(() => {
     const loadMeetings = async () => {
       try {
+        console.log('Loading meetings... refreshTrigger:', refreshTrigger);
         setLoading(true);
         setError(null);
         
@@ -117,30 +193,52 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger }) => 
         const startDate = CalendarHelpers.getStartDateForView(selectedDate, viewType);
         const endDate = CalendarHelpers.getEndDateForView(selectedDate, viewType);
         
+        console.log('Date range:', startDate, 'to', endDate);
+        
         // Gọi API để lấy meetings
         const meetingsData = await calendarAPI.getMeetingsByDateRange(startDate, endDate);
         
-        // Transform API data to event format
-        const transformedEvents = meetingsData.map(meeting => ({
-          id: meeting.meetingId,
-          title: meeting.title,
-          start: new Date(meeting.startTime),
-          end: new Date(meeting.endTime),
-          color: getStatusColor(meeting.status),
-          calendar: 'Meeting',
-          location: meeting.roomName || 'N/A',
-          organizer: meeting.organizerName || 'Unknown',
-          host: meeting.organizerName || 'Unknown',
-          attendees: meeting.participants || [],
-          description: meeting.description || '',
-          meetingRoom: meeting.roomName || 'N/A',
-          building: meeting.building || 'N/A',
-          floor: meeting.floor || 'N/A',
-          status: meeting.status,
-          allDay: false
-        }));
+        console.log('Meetings data from API:', meetingsData);
         
+        // Filter out cancelled meetings and transform API data to event format
+        const transformedEvents = meetingsData
+          .filter(meeting => {
+            const status = meeting.bookingStatus?.toUpperCase();
+            // Exclude cancelled meetings from calendar
+            return status !== 'CANCELLED';
+          })
+          .map(meeting => {
+            const status = meeting.bookingStatus?.toUpperCase();
+            const isPending = status === 'PENDING' || status === 'BOOKED';
+            
+            return {
+              id: meeting.meetingId,
+              title: meeting.title,
+              start: new Date(meeting.startTime),
+              end: new Date(meeting.endTime),
+              color: getStatusColor(meeting.bookingStatus),
+              calendar: 'Meeting',
+              location: meeting.roomName || 'N/A',
+              organizer: meeting.userName || 'Unknown',
+              host: meeting.userName || 'Unknown',
+              attendees: meeting.participants || [],
+              description: meeting.description || '',
+              meetingRoom: meeting.roomName || 'N/A',
+              building: meeting.building || 'N/A',
+              floor: meeting.floor || 'N/A',
+              bookingStatus: meeting.bookingStatus,
+              allDay: meeting.isAllDay || false,
+              // Add IDs for edit form
+              roomId: meeting.roomId,
+              deviceIds: meeting.deviceIds || [],
+              // Add opacity for pending meetings (0.5 for pending, 1 for confirmed)
+              opacity: isPending ? 0.5 : 1
+            };
+          });
+        
+        console.log('Transformed events:', transformedEvents);
         setEvents(transformedEvents);
+        console.log('Events state updated with', transformedEvents.length, 'events');
       } catch (error) {
         console.error('Error loading meetings:', error);
         setError('Không thể tải danh sách cuộc họp');
@@ -384,6 +482,38 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger }) => 
     <>
       {renderTimeTable}
       <EventTooltip />
+      
+      {/* Edit Meeting Form */}
+      {showEditForm && editingMeeting && (
+        <EditMeetingForm
+          meeting={editingMeeting}
+          onClose={() => {
+            setShowEditForm(false);
+            setEditingMeeting(null);
+          }}
+          onSubmit={handleUpdateMeeting}
+          onDelete={handleDeleteMeetingFromForm}
+        />
+      )}
+      
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title="Xác nhận xóa"
+        message="Bạn có chắc chắn muốn xóa cuộc họp này?"
+        onConfirm={confirmDeleteMeeting}
+        onCancel={() => setConfirmDialog({ isOpen: false, meetingId: null })}
+        confirmText="Xóa"
+        cancelText="Hủy"
+      />
+      
+      {/* Toast Notification */}
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isOpen: false })}
+      />
     </>
   );
 };

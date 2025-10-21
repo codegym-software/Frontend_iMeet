@@ -50,6 +50,13 @@ const MiniCalendar = ({ selectedDate, onDateSelect, currentDate, onMonthChange }
       selectedDate.getFullYear() === currentDate.getFullYear();
   };
 
+  const isToday = (day) => {
+    const today = new Date();
+    return today.getDate() === day &&
+      today.getMonth() === currentDate.getMonth() &&
+      today.getFullYear() === currentDate.getFullYear();
+  };
+
   const isPrevMonth = (day, weekIndex) => {
     return weekIndex === 0 && day > 7;
   };
@@ -94,7 +101,8 @@ return (
                   <div
                     key={dayIndex}
                     className={`calendar-day 
-                      ${isSelected(day) ? 'selected' : ''} 
+                      ${isSelected(day) && !isPrev && !isNext ? 'selected' : ''} 
+                      ${isToday(day) && !isPrev && !isNext ? 'today' : ''}
                       ${isPrev || isNext ? 'other-month' : ''}`}
                     onClick={() => handleDayClick(day, isPrev, isNext)}
                   >

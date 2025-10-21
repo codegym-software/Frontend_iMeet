@@ -20,10 +20,10 @@ export const roomAPI = {
     }
   },
 
-  // Lấy phòng có sẵn
+  // Lấy phòng có sẵn (trả về tất cả phòng vì backend đã bỏ status)
   async getAvailableRooms() {
     try {
-      const response = await fetch(`${API_BASE_URL}/rooms/available`, {
+      const response = await fetch(`${API_BASE_URL}/rooms`, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',

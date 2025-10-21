@@ -15,7 +15,7 @@ export default function Profile({ onSave }) {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [avatar, setAvatar] = useState('https://placehold.co/180x180');
+  const [avatar, setAvatar] = useState(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
   
   // Edit states
@@ -23,6 +23,10 @@ export default function Profile({ onSave }) {
   const [tempName, setTempName] = useState('');
   const [message, setMessage] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Settings dropdown
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
   
   // Avatar upload
   const fileInputRef = useRef(null);
@@ -52,14 +56,19 @@ export default function Profile({ onSave }) {
         setUsername(username || 'user');
         setEmail(email || 'user@example.com');
         
-        // Avatar
-        setAvatar(userData.avatarUrl || 'https://placehold.co/180x180');
+        // Avatar - ưu tiên picture từ OAuth2, sau đó avatarUrl
+        const avatarSource = userData.picture || userData.avatarUrl;
+        if (avatarSource) {
+          setAvatar(avatarSource);
+        } else {
+          setAvatar(null); // Set null để hiển thị initials
+        }
       } else {
         // Fallback dummy data
         setName('User');
         setUsername('user');
         setEmail('user@example.com');
-        setAvatar('https://placehold.co/180x180');
+        setAvatar(null);
       }
     };
     fetchProfile();
@@ -75,6 +84,23 @@ export default function Profile({ onSave }) {
       }
     };
   }, []);
+
+  // Close settings dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
+        setIsSettingsOpen(false);
+      }
+    };
+
+    if (isSettingsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSettingsOpen]);
 
   // Lấy thông tin user từ context hoặc localStorage
   const getUserData = () => {
@@ -177,6 +203,11 @@ export default function Profile({ onSave }) {
 
   const handleBack = () => {
     history.goBack();
+  };
+  
+  const handleLogout = () => {
+    authService.logout();
+    history.push('/login');
   };
   
   const handleSave = () => {
@@ -349,14 +380,33 @@ export default function Profile({ onSave }) {
   };
 
 
-  if (showChangePassword) {
-    return <ChangePassword onBack={handleBackFromChangePassword} />;
-  }
-  
-  // Remove the userData check since we're using fallback data
-  
   return (
     <div className="profile-main-container">
+      {/* Change Password Modal Overlay */}
+      {showChangePassword && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            maxWidth: '500px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <ChangePassword onBack={handleBackFromChangePassword} />
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="profile-header">
         {/* Left side with back button, logo and title */}
@@ -382,9 +432,22 @@ export default function Profile({ onSave }) {
           </div>
         </div>
         
-        {/* Settings button */}
-        <div className="profile-settings-button">
-          <FaCog className="profile-settings-icon" />
+        {/* Settings button with dropdown */}
+        <div className="profile-settings-container" ref={settingsRef}>
+          <div 
+            className="profile-settings-button"
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+          >
+            <FaCog className="profile-settings-icon" />
+          </div>
+          
+          {isSettingsOpen && (
+            <div className="profile-settings-dropdown">
+              <button onClick={handleLogout} className="profile-logout-btn">
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {/* Message Display - ở phần trên trang */}
@@ -397,7 +460,9 @@ export default function Profile({ onSave }) {
       <div className="profile-content-layout">
         <div className="profile-avatar-container">
           <div className="profile-avatar-wrapper">
-            <img className="profile-avatar" src={avatar} alt="Avatar" />
+            <div className="profile-avatar">
+              {renderAvatar()}
+            </div>
             {!isOAuth2Account && (
               <div className="profile-avatar-overlay" onClick={handleAvatarClick}>
                 <FaCamera className="profile-avatar-camera" />

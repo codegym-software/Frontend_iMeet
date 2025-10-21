@@ -5,9 +5,9 @@ import { useActivity } from './ActivityContext';
 import { FaPlus } from 'react-icons/fa';
 import UserFormModal from './components/UserFormModal';
 import UserTableRow from './components/UserTableRow';
-import UserStatsCards from './components/UserStatsCards';
+import UserStatsFilter from './components/UserStatsFilter';
 import UserSearchBar from './components/UserSearchBar';
-import Pagination from './components/Pagination';
+import DeleteConfirmModal from './components/DeleteConfirmModal';
 import './styles/UserManagement.css';
 
 const UserManagement = () => {
@@ -33,12 +33,12 @@ const UserManagement = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(0);
+  const [roleFilter, setRoleFilter] = useState('ALL'); // ALL, USER, ADMIN
   const [notification, setNotification] = useState(null);
   const [stats, setStats] = useState(preloadedStats);
-  
-  const itemsPerPage = 10;
 
   const [formData, setFormData] = useState({
     email: '',
@@ -66,22 +66,30 @@ const UserManagement = () => {
     }
   }, [preloadedUsers, preloadedLoading, preloadedStats]);
 
-  // Client-side search filter
+  // Client-side search and role filter
   const getFilteredUsers = () => {
-    if (!searchTerm.trim()) {
-      return allUsers;
+    let filtered = allUsers;
+    
+    // Apply role filter
+    if (roleFilter !== 'ALL') {
+      filtered = filtered.filter(user => user.role === roleFilter);
     }
     
-    const searchLower = searchTerm.toLowerCase().trim();
-    return allUsers.filter(user => {
-      const email = (user.email || '').toLowerCase();
-      const fullName = (user.fullName || '').toLowerCase();
-      const role = (user.role || '').toLowerCase();
-      
-      return email.includes(searchLower) || 
-             fullName.includes(searchLower) || 
-             role.includes(searchLower);
-    });
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(user => {
+        const email = (user.email || '').toLowerCase();
+        const fullName = (user.fullName || '').toLowerCase();
+        const role = (user.role || '').toLowerCase();
+        
+        return email.includes(searchLower) || 
+               fullName.includes(searchLower) || 
+               role.includes(searchLower);
+      });
+    }
+    
+    return filtered;
   };
 
   // Load user stats
@@ -94,20 +102,8 @@ const UserManagement = () => {
     }
   };
 
-  // Reset to first page when search term changes
-  useEffect(() => {
-    setCurrentPage(0);
-  }, [searchTerm]);
-
-  // Get filtered users and apply pagination
+  // Get filtered users (no pagination)
   const filteredUsers = getFilteredUsers();
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-  const totalElements = filteredUsers.length;
-  
-  // Get current page items
-  const startIndex = currentPage * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentItems = filteredUsers.slice(startIndex, endIndex);
 
   // Validation helpers
   const isStrongPassword = (password) => {
@@ -221,7 +217,6 @@ const UserManagement = () => {
         const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
         setAllUsers(response.users || []);
         await loadStats();
-        setCurrentPage(0);
       } catch (error) {
         showNotification('error', `❌ Lỗi khi thêm người dùng: ${error.message}`);
       } finally {
@@ -234,11 +229,11 @@ const UserManagement = () => {
   const handleEdit = (user) => {
     setEditingUser(user);
     setFormData({
-      email: user.email,
-      fullName: user.fullName,
+      email: user.email || '',
+      fullName: user.fullName || '',
       password: '', // Don't show password in edit form
       rePassword: '',
-      role: user.role
+      role: user.role || 'USER'
     });
     setFormErrors({});
     setShowEditForm(true);
@@ -295,44 +290,45 @@ const UserManagement = () => {
   };
 
   // Handle Delete
-  const handleDelete = async (id) => {
-    const userToDelete = allUsers.find(user => user.id === id);
-    if (window.confirm(`Bạn có chắc chắn muốn xóa người dùng "${userToDelete?.fullName}"?`)) {
-      try {
-        setActionLoading(true);
-        // Use correct ID for delete (Google ID for Google users, System ID for others)
-        const userId = userToDelete?.googleId || userToDelete?.id;
-        await adminService.deleteUser(userId);
-        showNotification('success', `🗑️ Đã xóa người dùng "${userToDelete?.fullName}" thành công!`);
-        
-        // Log activity
-        const roleLabel = roles.find(r => r.value === userToDelete?.role)?.label || userToDelete?.role;
-        addActivity('user', 'delete', userToDelete?.fullName, `📧 Email: ${userToDelete?.email} | 🎭 Role: ${roleLabel}`);
-        
-        setSearchTerm(''); // Clear search term
-        
-        // Reload all users data
-        const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
-        setAllUsers(response.users || []);
-        await loadStats();
-        
-        // Adjust current page if needed
-        const newFilteredUsers = searchTerm ? response.users.filter(user => {
-          const searchLower = searchTerm.toLowerCase().trim();
-          return (user.email || '').toLowerCase().includes(searchLower) || 
-                 (user.fullName || '').toLowerCase().includes(searchLower) || 
-                 (user.role || '').toLowerCase().includes(searchLower);
-        }) : response.users;
-        const newTotalPages = Math.ceil(newFilteredUsers.length / itemsPerPage);
-        if (currentPage >= newTotalPages && newTotalPages > 0) {
-          setCurrentPage(newTotalPages - 1);
-        }
-      } catch (error) {
-        showNotification('error', `❌ Lỗi khi xóa người dùng: ${error.message}`);
-      } finally {
-        setActionLoading(false);
-      }
+  const handleDelete = (id) => {
+    const user = allUsers.find(u => u.id === id);
+    setUserToDelete(user);
+    setShowDeleteConfirm(true);
+  };
+
+  // Confirm Delete
+  const confirmDelete = async () => {
+    try {
+      setActionLoading(true);
+      setShowDeleteConfirm(false);
+      
+      // Use correct ID for delete (Google ID for Google users, System ID for others)
+      const userId = userToDelete?.googleId || userToDelete?.id;
+      await adminService.deleteUser(userId);
+      showNotification('success', `🗑️ Đã xóa người dùng "${userToDelete?.fullName}" thành công!`);
+      
+      // Log activity
+      const roleLabel = roles.find(r => r.value === userToDelete?.role)?.label || userToDelete?.role;
+      addActivity('user', 'delete', userToDelete?.fullName, `📧 Email: ${userToDelete?.email} | 🎭 Role: ${roleLabel}`);
+      
+      setSearchTerm(''); // Clear search term
+      
+      // Reload all users data
+      const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
+      setAllUsers(response.users || []);
+      await loadStats();
+    } catch (error) {
+      showNotification('error', `❌ Lỗi khi xóa người dùng: ${error.message}`);
+    } finally {
+      setActionLoading(false);
+      setUserToDelete(null);
     }
+  };
+
+  // Cancel Delete
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setUserToDelete(null);
   };
 
   // Utility functions
@@ -408,8 +404,13 @@ const UserManagement = () => {
         </button>
       </div>
 
-      {/* Stats */}
-      <UserStatsCards stats={stats} loading={loading} />
+      {/* Stats & Filter */}
+      <UserStatsFilter 
+        roleFilter={roleFilter} 
+        setRoleFilter={setRoleFilter} 
+        stats={stats} 
+        loading={loading} 
+      />
 
       {/* Search Bar */}
       <UserSearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
@@ -428,7 +429,7 @@ const UserManagement = () => {
             </tr>
           </thead>
           <tbody>
-            {currentItems.map((user) => (
+            {filteredUsers.map((user) => (
               <UserTableRow
                 key={user.id}
                 user={user}
@@ -442,7 +443,7 @@ const UserManagement = () => {
           </tbody>
         </table>
 
-        {currentItems.length === 0 && !loading && (
+        {filteredUsers.length === 0 && !loading && (
           <div className="empty-state">
             <div className="empty-state-icon">👥</div>
             <div className="empty-state-title">
@@ -454,15 +455,6 @@ const UserManagement = () => {
           </div>
         )}
       </div>
-
-      {/* Pagination */}
-      <Pagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        totalElements={totalElements}
-        currentItems={currentItems}
-        onPageChange={setCurrentPage}
-      />
 
       {/* Add Form Modal */}
       {showAddForm && (
@@ -488,6 +480,15 @@ const UserManagement = () => {
           roles={roles}
           onSubmit={handleUpdate}
           onCancel={resetForm}
+        />
+      )}
+
+      {/* Delete Confirm Modal */}
+      {showDeleteConfirm && userToDelete && (
+        <DeleteConfirmModal
+          user={userToDelete}
+          onConfirm={confirmDelete}
+          onCancel={cancelDelete}
         />
       )}
 

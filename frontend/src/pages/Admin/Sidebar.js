@@ -31,7 +31,7 @@ const Sidebar = ({ onLogout, user, isCollapsed, setIsCollapsed }) => {
       color: '#96CEB4'
     },
     {
-      name: 'Meeting List',
+      name: 'Meeting Management',
       path: '/admin/meetings',
       icon: '📅',
       color: '#48CAE4'
@@ -61,7 +61,7 @@ const Sidebar = ({ onLogout, user, isCollapsed, setIsCollapsed }) => {
 
   const logoStyle = {
     padding: '20px',
-    textAlign: 'center',
+    textAlign: isCollapsed ? 'center' : 'left',
     borderBottom: '1px solid rgba(255,255,255,0.1)',
     marginBottom: '20px'
   };
@@ -73,7 +73,7 @@ const Sidebar = ({ onLogout, user, isCollapsed, setIsCollapsed }) => {
     display: 'flex',
     alignItems: 'center',
     justifyContent: isCollapsed ? 'center' : 'flex-start',
-    gap: '10px'
+    gap: '12px'
   };
 
   const menuStyle = {
@@ -159,19 +159,16 @@ const Sidebar = ({ onLogout, user, isCollapsed, setIsCollapsed }) => {
 
       <div style={logoStyle}>
         <div style={logoTextStyle}>
-          <div style={{ 
-            width: isCollapsed ? '40px' : '50px', 
-            height: isCollapsed ? '40px' : '50px', 
-            borderRadius: '8px',
-            backgroundColor: 'rgba(255,255,255,0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: isCollapsed ? '20px' : '24px'
-          }}>
-            📅
-          </div>
-          {!isCollapsed && <span style={{ marginLeft: '10px' }}>iMeet</span>}
+          <img 
+            src="/calendar-logo.png" 
+            alt="iMeet Logo" 
+            style={{ 
+              width: isCollapsed ? '40px' : '48px', 
+              height: isCollapsed ? '40px' : '48px', 
+              objectFit: 'contain'
+            }} 
+          />
+          {!isCollapsed && <span>iMeet</span>}
         </div>
       </div>
 

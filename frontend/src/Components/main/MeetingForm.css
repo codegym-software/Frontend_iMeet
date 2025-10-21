@@ -16,7 +16,7 @@
   background: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 500px;
+  max-width: 650px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
@@ -60,29 +60,322 @@
   padding: 20px 24px 24px;
 }
 
+.meeting-form.icon-form {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .form-group {
   margin-bottom: 16px;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.form-icon {
+  font-size: 24px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.form-row-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inline-input {
+  padding: 8px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  transition: border-color 0.2s;
+  flex: 0 0 auto;
+}
+
+.inline-input:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+.inline-input::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* DateTime Picker Styles */
+.time-inputs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.date-only-picker {
+  flex: 0 0 auto;
+  min-width: 130px;
+  max-width: 150px;
+}
+
+.time-picker-input {
+  flex: 0 0 auto;
+  min-width: 95px;
+  max-width: 110px;
+}
+
+.time-separator {
+  font-size: 16px;
+  font-weight: 500;
+  color: #5f6368;
+  margin: 0 4px;
+}
+
+.time-display-wrapper {
+  width: 100%;
+  padding: 8px 0;
+}
+
+.time-range {
+  font-size: 14px;
+  color: #1a73e8;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.time-range:hover {
+  text-decoration: underline;
+}
+
+.recurrence-text {
+  font-size: 12px;
+  color: #5f6368;
+  margin-top: 4px;
+}
+
+/* Time Picker Modal */
+.time-picker-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.time-picker-content {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.time-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.time-picker-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.close-picker {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 8px;
+  color: #666;
+}
+
+.time-picker-body {
+  padding: 16px;
+}
+
+.time-section {
+  margin-bottom: 16px;
+}
+
+.time-section label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #666;
+}
+
+.time-picker-footer {
+  padding: 16px;
+  border-top: 1px solid #e0e0e0;
+  text-align: right;
+}
+
+.time-picker-footer button {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.time-picker-footer button:hover {
+  background: #1557b0;
+}
+
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox-wrapper.inline-checkbox {
+  flex: 0 0 auto;
+  margin-left: 12px;
+  white-space: nowrap;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #1a73e8;
+  cursor: pointer;
+}
+
+.checkbox-label {
+  font-size: 14px;
+  color: #3c4043;
+  user-select: none;
+}
+
+/* Responsive for time inputs */
+@media (max-width: 768px) {
+  .time-inputs-row {
+    flex-wrap: wrap;
+  }
+  
+  .date-only-picker {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  
+  .time-picker-input {
+    flex: 1 1 calc(50% - 20px);
+    min-width: 100px;
+  }
+  
+  .time-separator {
+    flex: 0 0 auto;
+  }
+}
+
+.inline-select {
+  padding: 10px 14px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 15px;
+  background: white;
+  color: #495057;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  flex: 1;
+  min-width: 200px;
+  font-weight: 500;
+}
+
+.inline-select:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+.time-separator {
+  color: #666;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.time-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-input {
+  width: 110px;
 }
 
 .title-input {
   width: 100%;
   padding: 12px 16px;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 500;
+  border: none;
+  border-bottom: 1px solid #e9ecef;
+  border-radius: 0;
+  font-size: 20px;
+  font-weight: 400;
   background: white;
   transition: border-color 0.2s;
+  color: #999;
+  font-style: italic;
 }
 
 .title-input:focus {
   outline: none;
   border-color: #1a73e8;
+  color: #1a1a1a;
+  font-style: normal;
 }
 
 .title-input::placeholder {
   color: #999;
-  font-weight: normal;
+  font-style: italic;
+}
+
+.description-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s;
+}
+
+.description-textarea:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+.description-textarea::placeholder {
+  color: #999;
+  font-style: italic;
 }
 
 .form-section {
@@ -175,8 +468,45 @@
   border-top: 1px solid #e9ecef;
 }
 
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.form-actions-right {
+  display: flex;
+  gap: 12px;
+}
+
+.delete-btn {
+  padding: 8px 16px;
+  border: 1px solid #dc3545;
+  border-radius: 6px;
+  background: white;
+  color: #dc3545;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #dc3545;
+  color: white;
+}
+
+.delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .cancel-btn {
-  padding: 10px 20px;
+  padding: 8px 16px;
   border: 1px solid #dee2e6;
   border-radius: 6px;
   background: white;
@@ -187,13 +517,18 @@
   transition: all 0.2s;
 }
 
-.cancel-btn:hover {
+.cancel-btn:hover:not(:disabled) {
   background: #f8f9fa;
   border-color: #adb5bd;
 }
 
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .save-btn {
-  padding: 10px 24px;
+  padding: 8px 20px;
   border: none;
   border-radius: 6px;
   background: #1a73e8;
@@ -204,8 +539,13 @@
   transition: background-color 0.2s;
 }
 
-.save-btn:hover {
+.save-btn:hover:not(:disabled) {
   background: #1669d6;
+}
+
+.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Responsive */
@@ -302,9 +642,10 @@
   }
 }
 /* Thêm vào MeetingForm.css */
-.simple-input.error,
+.inline-input.error,
 .title-input.error,
-.simple-select.error {
+.simple-select.error,
+.inline-select.error {
   border-color: #dc3545;
   box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2);
 }
@@ -406,4 +747,194 @@
 .guest-autocomplete .simple-input {
   position: relative;
   z-index: 1001;
+}
+
+/* Date Picker Calendar */
+.date-picker-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.calendar-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  padding: 12px;
+  min-width: 280px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.calendar-month-year {
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.calendar-nav-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #495057;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.calendar-nav-btn:hover {
+  background: #f8f9fa;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6c757d;
+  padding: 4px;
+}
+
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #495057;
+}
+
+.calendar-day:hover:not(.empty):not(.past) {
+  background: #e7f3ff;
+  color: #1a73e8;
+}
+
+.calendar-day.empty {
+  cursor: default;
+}
+
+.calendar-day.past {
+  color: #adb5bd;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.calendar-day.today {
+  background: #1a73e8;
+  color: white;
+  font-weight: 600;
+}
+
+.calendar-day.today:hover {
+  background: #1669d6;
+}
+
+/* Device Selection Container */
+.device-selection-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.selected-devices-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
+}
+
+.device-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background-color: white;
+  color: #495057;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.device-tag:hover {
+  background-color: #f8f9fa;
+  border-color: #adb5bd;
+}
+
+.device-tag-remove {
+  background: none;
+  border: none;
+  color: #dc3545;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 4px;
+  transition: all 0.2s;
+  font-weight: 700;
+}
+
+.device-tag-remove:hover {
+  color: #c82333;
+  transform: scale(1.2);
+}
+
+/* Device Add Button */
+.device-add-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  background-color: white;
+  color: #495057;
+  border: 2px dashed #dee2e6;
+  border-radius: 6px;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.device-add-btn:hover:not(:disabled) {
+  background-color: #f8f9fa;
+  border-color: #495057;
+  color: #495057;
+  transform: scale(1.05);
+}
+
+.device-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
