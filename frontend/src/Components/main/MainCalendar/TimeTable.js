@@ -11,6 +11,7 @@ import DayView from './views/DayView';
 import WeekView from './views/WeekView';
 import MonthView from './views/MonthView';
 import YearView from './views/YearView';
+import ScheduleView from './ScheduleView';
 
 const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMeetingUpdated }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -18,9 +19,8 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // States cho event management với pin functionality
+  // States cho event management
   const [hoveredEvent, setHoveredEvent] = useState(null);
-  const [pinnedEvent, setPinnedEvent] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const tooltipRef = useRef(null);
   
@@ -34,49 +34,35 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
 
   // Custom functions cho event management
   const handleEventMouseEnter = useCallback((event, mouseEvent) => {
-    if (!pinnedEvent) {
-      setHoveredEvent(event);
+    setHoveredEvent(event);
+    setTooltipPosition({
+      x: mouseEvent.clientX,
+      y: mouseEvent.clientY
+    });
+  }, []);
+
+  const handleEventMouseLeave = useCallback(() => {
+    setHoveredEvent(null);
+  }, []);
+
+  const handleEventClick = useCallback((event, mouseEvent) => {
+    setHoveredEvent(event);
+
+    if (mouseEvent) {
       setTooltipPosition({
         x: mouseEvent.clientX,
         y: mouseEvent.clientY
       });
     }
-  }, [pinnedEvent]);
-
-  const handleEventMouseLeave = useCallback(() => {
-    if (!pinnedEvent) {
-      setHoveredEvent(null);
-    }
-  }, [pinnedEvent]);
-
-  const handleEventClick = useCallback((event, mouseEvent) => {
-    const isCurrentlyPinned = pinnedEvent && pinnedEvent.id === event.id;
-
-    if (isCurrentlyPinned) {
-      setPinnedEvent(null);
-      setHoveredEvent(null);
-    } else {
-      setPinnedEvent(event);
-      setHoveredEvent(event);
-
-      if (mouseEvent) {
-        setTooltipPosition({
-          x: mouseEvent.clientX,
-          y: mouseEvent.clientY
-        });
-      }
-    }
-  }, [pinnedEvent]);
+  }, []);
 
   const handleClickOutside = useCallback((event) => {
     if (tooltipRef.current && !tooltipRef.current.contains(event.target)) {
-      setPinnedEvent(null);
       setHoveredEvent(null);
     }
   }, []);
 
   const resetEventStates = useCallback(() => {
-    setPinnedEvent(null);
     setHoveredEvent(null);
   }, []);
 
@@ -218,12 +204,11 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
               end: new Date(meeting.endTime),
               color: getStatusColor(meeting.bookingStatus),
               calendar: 'Meeting',
-              location: meeting.roomName || 'N/A',
               organizer: meeting.userName || 'Unknown',
-              host: meeting.userName || 'Unknown',
               attendees: meeting.participants || [],
               description: meeting.description || '',
               meetingRoom: meeting.roomName || 'N/A',
+              roomLocation: meeting.roomLocation || '',
               building: meeting.building || 'N/A',
               floor: meeting.floor || 'N/A',
               bookingStatus: meeting.bookingStatus,
@@ -231,6 +216,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
               // Add IDs for edit form
               roomId: meeting.roomId,
               deviceIds: meeting.deviceIds || [],
+              devices: meeting.devices || [],
               // Add opacity for pending meetings (0.5 for pending, 1 for confirmed)
               opacity: isPending ? 0.5 : 1
             };
@@ -255,9 +241,9 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   const getStatusColor = (status) => {
     const colorMap = {
       'PENDING': '#f9ab00',
+      'BOOKED': '#ff9800',
       'CONFIRMED': '#4285f4',
-      'CANCELLED': '#ea4335',
-      'COMPLETED': '#34a853'
+      'CANCELLED': '#ea4335'
     };
     return colorMap[status] || '#5f6368';
   };
@@ -269,6 +255,18 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [handleClickOutside]);
+
+  // Đóng tooltip khi scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      setHoveredEvent(null);
+    };
+    
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, []);
 
   const handleTimeSlotClick = useCallback((hour, minute = 0) => {
     const newDate = new Date(selectedDate);
@@ -319,84 +317,105 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     return { x: adjustedX, y: adjustedY };
   }, []);
 
-  // Tooltip component với pin functionality
+  // Tooltip component
   const EventTooltip = () => {
-    const eventToShow = pinnedEvent || hoveredEvent;
+    const eventToShow = hoveredEvent;
     if (!eventToShow) return null;
 
     const adjustedPos = getAdjustedPosition(tooltipPosition.x, tooltipPosition.y);
-    const isPinned = !!pinnedEvent;
 
     return (
       <div
         ref={tooltipRef}
-        className={`event-tooltip ${isPinned ? 'pinned' : ''}`}
+        className="event-tooltip"
         style={{
           left: `${adjustedPos.x}px`,
           top: `${adjustedPos.y}px`
         }}
+        onMouseEnter={() => setHoveredEvent(eventToShow)}
+        onMouseLeave={() => setHoveredEvent(null)}
       >
         <div className="tooltip-header" style={{ backgroundColor: eventToShow.color }}>
           <div className="tooltip-title">{eventToShow.title}</div>
           <div className="tooltip-meta">
             <span className="tooltip-calendar">{eventToShow.calendar}</span>
-            {isPinned && <span className="pin-indicator">📌 Pinned</span>}
           </div>
-          {isPinned && (
-            <button className="close-tooltip-btn" onClick={resetEventStates}>
-              ×
-            </button>
-          )}
         </div>
 
-        <div className="tooltip-content">
+        <div className="tooltip-body">
+          {/* 1. Ngày/tháng/năm */}
           <div className="tooltip-section">
             <div className="tooltip-time">
               <strong>📅 {formatDateFull(eventToShow.start)}</strong>
             </div>
+          </div>
+
+          {/* 2. Start time - End time */}
+          <div className="tooltip-section">
             <div className="tooltip-time">
               <strong>🕐 {formatTime(eventToShow.start)} - {formatTime(eventToShow.end)}</strong>
             </div>
           </div>
 
-          <div className="tooltip-section">
-            <div className="tooltip-info compact">
-              <span className="tooltip-label">📍</span>
-              <span>{eventToShow.location}</span>
-            </div>
-            {eventToShow.meetingRoom && eventToShow.meetingRoom !== 'N/A' && (
+          {/* 3. Phòng họp */}
+          {eventToShow.meetingRoom && eventToShow.meetingRoom !== 'N/A' && (
+            <div className="tooltip-section">
               <div className="tooltip-info compact">
                 <span className="tooltip-label">🚪</span>
                 <span>{eventToShow.meetingRoom}</span>
               </div>
-            )}
+            </div>
+          )}
+
+          {/* 4. Vị trí phòng */}
+          <div className="tooltip-section">
+            <div className="tooltip-info compact">
+              <span className="tooltip-label">📍</span>
+              <span>
+                {eventToShow.roomLocation && eventToShow.roomLocation !== 'N/A' && eventToShow.roomLocation.trim() !== '' 
+                  ? eventToShow.roomLocation 
+                  : (eventToShow.building && eventToShow.building !== 'N/A' && eventToShow.building.trim() !== '' 
+                      ? `${eventToShow.building}${eventToShow.floor && eventToShow.floor !== 'N/A' ? ` - Tầng ${eventToShow.floor}` : ''}`
+                      : 'Chưa có thông tin vị trí'
+                    )
+                }
+              </span>
+            </div>
           </div>
 
+          {/* 5. Người chủ trì (người tạo lịch) */}
           <div className="tooltip-section">
             <div className="tooltip-info compact">
               <span className="tooltip-label">👤</span>
               <span>{eventToShow.organizer}</span>
             </div>
+          </div>
+
+          {/* 6. Số người tham gia */}
+          <div className="tooltip-section">
             <div className="tooltip-info compact">
-              <span className="tooltip-label">🎯</span>
-              <span>{eventToShow.host}</span>
+              <span className="tooltip-label">👥</span>
+              <span>{eventToShow.attendees.length} người tham gia</span>
             </div>
           </div>
 
-          <div className="tooltip-section">
-            <div className="tooltip-info">
-              <span className="tooltip-label">👥 ({eventToShow.attendees.length})</span>
-              <div className="attendees-list">
-                {eventToShow.attendees.slice(0, 3).map((attendee, index) => (
-                  <span key={index} className="attendee">• {attendee}</span>
-                ))}
-                {eventToShow.attendees.length > 3 && (
-                  <span className="attendee">+ {eventToShow.attendees.length - 3} more</span>
-                )}
+          {/* 7. Thiết bị mượn */}
+          {eventToShow.devices && eventToShow.devices.length > 0 && (
+            <div className="tooltip-section">
+              <div className="tooltip-info">
+                <span className="tooltip-label">💻 Thiết bị mượn:</span>
+                <div className="devices-list">
+                  {eventToShow.devices.map((device, index) => (
+                    <span key={index} className="device-item">
+                      • {device.deviceName} ({device.deviceType}) x{device.quantity}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
+          {/* 8. Mô tả (nếu có) */}
           {eventToShow.description && (
             <div className="tooltip-section">
               <div className="tooltip-info">
@@ -409,23 +428,40 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
           )}
         </div>
 
-        {isPinned && (
-          <div className="tooltip-footer">
-            <button 
-              className="tooltip-action-btn" 
-              onClick={() => handleEditMeeting(eventToShow)}
-            >
-              Edit
-            </button>
-            <button 
-              className="tooltip-action-btn" 
-              onClick={() => handleDeleteMeeting(eventToShow.id)}
-            >
-              Delete
-            </button>
-            <button className="tooltip-action-btn primary">Join</button>
+        {/* Notice for pending meetings */}
+        {eventToShow.bookingStatus?.toUpperCase() !== 'CONFIRMED' && (
+          <div className="edit-disabled-notice">
+            <span>ℹ️ Đang chờ admin duyệt. Bạn chỉ có thể xóa cuộc họp này.</span>
           </div>
         )}
+
+        <div className="tooltip-footer">
+          {/* Chỉ hiển thị nút Edit nếu status là CONFIRMED (đã được admin duyệt) */}
+          {eventToShow.bookingStatus?.toUpperCase() === 'CONFIRMED' ? (
+            <>
+              <button 
+                className="tooltip-action-btn" 
+                onClick={() => handleEditMeeting(eventToShow)}
+              >
+                ✏️ Edit
+              </button>
+              <button 
+                className="tooltip-action-btn" 
+                onClick={() => handleDeleteMeeting(eventToShow.id)}
+              >
+                🗑️ Delete
+              </button>
+            </>
+          ) : (
+            <button 
+              className="tooltip-action-btn"
+              onClick={() => handleDeleteMeeting(eventToShow.id)}
+              style={{ width: '100%' }}
+            >
+              🗑️ Delete
+            </button>
+          )}
+        </div>
       </div>
     );
   };
@@ -463,6 +499,8 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         return <MonthView {...commonProps} />;
       case 'year':
         return <YearView selectedDate={selectedDate} onDateSelect={onDateSelect} />;
+      case 'schedule':
+        return <ScheduleView selectedDate={selectedDate} onMeetingUpdated={onMeetingUpdated} />;
       default:
         return <MonthView {...commonProps} />;
     }
@@ -479,7 +517,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     formatTime
   ]);
   return (
-    <>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {renderTimeTable}
       <EventTooltip />
       
@@ -514,7 +552,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         type={toast.type}
         onClose={() => setToast({ ...toast, isOpen: false })}
       />
-    </>
+    </div>
   );
 };
 

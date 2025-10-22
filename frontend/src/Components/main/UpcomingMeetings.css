@@ -59,6 +59,7 @@
 .meeting-item.next-meeting {
   border-left: 4px solid var(--accent-color);
   background: linear-gradient(135deg, var(--card-bg) 0%, rgba(26, 115, 232, 0.1) 100%);
+  padding-right: 100px; /* Add space for the next badge */
 }
 
 /* Meeting Time */
@@ -67,6 +68,8 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .meeting-time .time {
@@ -76,11 +79,13 @@
 }
 
 .meeting-time .time-until {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted-color);
   background: var(--bg-color);
   padding: 4px 8px;
   border-radius: 12px;
+  white-space: nowrap;
+  max-width: 120px;
 }
 
 /* Meeting Details */

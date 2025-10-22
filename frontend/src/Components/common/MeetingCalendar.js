@@ -1,8 +1,8 @@
-// components/main/MiniCalendar.js
+// components/common/MeetingCalendar.js
 import React, { useState, useRef, useEffect } from 'react';
-import './MiniCalendar.css';
+import './MeetingCalendar.css';
 
-const MiniCalendar = ({ selectedDate, onDateSelect, currentDate, onMonthChange, disablePastDates = false }) => {
+const MeetingCalendar = ({ selectedDate, onDateSelect, currentDate, onMonthChange, disablePastDates = false }) => {
   // Lấy ngày trong tháng - giữ nguyên
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -104,10 +104,32 @@ const MiniCalendar = ({ selectedDate, onDateSelect, currentDate, onMonthChange, 
     onDateSelect(newDate);
   };
 
+  const handlePrevMonth = () => {
+    const newMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    onMonthChange(newMonth);
+  };
+
+  const handleNextMonth = () => {
+    const newMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    onMonthChange(newMonth);
+  };
+
+  const formatMonthYear = () => {
+    const month = currentDate.getMonth() + 1; // 1-12
+    const year = currentDate.getFullYear();
+    return `Tháng ${month}, ${year}`;
+  };
 
   return (
     <div className="calendar-container">
       <div className="calendar">
+        {/* Month/Year Header with Navigation */}
+        <div className="calendar-header">
+          <button className="nav-btn prev" onClick={handlePrevMonth} type="button">‹</button>
+          <div className="month-year-display">{formatMonthYear()}</div>
+          <button className="nav-btn next" onClick={handleNextMonth} type="button">›</button>
+        </div>
+
         <div className="week-days">
           {weekDays.map((day, index) => (
             <span key={index} className="week-day">{day}</span>
@@ -143,4 +165,4 @@ const MiniCalendar = ({ selectedDate, onDateSelect, currentDate, onMonthChange, 
   );
 };
 
-export default MiniCalendar;
+export default MeetingCalendar;

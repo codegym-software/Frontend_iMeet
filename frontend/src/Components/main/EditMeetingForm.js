@@ -10,6 +10,9 @@ import DeviceSelectorModal from './DeviceSelectorModal';
 const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
   console.log('EditMeetingForm - Meeting data:', meeting);
   
+  // Check if meeting is editable (only CONFIRMED meetings can be edited)
+  const isEditable = meeting?.bookingStatus?.toUpperCase() === 'CONFIRMED';
+  
   const [formData, setFormData] = useState({
     title: meeting?.title || '',
     description: meeting?.description || '',
@@ -173,12 +176,23 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
     setIsLoading(true);
     
     try {
+      // Helper function to format date as LocalDateTime string (without timezone)
+      const formatLocalDateTime = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+      
       // Prepare meeting data for API
       const meetingData = {
         title: formData.title,
         description: formData.description || '',
-        startTime: formData.startDateTime.toISOString(),
-        endTime: formData.endDateTime.toISOString(),
+        startTime: formatLocalDateTime(formData.startDateTime),
+        endTime: formatLocalDateTime(formData.endDateTime),
         isAllDay: formData.isAllDay,
         roomId: parseInt(formData.room),
         participants: formData.guests ? [formData.guests] : [],
@@ -214,9 +228,28 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
     <div className="create-meeting-modal-overlay">
       <div className="create-meeting-modal simple-style">
         <div className="modal-header">
-          <h2>Chỉnh sửa cuộc họp</h2>
+          <h2>{isEditable ? 'Chỉnh sửa cuộc họp' : 'Xem chi tiết cuộc họp'}</h2>
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
+        
+        {/* Notice for non-editable meetings */}
+        {!isEditable && (
+          <div style={{
+            margin: '0 20px 16px 20px',
+            padding: '12px 16px',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <span style={{ fontSize: '20px' }}>ℹ️</span>
+            <span style={{ color: '#856404', fontSize: '14px', fontWeight: '500' }}>
+              Cuộc họp này đang chờ admin duyệt. Bạn chỉ có thể xem thông tin hoặc xóa cuộc họp.
+            </span>
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className="meeting-form icon-form">
           {/* Title Section */}
@@ -230,6 +263,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                 onChange={handleChange}
                 placeholder="Thêm tiêu đề"
                 className="title-input"
+                disabled={!isEditable}
               />
               {errors.title && <span className="error-message">{errors.title}</span>}
             </div>
@@ -260,6 +294,8 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                 placeholder="dd/mm/yyyy"
                 className="date-only-picker"
                 displayFormat="date"
+                showCalendarHeader={true}
+                disabled={!isEditable}
               />
               
               {/* Start Time Input */}
@@ -334,6 +370,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                 onChange={handleChange}
                 placeholder="Thêm khách mời"
                 className="inline-input"
+                disabled={!isEditable}
               />
             </div>
           </div>
@@ -347,7 +384,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                 value={formData.room}
                 onChange={handleChange}
                 className="inline-select"
-                disabled={loadingRooms}
+                disabled={loadingRooms || !isEditable}
               >
                 <option value="">
                   {loadingRooms ? 'Đang tải...' : 'Chọn phòng họp'}
@@ -416,17 +453,19 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                     {formData.devices.map(device => (
                       <span key={device.deviceId} className="device-tag">
                         {device.deviceName} x{device.quantity}
-                        <button
-                          type="button"
-                          className="device-tag-remove"
-                          onClick={() => {
-                            const newDevices = formData.devices.filter(d => d.deviceId !== device.deviceId);
-                            setFormData(prev => ({ ...prev, devices: newDevices }));
-                          }}
-                          title="Xóa"
-                        >
-                          ×
-                        </button>
+                        {isEditable && (
+                          <button
+                            type="button"
+                            className="device-tag-remove"
+                            onClick={() => {
+                              const newDevices = formData.devices.filter(d => d.deviceId !== device.deviceId);
+                              setFormData(prev => ({ ...prev, devices: newDevices }));
+                            }}
+                            title="Xóa"
+                          >
+                            ×
+                          </button>
+                        )}
                       </span>
                     ))}
                   </div>
@@ -435,7 +474,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                   type="button"
                   className="device-add-btn"
                   onClick={() => setShowDeviceModal(true)}
-                  disabled={loadingDevices}
+                  disabled={loadingDevices || !isEditable}
                   title="Thêm thiết bị"
                 >
                   {loadingDevices ? '...' : '+'}
@@ -464,6 +503,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                 placeholder="Thêm mô tả"
                 className="description-textarea"
                 rows="3"
+                disabled={!isEditable}
               />
             </div>
           </div>
@@ -477,21 +517,55 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
 
           {/* Action Buttons */}
           <div className="form-actions simple-actions">
-            <button
-              type="button"
-              className="cancel-btn"
-              onClick={onClose}
-              disabled={isLoading}
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="save-btn"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
-            </button>
+            {isEditable ? (
+              <>
+                <button
+                  type="button"
+                  className="cancel-btn"
+                  onClick={onClose}
+                  disabled={isLoading}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="save-btn"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="cancel-btn"
+                  onClick={onClose}
+                  style={{ flex: 1 }}
+                >
+                  Đóng
+                </button>
+                {onDelete && (
+                  <button
+                    type="button"
+                    className="save-btn"
+                    onClick={() => {
+                      if (window.confirm('Bạn có chắc chắn muốn xóa cuộc họp này?')) {
+                        onDelete(meeting.id);
+                        onClose();
+                      }
+                    }}
+                    style={{ 
+                      flex: 1,
+                      backgroundColor: '#dc3545',
+                      borderColor: '#dc3545'
+                    }}
+                  >
+                    Xóa cuộc họp
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </form>
       </div>

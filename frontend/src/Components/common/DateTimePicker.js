@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './DateTimePicker.css';
 import MiniCalendar from '../main/MiniCalendar';
+import MeetingCalendar from './MeetingCalendar';
 
 const DateTimePicker = ({ 
   value, 
@@ -15,7 +16,11 @@ const DateTimePicker = ({
   // optional baseDate used to calculate duration suggestions (e.g., start time when editing end time)
   baseDate = null,
   // displayFormat: 'date' | 'time' | 'datetime' - controls what to show in the input
-  displayFormat = 'datetime'
+  displayFormat = 'datetime',
+  // disablePastDates: prevent selecting past dates (for creating new meetings)
+  disablePastDates = false,
+  // showCalendarHeader: show month/year header with navigation buttons
+  showCalendarHeader = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -179,9 +184,29 @@ const DateTimePicker = ({
   const generateTimeOptions = () => {
     const options = [];
     
-    // Generate all times from 00:00 to 23:45 with 15 min intervals
-    for (let hour = 0; hour < 24; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
+    // Determine start hour and minute based on mode
+    let startHour = 0;
+    let startMinute = 0;
+    
+    if (mode === 'end' && baseDate) {
+      const base = new Date(baseDate);
+      startHour = base.getHours();
+      startMinute = base.getMinutes();
+      // Round up to next 15-minute interval
+      if (startMinute % 15 !== 0) {
+        startMinute = Math.ceil(startMinute / 15) * 15;
+        if (startMinute >= 60) {
+          startMinute = 0;
+          startHour++;
+        }
+      }
+    }
+    
+    // Generate times from start time to end of day (23:45)
+    for (let hour = startHour; hour < 24; hour++) {
+      const minuteStart = (hour === startHour) ? startMinute : 0;
+      
+      for (let minute = minuteStart; minute < 60; minute += 15) {
         const timeLabel = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         const isSelected = selectedTime.hour === hour && selectedTime.minute === minute;
         
@@ -250,18 +275,176 @@ const DateTimePicker = ({
   };
 
 
+  // Handle manual input (date or time)
+  const handleManualInput = (e) => {
+    const inputValue = e.target.value.trim();
+    
+    // Parse date input for date or datetime formats
+    if (displayFormat === 'date' || displayFormat === 'datetime') {
+      // Support formats: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
+      const dateRegex1 = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/; // DD/MM/YYYY or DD-MM-YYYY
+      const dateRegex2 = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/; // YYYY-MM-DD
+      
+      let match = inputValue.match(dateRegex1);
+      let day, month, year;
+      
+      if (match) {
+        day = parseInt(match[1]);
+        month = parseInt(match[2]);
+        year = parseInt(match[3]);
+      } else {
+        match = inputValue.match(dateRegex2);
+        if (match) {
+          year = parseInt(match[1]);
+          month = parseInt(match[2]);
+          day = parseInt(match[3]);
+        }
+      }
+      
+      if (match) {
+        // Validate date
+        const testDate = new Date(year, month - 1, day);
+        const isValidDate = testDate.getDate() === day && 
+                           testDate.getMonth() === month - 1 && 
+                           testDate.getFullYear() === year;
+        
+        if (isValidDate) {
+          // Check if date is not in the past (only if disablePastDates is true)
+          if (disablePastDates) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            testDate.setHours(0, 0, 0, 0);
+            
+            if (testDate < today) {
+              // Date is in the past - reset to today
+              alert('Không thể chọn ngày đã qua. Vui lòng chọn từ hôm nay trở đi.');
+              const today = new Date();
+              setSelectedDate(today);
+              onChange(today);
+              return;
+            }
+          }
+          
+          const newDate = new Date(year, month - 1, day, selectedTime.hour, selectedTime.minute, 0, 0);
+          setSelectedDate(newDate);
+          setCurrentMonth(new Date(year, month - 1, 1));
+          onChange(newDate);
+          return;
+        }
+      }
+    }
+    
+    // Parse time input - support multiple formats
+    // Format 1: "H:MM" or "HH:MM" (24-hour format, will auto-convert to 12h display)
+    const time24Regex = /^(\d{1,2}):(\d{2})$/;
+    // Format 2: "H:MMAM" or "HH:MMPM" (12-hour with AM/PM attached)
+    const time12Regex = /^(\d{1,2}):(\d{2})(AM|PM)$/i;
+    
+    let match = inputValue.match(time24Regex);
+    let hour, minute;
+    
+    if (match) {
+      // 24-hour format input
+      hour = parseInt(match[1]);
+      minute = parseInt(match[2]);
+      
+      // Validate and accept 0-23 for hours
+      if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+        const newDate = new Date(selectedDate || new Date());
+        newDate.setHours(hour, minute, 0, 0);
+        setSelectedTime({ hour, minute });
+        onChange(newDate);
+      }
+    } else {
+      // Try 12-hour format with AM/PM
+      match = inputValue.match(time12Regex);
+      if (match) {
+        hour = parseInt(match[1]);
+        minute = parseInt(match[2]);
+        const period = match[3].toUpperCase();
+        
+        // Convert to 24-hour format
+        if (period === 'PM' && hour !== 12) {
+          hour += 12;
+        } else if (period === 'AM' && hour === 12) {
+          hour = 0;
+        }
+        
+        if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+          const newDate = new Date(selectedDate || new Date());
+          newDate.setHours(hour, minute, 0, 0);
+          setSelectedTime({ hour, minute });
+          onChange(newDate);
+        }
+      }
+    }
+  };
+
+  // Handle input focus - allow editing
+  const handleInputFocus = (e) => {
+    if (displayFormat === 'time') {
+      // For time-only input, select all text for easy editing
+      e.target.select();
+    }
+  };
+
+  // Handle input click - prevent dropdown from opening when clicking to edit
+  const handleInputClick = (e) => {
+    if (disabled) return;
+    
+    // If clicking on the input itself (not icon), don't open dropdown immediately
+    // User can still open dropdown by clicking outside the text or pressing down arrow
+    if (e.target.tagName === 'INPUT') {
+      // Don't open dropdown, allow editing
+      return;
+    }
+  };
+
   return (
     <div className={`date-time-picker ${className}`} ref={pickerRef}>
-      <div
-        className={`date-time-input ${isOpen ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        ref={inputRef}
-      >
-        <span className="clock-icon">🕐</span>
-        <span className="input-text">
-          {formatDisplayValue() || placeholder}
-        </span>
-        <span className="dropdown-arrow">▼</span>
+      <div className="date-time-input-wrapper">
+        <input
+          type="text"
+          className={`date-time-input ${isOpen ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
+          onClick={handleInputClick}
+          onFocus={handleInputFocus}
+          onChange={handleManualInput}
+          onBlur={handleManualInput}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleManualInput(e);
+              e.target.blur();
+            } else if (e.key === 'ArrowDown') {
+              // Open dropdown with arrow down
+              setIsOpen(true);
+            }
+          }}
+          value={formatDisplayValue() || ''}
+          placeholder={placeholder}
+          disabled={disabled}
+          ref={inputRef}
+          readOnly={false} // Allow manual input for all formats
+        />
+        <div className="input-icons">
+          {(displayFormat === 'date' || displayFormat === 'datetime') && (
+            <span 
+              className="calendar-icon" 
+              onClick={() => !disabled && setIsOpen(!isOpen)}
+              title="Chọn từ lịch"
+            >
+              📅
+            </span>
+          )}
+          {displayFormat !== 'date' && (
+            <span 
+              className="dropdown-toggle-icon" 
+              onClick={() => !disabled && setIsOpen(!isOpen)}
+              title="Chọn giờ"
+            >
+              ▼
+            </span>
+          )}
+        </div>
       </div>
 
       {isOpen && (
@@ -285,15 +468,26 @@ const DateTimePicker = ({
               </div>
             )}
 
-            {/* Calendar Section - Use MiniCalendar component */}
+            {/* Calendar Section - Use MeetingCalendar or MiniCalendar component */}
             {showDate && displayFormat !== 'time' && (!showTime || activeTab === 'date') && (
               <div className="calendar-section">
-                <MiniCalendar
-                  selectedDate={selectedDate || new Date()}
-                  currentDate={currentMonth}
-                  onDateSelect={handleDateSelect}
-                  onMonthChange={setCurrentMonth}
-                />
+                {showCalendarHeader ? (
+                  <MeetingCalendar
+                    selectedDate={selectedDate || new Date()}
+                    currentDate={currentMonth}
+                    onDateSelect={handleDateSelect}
+                    onMonthChange={setCurrentMonth}
+                    disablePastDates={disablePastDates}
+                  />
+                ) : (
+                  <MiniCalendar
+                    selectedDate={selectedDate || new Date()}
+                    currentDate={currentMonth}
+                    onDateSelect={handleDateSelect}
+                    onMonthChange={setCurrentMonth}
+                    disablePastDates={disablePastDates}
+                  />
+                )}
                 
                 {showTime && (
                   <div className="tab-navigation">

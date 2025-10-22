@@ -15,17 +15,23 @@ const Main = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewType, setViewType] = useState('day');
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(() => {
+    // Load theme from localStorage or default to 'light'
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme || 'light';
+  });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
   const history = useHistory();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    // Save theme to localStorage
+    localStorage.setItem('theme', theme);
   }, [theme]);
   
   const toggleTheme = () => { 
-    setTheme(theme === 'light' ? 'dark' : 'light'); 
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light'); 
   };  
 
   // Hàm xử lý thay đổi view type
@@ -36,6 +42,8 @@ const Main = () => {
   // Hàm xử lý thay đổi ngày
   const handleDateChange = (newDate) => {
     setSelectedDate(newDate);
+    // Cập nhật currentMonth để MiniCalendar hiển thị đúng tháng
+    setCurrentMonth(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
   };
 
   // Hàm xử lý thay đổi tháng từ MiniCalendar

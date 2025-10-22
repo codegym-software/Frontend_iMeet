@@ -22,13 +22,26 @@ const DayView = React.memo(({
 
   const renderTimedEvents = useMemo(() => {
     return timedEvents.map(event => {
-      const startMinutes = event.start.getHours() * 60 + event.start.getMinutes();
-      const endMinutes = event.end.getHours() * 60 + event.end.getMinutes();
+      const startHour = event.start.getHours();
+      const startMinute = event.start.getMinutes();
+      const endHour = event.end.getHours();
+      const endMinute = event.end.getMinutes();
+      
+      // Calculate total minutes from start of day (00:00)
+      const startMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
       const duration = endMinutes - startMinutes;
 
-      // Calculate exact pixel position: 1 minute = 1 pixel, plus 48px offset for GMT header
-      const top = startMinutes + 48;
-      const height = Math.max(duration, 20);
+      // Calculate exact pixel position: 
+      // - GMT header offset = 48px (fixed height)
+      // - Each hour = 60px (fixed height)
+      // - Each minute = 1px
+      // Formula: top = GMT_OFFSET + (hours × PIXELS_PER_HOUR) + minutes
+      // Example: 9:45 AM = 48 + (9 × 60) + 45 = 633px
+      const GMT_OFFSET = 48;
+      const PIXELS_PER_HOUR = 60;
+      const top = GMT_OFFSET + (startHour * PIXELS_PER_HOUR) + startMinute;
+      const height = Math.max(duration, 20); // Minimum 20px for visibility
 
       return (
         <div
@@ -49,15 +62,16 @@ const DayView = React.memo(({
             {duration < 60 ? (
               // Short meeting: single line format "Title (10:00 AM - 11:00 AM)"
               <div className="event-title-inline">
-                {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
-                {event.title} ({formatTime(event.start)} - {formatTime(event.end)})
+                {event.title}
+                {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
+                {' '}({formatTime(event.start)} - {formatTime(event.end)})
               </div>
             ) : (
               // Long meeting: multi-line format
               <>
                 <div className="event-title">
-                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
                   {event.title}
+                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                 </div>
                 <div className="event-time">
                   {formatTime(event.start)} - {formatTime(event.end)}
@@ -114,8 +128,8 @@ const DayView = React.memo(({
                 onMouseLeave={handleEventMouseLeave}
               >
                 <div className="event-title">
-                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
                   {event.title}
+                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                 </div>
               </div>
             ))}

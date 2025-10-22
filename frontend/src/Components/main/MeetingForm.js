@@ -365,12 +365,23 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
     setIsLoading(true);
     
     try {
+      // Helper function to format date as LocalDateTime string (without timezone)
+      const formatLocalDateTime = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+      
       // Prepare meeting data for API
       const meetingData = {
         title: formData.title,
         description: formData.description || '',
-        startTime: formData.startDateTime.toISOString(),
-        endTime: formData.endDateTime.toISOString(),
+        startTime: formatLocalDateTime(formData.startDateTime),
+        endTime: formatLocalDateTime(formData.endDateTime),
         isAllDay: formData.isAllDay,
         roomId: parseInt(formData.room),
         participants: formData.guests ? [formData.guests] : [],
@@ -461,9 +472,11 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                 }}
                 showTime={false}
                 showDate={true}
-                placeholder="dd/mm/yyyy"
-                className="date-only-picker"
+                placeholder="Chọn ngày"
+                className="date-picker-input"
                 displayFormat="date"
+                disablePastDates={true}
+                showCalendarHeader={true}
               />
               
               {/* Start Time Input */}

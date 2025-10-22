@@ -5,18 +5,65 @@
   width: 100%;
 }
 
-.date-time-input {
+.date-time-input-wrapper {
+  position: relative;
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
+}
+
+.date-time-input {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
   border: 1px solid #dadce0;
   border-radius: 8px;
   background: white;
-  cursor: pointer;
+  cursor: text;
   transition: all 0.2s ease;
   font-size: 14px;
   min-height: 48px;
+  color: #3c4043;
+  font-family: inherit;
+  outline: none;
+}
+
+.input-icons {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.calendar-icon {
+  color: #5f6368;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 6px;
+  user-select: none;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar-icon:hover {
+  transform: scale(1.1);
+}
+
+.dropdown-toggle-icon {
+  color: #5f6368;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 8px;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.dropdown-toggle-icon:hover {
+  color: #1a73e8;
 }
 
 .date-time-input:hover {
@@ -33,6 +80,16 @@
   background: #f8f9fa;
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+.date-time-input::placeholder {
+  color: #80868b;
+  font-weight: 400;
+}
+
+.date-time-input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
 }
 
 .clock-icon {
@@ -91,14 +148,13 @@
   position: absolute;
   top: 100%;
   left: 0;
-  right: 0;
   z-index: 1000;
-  background: white;
-  border: 1px solid #dadce0;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--shadow-hover);
   margin-top: 4px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Compact dropdown for time-only pickers */
@@ -112,11 +168,11 @@
 /* Dropdown for date-only pickers */
 .date-only-picker .date-time-picker-dropdown {
   position: absolute;
-  width: auto;
-  min-width: 300px;
-  max-width: 350px;
+  width: 320px;
   right: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--shadow-hover);
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
 }
 
 .picker-content {
@@ -130,7 +186,7 @@
 
 /* Larger padding for date-only pickers */
 .date-only-picker .picker-content {
-  padding: 20px;
+  padding: 16px;
 }
 
 /* Override MiniCalendar styling in DateTimePicker */
@@ -138,21 +194,25 @@
   gap: 0;
 }
 
+/* Remove calendar's own shadow/border since it's inside form wrapper */
 .date-time-picker-dropdown .calendar {
-  background: transparent;
-  border-radius: 0;
-  padding: 0;
-  margin-bottom: 0;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
 }
 
 /* Calendar Styles */
 .calendar-section {
-  margin-bottom: 16px;
+  margin-bottom: 0;
+  overflow: visible;
+  min-height: 300px;
 }
 
 /* Compact calendar for date-only pickers */
 .date-only-picker .calendar-section {
   margin-bottom: 0;
+  overflow: visible;
 }
 
 .calendar-header {

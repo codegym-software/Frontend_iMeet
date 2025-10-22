@@ -87,7 +87,10 @@ const MonthView = React.memo(({
                       <span className="event-time">
                         {event.allDay ? 'All day' : formatTime(event.start)}
                       </span>
-                      <span className="event-title">{event.title}</span>
+                      <span className="event-title">
+                        {event.title}
+                        {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
+                      </span>
                     </div>
                   ))}
                   {dayInfo.dayEvents.length > 3 && (

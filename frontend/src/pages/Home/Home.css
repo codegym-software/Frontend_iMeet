@@ -8,18 +8,34 @@
   --accent-color: #1a73e8;
   --accent-hover: #1557b0;
   --card-color: #ffffff;
+  --card-bg: rgba(255, 255, 255, 0.05);
+  --scrollbar-track: #f1f3f4;
+  --scrollbar-thumb: #dadce0;
+  --scrollbar-thumb-hover: #bdc1c6;
+  --shadow: rgba(0, 0, 0, 0.1);
+  --shadow-hover: rgba(0, 0, 0, 0.15);
+  --danger-color: #dc3545;
+  --danger-hover: #c82333;
 }
 
 [data-theme="dark"] {
-  --bg-color: #202124;
-  --component-bg: #303134;
-  --hover-bg: #35363a;
-  --border-color: #5f6368;
+  --bg-color: #1a1a1a;
+  --component-bg: #2d2d2d;
+  --hover-bg: #3a3a3a;
+  --border-color: #404040;
   --text-color: #e8eaed;
   --muted-color: #9aa0a6;
-  --accent-color: #1a73e8;
-  --accent-hover: #1557b0;
-  --card-color: #303134;
+  --accent-color: #4a9eff;
+  --accent-hover: #6bb0ff;
+  --card-color: #2d2d2d;
+  --card-bg: rgba(255, 255, 255, 0.05);
+  --scrollbar-track: #2d2d2d;
+  --scrollbar-thumb: #5f6368;
+  --scrollbar-thumb-hover: #7a8085;
+  --shadow: rgba(0, 0, 0, 0.3);
+  --shadow-hover: rgba(0, 0, 0, 0.4);
+  --danger-color: #ff5555;
+  --danger-hover: #ff6b6b;
 }
 
 

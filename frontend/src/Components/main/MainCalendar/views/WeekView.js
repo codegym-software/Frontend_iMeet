@@ -166,8 +166,8 @@ const WeekView = React.memo(({
                       onMouseLeave={handleEventMouseLeave}
                     >
                       <div className="event-title">
-                        {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
                         {event.title}
+                        {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                       </div>
                     </div>
                   ))}
@@ -203,89 +203,80 @@ const WeekView = React.memo(({
                     className={`week-day-column ${isToday ? 'today' : ''}`}
                   >
                     <div className="week-day-time-cells">
-                      {Array.from({ length: 24 }, (_, hour) => {
-                        const hourEvents = dayEvents.filter(event => {
-                          const eventHour = event.start.getHours();
-                          const eventEndHour = event.end.getHours();
-                          return eventHour <= hour && eventEndHour >= hour;
-                        });
+                      {/* Render hour cells for clicking */}
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <div
+                          key={hour}
+                          className="week-time-cell"
+                          onClick={() => {
+                            const newDate = new Date(day);
+                            newDate.setHours(hour, 0, 0, 0);
+                            onDateSelect && onDateSelect(newDate);
+                          }}
+                        />
+                      ))}
+                      
+                      {/* Render all events with absolute positioning */}
+                      {dayEvents.map((event) => {
+                        const startHour = event.start.getHours();
+                        const startMinute = event.start.getMinutes();
+                        const endHour = event.end.getHours();
+                        const endMinute = event.end.getMinutes();
+                        
+                        // Calculate total minutes from start of day (00:00)
+                        const startMinutes = startHour * 60 + startMinute;
+                        const endMinutes = endHour * 60 + endMinute;
+                        const duration = endMinutes - startMinutes;
+
+                        // Calculate exact pixel position:
+                        // - No GMT header in week view
+                        // - Each hour = 60px (fixed height)
+                        // - Each minute = 1px
+                        // Formula: top = (hours × PIXELS_PER_HOUR) + minutes
+                        // Example: 9:45 AM = (9 × 60) + 45 = 585px
+                        const PIXELS_PER_HOUR = 60;
+                        const top = (startHour * PIXELS_PER_HOUR) + startMinute;
+                        const height = Math.max(duration, 20); // Minimum 20px for visibility
 
                         return (
                           <div
-                            key={hour}
-                            className="week-time-cell"
-                            onClick={() => {
-                              const newDate = new Date(day);
-                              newDate.setHours(hour, 0, 0, 0);
-                              onDateSelect && onDateSelect(newDate);
+                            key={event.id}
+                            className={`calendar-event week-timed-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
+                            style={{
+                              top: `${top}px`,
+                              height: `${height}px`,
+                              backgroundColor: event.color,
+                              borderLeft: `3px solid ${event.color}`,
+                              opacity: event.opacity || 1
                             }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEventClick(event, e);
+                            }}
+                            onMouseEnter={(e) => handleEventMouseEnter(event, e)}
+                            onMouseLeave={handleEventMouseLeave}
                           >
-                            {hourEvents.map((event, eventIndex) => {
-                              const eventStartHour = event.start.getHours();
-                              const eventStartMinute = event.start.getMinutes();
-                              const eventEndHour = event.end.getHours();
-                              const eventEndMinute = event.end.getMinutes();
-
-                              const isFirstHour = eventStartHour === hour;
-                              const isLastHour = eventEndHour === hour;
-                              const duration = eventEndHour - eventStartHour;
-
-                              // Calculate exact pixel position: 1 minute = 1 pixel
-                              const top = isFirstHour ? eventStartMinute : 0;
-                              const height = isFirstHour && isLastHour 
-                                ? (eventEndMinute - eventStartMinute) 
-                                : isFirstHour 
-                                  ? 60 - eventStartMinute 
-                                  : isLastHour 
-                                    ? eventEndMinute 
-                                    : 60;
-
-                              return (
-                                <div
-                                  key={event.id}
-                                  className={`calendar-event week-timed-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
-                                  style={{
-                                    top: `${top}px`,
-                                    height: `${height}px`,
-                                    backgroundColor: event.color,
-                                    borderLeft: `3px solid ${event.color}`,
-                                    opacity: event.opacity || 1
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEventClick(event, e);
-                                  }}
-                                  onMouseEnter={(e) => handleEventMouseEnter(event, e)}
-                                  onMouseLeave={handleEventMouseLeave}
-                                >
-                                  {isFirstHour && (
-                                    <div className="event-content">
-                                      {(() => {
-                                        const duration = (event.end - event.start) / (1000 * 60);
-                                        return duration < 60 ? (
-                                          // Short meeting: single line
-                                          <div className="event-title-inline">
-                                            {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
-                                            {event.title} ({formatTime(event.start)} - {formatTime(event.end)})
-                                          </div>
-                                        ) : (
-                                          // Long meeting: multi-line
-                                          <>
-                                            <div className="event-title">
-                                              {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && <span className="status-badge pending">⏳ Chờ duyệt</span>}
-                                              {event.title}
-                                            </div>
-                                            <div className="event-time">
-                                              {formatTime(event.start)} - {formatTime(event.end)}
-                                            </div>
-                                          </>
-                                        );
-                                      })()}
-                                    </div>
-                                  )}
+                            <div className="event-content">
+                              {duration < 60 ? (
+                                // Short meeting: single line
+                                <div className="event-title-inline">
+                                  {event.title}
+                                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
+                                  {' '}({formatTime(event.start)} - {formatTime(event.end)})
                                 </div>
-                              );
-                            })}
+                              ) : (
+                                // Long meeting: multi-line
+                                <>
+                                  <div className="event-title">
+                                    {event.title}
+                                    {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
+                                  </div>
+                                  <div className="event-time">
+                                    {formatTime(event.start)} - {formatTime(event.end)}
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
