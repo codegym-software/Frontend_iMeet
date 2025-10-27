@@ -39,6 +39,9 @@ export const DataPreloaderProvider = ({ children }) => {
 
   // Global loading state
   const [isPreloading, setIsPreloading] = useState(true);
+  
+  // ✅ Track if data has been loaded - ONLY LOAD ONCE!
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   // Normalize backend device object to frontend shape
   const normalizeDevice = useCallback((d, deviceTypes = []) => {
@@ -208,11 +211,18 @@ export const DataPreloaderProvider = ({ children }) => {
     }
   }, []);
 
-  // Preload all data on mount
+  // ✅ Preload all data ONLY ONCE - No refetch when switching pages!
   useEffect(() => {
+    // Skip if already loaded
+    if (isDataLoaded) {
+      console.log('📦 Data already loaded from cache - skip fetch');
+      return;
+    }
+
     const isMountedRef = { current: true };
 
     const preloadAllData = async () => {
+      console.log('🚀 Loading data for the first time...');
       if (isMountedRef.current) setIsPreloading(true);
       
       try {
@@ -225,10 +235,10 @@ export const DataPreloaderProvider = ({ children }) => {
           loadMeetings(isMountedRef)
         ]);
         
-        console.log('Stats Result:', results[1]);
-        console.log('Rooms Result:', results[3]);
-        console.log('Devices Result:', results[2]);
-        console.log('Meetings Result:', results[4]);
+        if (isMountedRef.current) {
+          setIsDataLoaded(true); // ✅ Mark as loaded
+          console.log('✅ Initial data loaded and cached!');
+        }
       } catch (error) {
         console.error('Error preloading data:', error);
       } finally {
@@ -241,9 +251,12 @@ export const DataPreloaderProvider = ({ children }) => {
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadUsers, loadUserStats, loadDevices, loadRooms, loadMeetings]);
+  }, [isDataLoaded, loadUsers, loadUserStats, loadDevices, loadRooms, loadMeetings]);
 
   const value = {
+    // Data loaded flag
+    isDataLoaded,
+    
     // Users
     users,
     userStats,

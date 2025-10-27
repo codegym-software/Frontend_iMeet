@@ -163,7 +163,7 @@ const UpcomingMeetings = () => {
     }, 5 * 60 * 1000);
     
     return () => clearInterval(refreshInterval);
-  }, []);
+  }, [refreshTrigger]);
 
   // Format thời gian còn lại
   const getTimeUntilMeeting = (meetingDate, meetingTime) => {

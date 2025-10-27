@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDeviceTypes } from './DeviceTypeContext';
 import { useDevices } from './DeviceContext';
 import { usePreloadedData } from './DataPreloaderContext';
@@ -44,7 +44,6 @@ const DeviceList = () => {
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('');
-  const [filteredDevices, setFilteredDevices] = useState([]);
 
 
   // Sync with preloaded data
@@ -58,21 +57,15 @@ const DeviceList = () => {
     }
   }, [preloadedDevices, preloadedLoading, deviceTypesLoading]);
 
-  // Filter devices based on search query and type filter
-  useEffect(() => {
+  // ✅ Use useMemo instead of useEffect for filtering - Prevent unnecessary re-renders
+  const filteredDevices = useMemo(() => {
     let filtered = [...devices];
-    
-    // Debug log
-    console.log('DeviceList - Total devices:', devices.length);
-    console.log('DeviceList - Device types:', devices.map(d => ({ name: d.name, type: d.deviceTypeName, typeId: d.deviceTypeId })));
-    console.log('DeviceList - Available deviceTypes:', deviceTypes.map(t => ({ id: t.id, name: t.name })));
     
     // Filter by device type
     if (selectedTypeFilter) {
       filtered = filtered.filter(device => 
         String(device.deviceTypeId) === String(selectedTypeFilter)
       );
-      console.log('DeviceList - Filtered by type:', selectedTypeFilter, 'Count:', filtered.length);
     }
     
     // Filter by search query (name or description)
@@ -83,27 +76,22 @@ const DeviceList = () => {
         (device.description || '').toLowerCase().includes(query) ||
         (device.deviceTypeName || '').toLowerCase().includes(query)
       );
-      console.log('DeviceList - Filtered by search:', searchQuery, 'Count:', filtered.length);
     }
     
-    setFilteredDevices(filtered);
-  }, [devices, searchQuery, selectedTypeFilter, deviceTypes]);
+    return filtered;
+  }, [devices, searchQuery, selectedTypeFilter]);
 
-  // Re-normalize devices when deviceTypes are loaded (only once)
+  // ✅ Re-normalize devices when deviceTypes are loaded (only once)
   const [deviceTypesLoaded, setDeviceTypesLoaded] = useState(false);
   useEffect(() => {
     if (deviceTypes.length > 0 && !deviceTypesLoaded && preloadedDevices.length > 0) {
-      console.log('Re-normalizing devices with loaded deviceTypes');
-      console.log('Raw preloaded devices:', preloadedDevices.length);
       const normalizedDevices = preloadedDevices.map(d => normalizeDevice(d, deviceTypes)).filter(d => d !== null);
-      console.log('Normalized devices:', normalizedDevices.length);
-      console.log('Device type names:', normalizedDevices.map(d => d.deviceTypeName));
       setDevices(normalizedDevices);
       setContextDevices(normalizedDevices);
       setPreloadedDevices(normalizedDevices);
       setDeviceTypesLoaded(true);
     }
-  }, [deviceTypes, deviceTypesLoaded, preloadedDevices]);
+  }, [deviceTypes, deviceTypesLoaded, preloadedDevices, normalizeDevice, setContextDevices, setPreloadedDevices]);
 
   // Function để tạo thiết bị mẫu tự động khi có loại thiết bị mới (creates via API)
   const createSampleDevice = async (newDeviceType) => {
@@ -118,11 +106,14 @@ const DeviceList = () => {
       };
 
       const result = await adminService.createDevice(sampleDeviceData);
-      // Refresh devices list from API and update both contexts
-      const list = await reloadDevices(deviceTypes);
-      setDevices(list);
-      setContextDevices(list);
-      setPreloadedDevices(list);
+      // ✅ Optimistic update - no refetch!
+      if (result && result.data) {
+        const normalizedDevice = normalizeDevice(result.data, deviceTypes);
+        const updatedList = [normalizedDevice, ...devices];
+        setDevices(updatedList);
+        setContextDevices(updatedList);
+        setPreloadedDevices(updatedList);
+      }
 
       // Clear API error on success
       setApiError(null);

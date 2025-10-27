@@ -244,14 +244,8 @@ const RoomManagement = () => {
           setPreloadedRooms(updatedRoomsList);
           // filteredRooms will be updated by the useEffect that watches rooms
 
-          // Reload devices to update quantities after assignment
-          if (selected.length > 0) {
-            try {
-              await reloadDevices();
-            } catch (err) {
-              console.warn('Failed to reload devices:', err);
-            }
-          }
+          // ✅ Optimistic update - no refetch devices!
+          // Device quantities will be updated via DeviceInventoryContext automatically
 
           showNotification(
             deviceSyncSuccess ? 'success' : 'warning',
@@ -464,11 +458,10 @@ const RoomManagement = () => {
           // Reload devices to update quantities after any device changes
           if (hasDeviceChanges) {
             try {
-              await reloadDevices();
-              // Also reload rooms to get updated device assignments
-              await reloadRooms();
+              // ✅ Optimistic update - no refetch!
+              // Updates already in local state
             } catch (err) {
-              console.warn('Failed to reload devices/rooms:', err);
+              console.warn('Device sync error:', err);
             }
           }
 
@@ -533,14 +526,8 @@ const RoomManagement = () => {
           setPreloadedRooms(updatedRoomsList);
           // filteredRooms will be updated by the useEffect that watches rooms
           
-          // Reload devices to update quantities after removal
-          if (hasDevices) {
-            try {
-              await reloadDevices();
-            } catch (err) {
-              console.warn('Failed to reload devices:', err);
-            }
-          }
+          // ✅ Optimistic update - no refetch devices!
+          // Device quantities updated via DeviceInventoryContext
           
           showNotification('success', `🗑️ ${result.message || `Đã xóa phòng "${roomToDelete?.name}" thành công!`}`);
           

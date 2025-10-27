@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import './DeviceSelectorModal.css';
+import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
 
 const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConfirm }) => {
   const [tempSelectedDevices, setTempSelectedDevices] = useState([]);
   const [expandedTypes, setExpandedTypes] = useState({});
+  
+  // ✅ Get real-time inventory
+  const { inventory } = useDeviceInventory();
 
   // Khởi tạo tempSelectedDevices khi modal mở
   useEffect(() => {
@@ -42,7 +46,7 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
     }));
   };
 
-  // Xử lý thay đổi số lượng thiết bị
+  // Xử lý thay đổi số lượng thiết bị - WITH REAL-TIME CHECK
   const handleQuantityChange = (deviceId, quantity) => {
     const newQuantity = Math.max(0, parseInt(quantity) || 0);
     
@@ -54,9 +58,16 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
       const device = devices.find(d => d.deviceId === deviceId);
       if (!device) return;
 
-      // Kiểm tra số lượng tối đa
-      const maxQuantity = device.quantity || 0;
-      const finalQuantity = Math.min(newQuantity, maxQuantity);
+      // ✅ CHECK AVAILABILITY from real-time inventory
+      const deviceInfo = inventory[deviceId];
+      const available = deviceInfo?.available || device.quantity || 0;
+      
+      if (newQuantity > available) {
+        alert(`❌ Không đủ thiết bị!\n\nThiết bị: ${device.deviceName || device.name}\nYêu cầu: ${newQuantity}\nCòn lại: ${available}`);
+        return;
+      }
+
+      const finalQuantity = newQuantity;
 
       // Cập nhật hoặc thêm thiết bị
       const existingIndex = tempSelectedDevices.findIndex(d => d.deviceId === deviceId);
@@ -164,16 +175,22 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                     <div className="device-cards-container">
                       {typeDevices.map(device => {
                         const selectedQty = getSelectedQuantity(device.deviceId);
-                        const maxQty = device.quantity || 0;
+                        
+                        // ✅ GET AVAILABILITY FROM INVENTORY
+                        const deviceInfo = inventory[device.deviceId];
+                        const available = deviceInfo?.available ?? device.quantity ?? 0;
+                        const total = deviceInfo?.total ?? device.quantity ?? 0;
+                        const isOutOfStock = available === 0;
+                        
                         const isSelected = selectedQty > 0;
 
                         return (
                           <div 
                             key={device.deviceId} 
-                            className={`device-card ${isSelected ? 'selected' : ''} ${maxQty === 0 ? 'unavailable' : ''}`}
+                            className={`device-card ${isSelected ? 'selected' : ''} ${isOutOfStock ? 'unavailable' : ''}`}
                             onClick={() => {
                               // Click vào card để chọn số lượng 1 nếu chưa chọn
-                              if (!isSelected && maxQty > 0) {
+                              if (!isSelected && !isOutOfStock) {
                                 handleQuantityChange(device.deviceId, 1);
                               }
                             }}
@@ -181,9 +198,14 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                             <div className="device-card-header">
                               <div className="device-card-name">
                                 {device.name || device.deviceName}
+                                {isOutOfStock && <span style={{ marginLeft: '8px', color: '#ef4444', fontWeight: 'bold' }}>❌ Hết</span>}
                               </div>
-                              <div className="device-card-available">
-                                Còn: <strong>{maxQty}</strong>
+                              <div className="device-card-available" style={{ color: isOutOfStock ? '#ef4444' : '#10b981' }}>
+                                {isOutOfStock ? (
+                                  <strong>Hết hàng</strong>
+                                ) : (
+                                  <>Còn: <strong>{available}/{total}</strong></>
+                                )}
                               </div>
                             </div>
 
@@ -202,7 +224,7 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                                     e.stopPropagation();
                                     handleQuantityChange(device.deviceId, selectedQty - 1);
                                   }}
-                                  disabled={selectedQty === 0 || maxQty === 0}
+                                  disabled={selectedQty === 0 || isOutOfStock}
                                 >
                                   −
                                 </button>
@@ -213,8 +235,9 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                                   onChange={(e) => handleQuantityChange(device.deviceId, e.target.value)}
                                   onClick={(e) => e.stopPropagation()}
                                   min="0"
-                                  max={maxQty}
-                                  disabled={maxQty === 0}
+                                  max={available}
+                                  disabled={isOutOfStock}
+                                  placeholder={isOutOfStock ? '0' : '0'}
                                 />
                                 <button
                                   type="button"
@@ -223,7 +246,7 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                                     e.stopPropagation();
                                     handleQuantityChange(device.deviceId, selectedQty + 1);
                                   }}
-                                  disabled={selectedQty >= maxQty || maxQty === 0}
+                                  disabled={selectedQty >= available || isOutOfStock}
                                 >
                                   +
                                 </button>

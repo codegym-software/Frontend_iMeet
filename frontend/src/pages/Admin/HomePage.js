@@ -25,22 +25,12 @@ const HomeStats = () => {
         
         const [statsResult, roomsResult, devicesResult, meetingsResult] = results;
         
-        console.log('Stats Result:', statsResult);
-        console.log('Rooms Result:', roomsResult);
-        console.log('Devices Result:', devicesResult);
-        console.log('Meetings Result:', meetingsResult);
-        
         if (mounted) {
           // Extract values from Promise.allSettled results
           const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : {};
           const roomsRes = roomsResult.status === 'fulfilled' ? roomsResult.value : [];
           const devicesRes = devicesResult.status === 'fulfilled' ? devicesResult.value : [];
           const meetingsRes = meetingsResult.status === 'fulfilled' ? meetingsResult.value : { data: [] };
-          
-          console.log('Extracted Stats:', statsRes);
-          console.log('Extracted Rooms:', roomsRes);
-          console.log('Extracted Devices:', devicesRes);
-          console.log('Extracted Meetings:', meetingsRes);
           
           // Set state with proper fallbacks
           setStats(statsRes?.data || statsRes || {});

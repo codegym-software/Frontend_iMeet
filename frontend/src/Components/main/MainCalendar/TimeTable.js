@@ -500,7 +500,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
       case 'year':
         return <YearView selectedDate={selectedDate} onDateSelect={onDateSelect} />;
       case 'schedule':
-        return <ScheduleView selectedDate={selectedDate} onMeetingUpdated={onMeetingUpdated} />;
+        return <ScheduleView selectedDate={selectedDate} onMeetingUpdated={onMeetingUpdated} refreshTrigger={refreshTrigger} />;
       default:
         return <MonthView {...commonProps} />;
     }
@@ -514,7 +514,9 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     handleEventMouseEnter,
     handleEventMouseLeave,
     handleTimeSlotClick,
-    formatTime
+    formatTime,
+    onMeetingUpdated,
+    refreshTrigger
   ]);
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

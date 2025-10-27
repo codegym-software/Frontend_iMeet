@@ -6,6 +6,8 @@ import { calendarAPI } from './MainCalendar/utils/CalendarAPI';
 import DateTimePicker from '../common/DateTimePicker';
 import adminService from '../../services/adminService';
 import DeviceSelectorModal from './DeviceSelectorModal';
+import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
+import { useMeetingWithDevices } from '../../hooks/useMeetingWithDevices';
 
 const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
   console.log('EditMeetingForm - Meeting data:', meeting);
@@ -28,10 +30,15 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [selectedRoomDevices, setSelectedRoomDevices] = useState([]);
-  const [allDevices, setAllDevices] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
-  const [loadingDevices, setLoadingDevices] = useState(false);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
+  
+  // ✅ USE CACHE - No more slow API calls!
+  const { getDevicesWithAvailability, checkAvailability } = useDeviceInventory();
+  const { updateMeetingWithDevices, deleteMeetingWithDevices } = useMeetingWithDevices();
+  
+  // Get devices from cache - INSTANT!
+  const allDevices = getDevicesWithAvailability();
   
   // Update formData when meeting changes
   useEffect(() => {
@@ -50,7 +57,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
     }
   }, [meeting]);
 
-  // Load rooms and all devices khi component mount
+  // Load rooms only - devices từ cache rồi!
   useEffect(() => {
     let isMounted = true;
 
@@ -79,24 +86,8 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
       }
     };
 
-    const loadAllDevices = async () => {
-      try {
-        if (isMounted) setLoadingDevices(true);
-        const devicesData = await adminService.getDevices();
-        if (isMounted) {
-          setAllDevices(devicesData || []);
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error('Error loading devices:', error);
-        }
-      } finally {
-        if (isMounted) setLoadingDevices(false);
-      }
-    };
-
     loadRooms();
-    loadAllDevices();
+    // ✅ Devices từ cache - không cần fetch nữa!
 
     return () => {
       isMounted = false;
@@ -168,6 +159,19 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
       newErrors.room = 'Vui lòng chọn phòng';
     }
     
+    // ✅ VALIDATE DEVICE AVAILABILITY
+    const deviceErrors = [];
+    formData.devices.forEach(device => {
+      if (!checkAvailability(device.deviceId, device.quantity)) {
+        const available = allDevices.find(d => d.deviceId === device.deviceId)?.available || 0;
+        deviceErrors.push(`${device.deviceName}: chỉ còn ${available} (yêu cầu ${device.quantity})`);
+      }
+    });
+    
+    if (deviceErrors.length > 0) {
+      newErrors.devices = 'Không đủ thiết bị:\n' + deviceErrors.join('\n');
+    }
+    
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -202,9 +206,12 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
       // Call API to update meeting
       const updatedMeeting = await calendarAPI.updateMeeting(meeting.id, meetingData);
       
-      console.log('Meeting updated successfully:', updatedMeeting);
+      console.log('✅ Meeting updated successfully:', updatedMeeting);
       
-      // Call parent onSubmit callback to refresh calendar FIRST
+      // ✅ OPTIMISTIC UPDATE - Return old devices, borrow new ones
+      updateMeetingWithDevices(meeting, updatedMeeting);
+      
+      // Call parent onSubmit callback
       if (onSubmit) {
         onSubmit(updatedMeeting, 'Cập nhật cuộc họp thành công!');
       }

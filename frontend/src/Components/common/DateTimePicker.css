@@ -18,13 +18,15 @@
   border: 1px solid #dadce0;
   border-radius: 8px;
   background: white;
-  cursor: text;
+  cursor: text !important; /* Force text cursor to show it's editable */
   transition: all 0.2s ease;
   font-size: 14px;
   min-height: 48px;
   color: #3c4043;
-  font-family: inherit;
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   outline: none;
+  font-weight: 400;
+  user-select: text; /* Allow text selection */
 }
 
 .input-icons {
@@ -35,11 +37,13 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  pointer-events: auto; /* Make sure icons are clickable */
+  z-index: 2; /* Icons above input */
 }
 
 .calendar-icon {
   color: #5f6368;
-  cursor: pointer;
+  cursor: pointer !important; /* Force pointer cursor for icons */
   font-size: 18px;
   padding: 6px;
   user-select: none;
@@ -47,6 +51,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  border-radius: 4px;
+}
+
+.calendar-icon:active {
+  background: #f1f3f4;
 }
 
 .calendar-icon:hover {
@@ -55,11 +65,16 @@
 
 .dropdown-toggle-icon {
   color: #5f6368;
-  cursor: pointer;
+  cursor: pointer !important; /* Force pointer cursor for icons */
   font-size: 12px;
   padding: 8px;
   user-select: none;
-  transition: color 0.2s;
+  transition: all 0.2s;
+  border-radius: 4px;
+}
+
+.dropdown-toggle-icon:active {
+  background: #f1f3f4;
 }
 
 .dropdown-toggle-icon:hover {
@@ -149,10 +164,10 @@
   top: 100%;
   left: 0;
   z-index: 1000;
-  background: var(--card-color);
-  border: 1px solid var(--border-color);
+  background: white;
+  border: 1px solid #dadce0;
   border-radius: 8px;
-  box-shadow: 0 4px 12px var(--shadow-hover);
+  box-shadow: 0 2px 10px 0 rgba(0,0,0,0.2), 0 1px 3px 0 rgba(0,0,0,0.1);
   margin-top: 4px;
   overflow: visible;
 }
@@ -449,11 +464,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 8px 16px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.2s ease;
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 0.15s ease;
   border-bottom: 1px solid #f1f3f4;
+  color: #3c4043;
 }
 
 /* Compact time slots for time-only pickers */
@@ -467,7 +484,7 @@
 }
 
 .time-slot:hover {
-  background: #f1f3f4;
+  background: #f8f9fa;
 }
 
 .time-slot.selected {

@@ -126,6 +126,18 @@
   width: 100%;
 }
 
+.time-picker-input {
+  min-width: 100px;
+  flex: 0 0 auto;
+}
+
+.time-separator {
+  font-size: 16px;
+  color: #5f6368;
+  font-weight: 500;
+  margin: 0 4px;
+}
+
 .date-only-picker {
   flex: 0 0 auto;
   min-width: 130px;

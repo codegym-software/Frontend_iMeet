@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { AuthProvider } from '../../contexts/AuthContext';
+import { MeetingProvider, useMeetings } from '../../contexts/MeetingContext';
+import { DeviceInventoryProvider } from '../../contexts/DeviceInventoryContext';
 import './Home.css';
 import TopBar from '../../Components/main/TopBar';
 import MiniCalendar from '../../Components/main/MiniCalendar';
@@ -11,7 +13,7 @@ import OtherSchedule from '../../Components/main/OtherSchedule';
 import TimeTable from '../../Components/main/MainCalendar/TimeTable';
 import Toast from '../../Components/common/Toast';
 
-const Main = () => {
+const MainContent = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewType, setViewType] = useState('day');
@@ -23,6 +25,7 @@ const Main = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
   const history = useHistory();
+  const { addMeeting } = useMeetings(); // Get optimistic update function
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -51,14 +54,17 @@ const Main = () => {
     setCurrentMonth(newMonth);
   };
 
-  // Hàm xử lý khi tạo meeting thành công
+  // Hàm xử lý khi tạo meeting thành công - OPTIMISTIC UPDATE
   const handleMeetingCreated = (meetingData, message) => {
-    console.log('handleMeetingCreated called, refreshing calendar...');
-    setRefreshTrigger(prev => {
-      const newValue = prev + 1;
-      console.log('refreshTrigger updated:', prev, '->', newValue);
-      return newValue;
-    });
+    console.log('✅ Meeting created - using optimistic update');
+    
+    // Add to shared cache immediately - NO API CALL!
+    if (meetingData) {
+      addMeeting(meetingData);
+    }
+    
+    // Trigger minimal refresh for calendar view only
+    setRefreshTrigger(prev => prev + 1);
     
     // Show toast if message provided
     if (message) {
@@ -148,5 +154,15 @@ const Main = () => {
   );
 };
 
-// Wrap với AuthProvider nếu chưa có
+// Wrap MainContent with providers
+const Main = () => {
+  return (
+    <DeviceInventoryProvider>
+      <MeetingProvider>
+        <MainContent />
+      </MeetingProvider>
+    </DeviceInventoryProvider>
+  );
+};
+
 export default Main;

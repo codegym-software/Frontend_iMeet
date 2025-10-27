@@ -3,7 +3,7 @@ import './ScheduleView.css';
 import meetingService from '../../../services/meetingService';
 import EditMeetingForm from '../EditMeetingForm';
 
-const ScheduleView = ({ selectedDate, onMeetingUpdated }) => {
+const ScheduleView = ({ selectedDate, onMeetingUpdated, refreshTrigger }) => {
   const [meetings, setMeetings] = useState([]);
   const [holidays, setHolidays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +47,7 @@ const ScheduleView = ({ selectedDate, onMeetingUpdated }) => {
   useEffect(() => {
     fetchMeetings();
     loadHolidays();
-  }, [viewYear]);
+  }, [viewYear, refreshTrigger]);
 
   // Update viewYear when selectedDate changes
   useEffect(() => {

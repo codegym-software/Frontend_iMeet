@@ -6,6 +6,8 @@ import { calendarAPI } from './MainCalendar/utils/CalendarAPI';
 import DateTimePicker from '../common/DateTimePicker';
 import adminService from '../../services/adminService';
 import DeviceSelectorModal from './DeviceSelectorModal';
+import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
+import { useMeetingWithDevices } from '../../hooks/useMeetingWithDevices';
 
 const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
@@ -26,9 +28,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [selectedRoomDevices, setSelectedRoomDevices] = useState([]);
-  const [allDevices, setAllDevices] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
-  const [loadingDevices, setLoadingDevices] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [currentPickerMonth, setCurrentPickerMonth] = useState(new Date());
@@ -36,7 +36,14 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
   const suggestionsRef = useRef(null);
   const datePickerRef = useRef(null);
 
-  // Load rooms and all devices khi component mount
+  // ✅ USE CACHE - No more slow API calls!
+  const { getDevicesWithAvailability, checkAvailability } = useDeviceInventory();
+  const { createMeetingWithDevices } = useMeetingWithDevices();
+  
+  // Get devices from cache - INSTANT!
+  const allDevices = getDevicesWithAvailability();
+
+  // Load rooms only - devices từ cache rồi!
   useEffect(() => {
     let isMounted = true;
 
@@ -57,24 +64,8 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
       }
     };
 
-    const loadAllDevices = async () => {
-      try {
-        if (isMounted) setLoadingDevices(true);
-        const devicesData = await adminService.getDevices();
-        if (isMounted) {
-          setAllDevices(devicesData || []);
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error('Error loading devices:', error);
-        }
-      } finally {
-        if (isMounted) setLoadingDevices(false);
-      }
-    };
-
     loadRooms();
-    loadAllDevices();
+    // ✅ Devices từ cache - không cần fetch nữa!
 
     return () => {
       isMounted = false;
@@ -357,6 +348,19 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
       newErrors.room = 'Vui lòng chọn phòng';
     }
     
+    // ✅ VALIDATE DEVICE AVAILABILITY
+    const deviceErrors = [];
+    formData.devices.forEach(device => {
+      if (!checkAvailability(device.deviceId, device.quantity)) {
+        const available = allDevices.find(d => d.deviceId === device.deviceId)?.available || 0;
+        deviceErrors.push(`${device.deviceName}: chỉ còn ${available} (yêu cầu ${device.quantity})`);
+      }
+    });
+    
+    if (deviceErrors.length > 0) {
+      newErrors.devices = 'Không đủ thiết bị:\n' + deviceErrors.join('\n');
+    }
+    
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -391,14 +395,17 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
       // Call API to create meeting
       const createdMeeting = await calendarAPI.createMeeting(meetingData);
       
-      console.log('Meeting created successfully:', createdMeeting);
+      console.log('✅ Meeting created successfully:', createdMeeting);
       
-      // Call parent onSubmit callback to refresh calendar FIRST
+      // ✅ OPTIMISTIC UPDATE - Instant UI refresh!
+      createMeetingWithDevices(createdMeeting);
+      
+      // Call parent onSubmit callback
       if (onSubmit) {
         onSubmit(createdMeeting, 'Tạo cuộc họp thành công!');
       }
       
-      // Close form after success (after a small delay to ensure refresh happens)
+      // Close form
       setTimeout(() => {
         if (onClose) {
           onClose();
@@ -491,9 +498,9 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                   }
                 }}
                 showTime={true}
-                showDate={true}
+                showDate={false}
                 mode="start"
-                placeholder="00:00 AM"
+                placeholder="9:00 AM"
                 className="time-picker-input"
                 displayFormat="time"
               />
@@ -505,10 +512,10 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                 value={formData.endDateTime}
                 onChange={(date) => setFormData(prev => ({ ...prev, endDateTime: date }))}
                 showTime={true}
-                showDate={true}
+                showDate={false}
                 mode="end"
                 baseDate={formData.startDateTime}
-                placeholder="23:59 PM"
+                placeholder="10:00 AM"
                 className="time-picker-input"
                 displayFormat="time"
               />
@@ -707,12 +714,12 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                   type="button"
                   className="device-add-btn"
                   onClick={() => setShowDeviceModal(true)}
-                  disabled={loadingDevices}
                   title="Thêm thiết bị"
                 >
-                  {loadingDevices ? '...' : '+'}
+                  +
                 </button>
               </div>
+              {errors.devices && <span className="error-message" style={{ whiteSpace: 'pre-line' }}>{errors.devices}</span>}
             </div>
           </div>
 

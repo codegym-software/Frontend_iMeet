@@ -29,6 +29,9 @@ const DateTimePicker = ({
   const [hoveredDate, setHoveredDate] = useState(null);
   // Default to 'time' tab if displayFormat is 'time', otherwise 'date'
   const [activeTab, setActiveTab] = useState(displayFormat === 'time' ? 'time' : 'date');
+  // Track input value separately for manual typing
+  const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   
   const pickerRef = useRef(null);
   const inputRef = useRef(null);
@@ -45,14 +48,28 @@ const DateTimePicker = ({
           minute: date.getMinutes()
         });
         setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+        // Update input value when not typing
+        if (!isTyping) {
+          setInputValue(formatDisplayValue());
+        }
       }
     } else {
       // Set default to today
       const today = new Date();
       setSelectedDate(today);
       setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+      if (!isTyping) {
+        setInputValue(formatDisplayValue());
+      }
     }
   }, [value]);
+
+  // Update input value when selected time changes (but not when user is typing)
+  useEffect(() => {
+    if (!isTyping) {
+      setInputValue(formatDisplayValue());
+    }
+  }, [selectedDate, selectedTime, isTyping]);
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -87,40 +104,38 @@ const DateTimePicker = ({
     }
   }, [activeTab, selectedTime.hour, selectedTime.minute]);
 
-  // Format display value
+  // Format display value - Enhanced Google Calendar style
   const formatDisplayValue = () => {
     if (!selectedDate) return '';
     
     // Use displayFormat to control what to show
     if (displayFormat === 'time') {
-      // Only show time in 12-hour format without space before AM/PM
+      // Google Calendar style time format: H:MM AM/PM (no leading zero for hour)
       const hour12 = selectedTime.hour % 12 || 12;
       const period = selectedTime.hour >= 12 ? 'PM' : 'AM';
-      return `${hour12.toString().padStart(2, '0')}:${selectedTime.minute.toString().padStart(2, '0')}${period}`;
+      // Minutes always padded to 2 digits, hour without leading zero (like Google Calendar)
+      return `${hour12}:${selectedTime.minute.toString().padStart(2, '0')} ${period}`;
     }
     
     if (displayFormat === 'date') {
-      // Only show date
-      return selectedDate.toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
+      // Google Calendar style date format: M/D/YYYY or MM/DD/YYYY
+      const month = selectedDate.getMonth() + 1;
+      const day = selectedDate.getDate();
+      const year = selectedDate.getFullYear();
+      return `${month}/${day}/${year}`;
     }
     
-    // displayFormat === 'datetime' - show both
-    const dateStr = selectedDate.toLocaleDateString('vi-VN', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
+    // displayFormat === 'datetime' - show both in Google Calendar style
+    const month = selectedDate.getMonth() + 1;
+    const day = selectedDate.getDate();
+    const year = selectedDate.getFullYear();
+    const dateStr = `${month}/${day}/${year}`;
     
     if (showTime) {
       const hour12 = selectedTime.hour % 12 || 12;
       const period = selectedTime.hour >= 12 ? 'PM' : 'AM';
-      const timeStr = `${hour12.toString().padStart(2, '0')}:${selectedTime.minute.toString().padStart(2, '0')}${period}`;
-      return `${dateStr}, ${timeStr}`;
+      const timeStr = `${hour12}:${selectedTime.minute.toString().padStart(2, '0')} ${period}`;
+      return `${dateStr} ${timeStr}`;
     }
     
     return dateStr;
@@ -130,6 +145,7 @@ const DateTimePicker = ({
   const handleDateSelect = (date) => {
     setSelectedDate(date);
     setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    setIsTyping(false);
     
     // If displayFormat is 'date', auto-close after selection
     if (displayFormat === 'date') {
@@ -148,6 +164,7 @@ const DateTimePicker = ({
   // Handle time selection directly
   const handleTimeSelect = (hour, minute) => {
     setSelectedTime({ hour, minute });
+    setIsTyping(false);
     
     if (selectedDate) {
       const finalDate = new Date(selectedDate);
@@ -193,21 +210,23 @@ const DateTimePicker = ({
       startHour = base.getHours();
       startMinute = base.getMinutes();
       // Round up to next 15-minute interval
-      if (startMinute % 15 !== 0) {
-        startMinute = Math.ceil(startMinute / 15) * 15;
-        if (startMinute >= 60) {
-          startMinute = 0;
-          startHour++;
-        }
+      startMinute = Math.ceil(startMinute / 15) * 15;
+      if (startMinute >= 60) {
+        startMinute = 0;
+        startHour++;
       }
     }
     
-    // Generate times from start time to end of day (23:45)
+    // Generate times from start time to end of day - 15 MINUTE INTERVALS (like Google Calendar)
     for (let hour = startHour; hour < 24; hour++) {
       const minuteStart = (hour === startHour) ? startMinute : 0;
       
+      // Generate 15-minute intervals: 0, 15, 30, 45
       for (let minute = minuteStart; minute < 60; minute += 15) {
-        const timeLabel = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        // Google Calendar style time display: H:MM AM/PM
+        const hour12 = hour % 12 || 12;
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const timeLabel = `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
         const isSelected = selectedTime.hour === hour && selectedTime.minute === minute;
         
         // Calculate duration from base date if in end mode
@@ -275,33 +294,72 @@ const DateTimePicker = ({
   };
 
 
-  // Handle manual input (date or time)
-  const handleManualInput = (e) => {
-    const inputValue = e.target.value.trim();
+  // Handle manual input (date or time) - Enhanced Google Calendar style
+  const handleManualInputBlur = (e) => {
+    setIsTyping(false);
+    const inputVal = e.target.value.trim();
+    
+    // If empty, reset to formatted value
+    if (!inputVal) {
+      setInputValue(formatDisplayValue());
+      return;
+    }
     
     // Parse date input for date or datetime formats
     if (displayFormat === 'date' || displayFormat === 'datetime') {
-      // Support formats: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
-      const dateRegex1 = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/; // DD/MM/YYYY or DD-MM-YYYY
-      const dateRegex2 = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/; // YYYY-MM-DD
+      // Support multiple date formats like Google Calendar
+      const formats = [
+        /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/, // DD/MM/YYYY or DD-MM-YYYY
+        /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/, // YYYY-MM-DD
+        /^(\d{1,2})\s+(\d{1,2})\s+(\d{4})$/, // DD MM YYYY
+        /^(\d{1,2})\s+(\w+)\s+(\d{4})$/, // DD Month YYYY (e.g., "15 Dec 2024")
+        /^(\w+)\s+(\d{1,2})\s+(\d{4})$/, // Month DD YYYY (e.g., "Dec 15 2024")
+        /^(\d{1,2})\s+(\d{1,2})$/, // DD MM (assume current year)
+        /^(\d{1,2})$/, // DD (assume current month and year)
+      ];
       
-      let match = inputValue.match(dateRegex1);
       let day, month, year;
+      let matchFound = false;
       
-      if (match) {
-        day = parseInt(match[1]);
-        month = parseInt(match[2]);
-        year = parseInt(match[3]);
-      } else {
-        match = inputValue.match(dateRegex2);
+      for (let i = 0; i < formats.length; i++) {
+        const match = inputVal.match(formats[i]);
         if (match) {
-          year = parseInt(match[1]);
-          month = parseInt(match[2]);
-          day = parseInt(match[3]);
+          matchFound = true;
+          
+          if (i === 0) { // DD/MM/YYYY or DD-MM-YYYY
+            day = parseInt(match[1]);
+            month = parseInt(match[2]);
+            year = parseInt(match[3]);
+          } else if (i === 1) { // YYYY-MM-DD
+            year = parseInt(match[1]);
+            month = parseInt(match[2]);
+            day = parseInt(match[3]);
+          } else if (i === 2) { // DD MM YYYY
+            day = parseInt(match[1]);
+            month = parseInt(match[2]);
+            year = parseInt(match[3]);
+          } else if (i === 3) { // DD Month YYYY
+            day = parseInt(match[1]);
+            month = getMonthNumber(match[2]);
+            year = parseInt(match[3]);
+          } else if (i === 4) { // Month DD YYYY
+            month = getMonthNumber(match[1]);
+            day = parseInt(match[2]);
+            year = parseInt(match[3]);
+          } else if (i === 5) { // DD MM (current year)
+            day = parseInt(match[1]);
+            month = parseInt(match[2]);
+            year = new Date().getFullYear();
+          } else if (i === 6) { // DD (current month and year)
+            day = parseInt(match[1]);
+            month = new Date().getMonth() + 1;
+            year = new Date().getFullYear();
+          }
+          break;
         }
       }
       
-      if (match) {
+      if (matchFound && day && month && year) {
         // Validate date
         const testDate = new Date(year, month - 1, day);
         const isValidDate = testDate.getDate() === day && 
@@ -317,7 +375,6 @@ const DateTimePicker = ({
             
             if (testDate < today) {
               // Date is in the past - reset to today
-              alert('Không thể chọn ngày đã qua. Vui lòng chọn từ hôm nay trở đi.');
               const today = new Date();
               setSelectedDate(today);
               onChange(today);
@@ -329,97 +386,193 @@ const DateTimePicker = ({
           setSelectedDate(newDate);
           setCurrentMonth(new Date(year, month - 1, 1));
           onChange(newDate);
+          setInputValue(formatDisplayValue());
           return;
         }
       }
     }
     
-    // Parse time input - support multiple formats
-    // Format 1: "H:MM" or "HH:MM" (24-hour format, will auto-convert to 12h display)
-    const time24Regex = /^(\d{1,2}):(\d{2})$/;
-    // Format 2: "H:MMAM" or "HH:MMPM" (12-hour with AM/PM attached)
-    const time12Regex = /^(\d{1,2}):(\d{2})(AM|PM)$/i;
+    // Parse time input - Enhanced Google Calendar style with more formats
+    const timeFormats = [
+      /^(\d{1,2}):(\d{1,2})\s+(AM|PM)$/i, // H:MM AM/PM with space
+      /^(\d{1,2}):(\d{1,2})(AM|PM)$/i, // H:MMAM/PM without space
+      /^(\d{1,2}):(\d{1,2})$/, // H:MM (24-hour format)
+      /^(\d{1,2})\s+(AM|PM)$/i, // H AM/PM (assume :00 minutes)
+      /^(\d{1,2})(AM|PM)$/i, // HAM/PM (assume :00 minutes)
+      /^(\d{1,2})$/, // H (assume :00 minutes, current period)
+    ];
     
-    let match = inputValue.match(time24Regex);
     let hour, minute;
+    let timeMatchFound = false;
     
-    if (match) {
-      // 24-hour format input
-      hour = parseInt(match[1]);
-      minute = parseInt(match[2]);
-      
-      // Validate and accept 0-23 for hours
-      if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
-        const newDate = new Date(selectedDate || new Date());
-        newDate.setHours(hour, minute, 0, 0);
-        setSelectedTime({ hour, minute });
-        onChange(newDate);
-      }
-    } else {
-      // Try 12-hour format with AM/PM
-      match = inputValue.match(time12Regex);
+    for (let i = 0; i < timeFormats.length; i++) {
+      const match = inputVal.match(timeFormats[i]);
       if (match) {
-        hour = parseInt(match[1]);
-        minute = parseInt(match[2]);
-        const period = match[3].toUpperCase();
+        timeMatchFound = true;
         
-        // Convert to 24-hour format
-        if (period === 'PM' && hour !== 12) {
-          hour += 12;
-        } else if (period === 'AM' && hour === 12) {
-          hour = 0;
+        if (i === 0 || i === 1) { // With AM/PM
+          hour = parseInt(match[1]);
+          minute = parseInt(match[2]);
+          const period = match[3].toUpperCase();
+          
+          // Validate hour in 12-hour format (1-12) and minute (0-59)
+          if (hour >= 1 && hour <= 12 && minute >= 0 && minute <= 59) {
+            // Convert to 24-hour format
+            if (period === 'PM' && hour !== 12) {
+              hour += 12;
+            } else if (period === 'AM' && hour === 12) {
+              hour = 0;
+            }
+          } else {
+            timeMatchFound = false;
+            continue;
+          }
+        } else if (i === 2) { // 24-hour format
+          hour = parseInt(match[1]);
+          minute = parseInt(match[2]);
+          
+          // Validate and accept 0-23 for hours and 0-59 for minutes
+          if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+            timeMatchFound = false;
+            continue;
+          }
+        } else if (i === 3 || i === 4) { // Hour with AM/PM, no minutes
+          hour = parseInt(match[1]);
+          minute = 0;
+          const period = match[2].toUpperCase();
+          
+          // Validate hour in 12-hour format (1-12)
+          if (hour >= 1 && hour <= 12) {
+            // Convert to 24-hour format
+            if (period === 'PM' && hour !== 12) {
+              hour += 12;
+            } else if (period === 'AM' && hour === 12) {
+              hour = 0;
+            }
+          } else {
+            timeMatchFound = false;
+            continue;
+          }
+        } else if (i === 5) { // Just hour, assume current period
+          hour = parseInt(match[1]);
+          minute = 0;
+          
+          // If hour is 1-12, assume current AM/PM period
+          if (hour >= 1 && hour <= 12) {
+            const currentHour = new Date().getHours();
+            const isPM = currentHour >= 12;
+            
+            if (isPM && hour !== 12) {
+              hour += 12;
+            } else if (!isPM && hour === 12) {
+              hour = 0;
+            }
+          } else if (hour >= 0 && hour <= 23) {
+            // Already in 24-hour format
+          } else {
+            timeMatchFound = false;
+            continue;
+          }
         }
-        
-        if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
-          const newDate = new Date(selectedDate || new Date());
-          newDate.setHours(hour, minute, 0, 0);
-          setSelectedTime({ hour, minute });
-          onChange(newDate);
-        }
+        break;
       }
     }
+    
+    if (timeMatchFound && hour !== undefined && minute !== undefined) {
+      const newDate = new Date(selectedDate || new Date());
+      newDate.setHours(hour, minute, 0, 0);
+      setSelectedTime({ hour, minute });
+      onChange(newDate);
+      setInputValue(formatDisplayValue());
+      return;
+    }
+    
+    // If no valid format found, reset to previous value
+    setInputValue(formatDisplayValue());
+  };
+
+  // Helper function to convert month name to number
+  const getMonthNumber = (monthName) => {
+    const months = {
+      'jan': 1, 'january': 1,
+      'feb': 2, 'february': 2,
+      'mar': 3, 'march': 3,
+      'apr': 4, 'april': 4,
+      'may': 5,
+      'jun': 6, 'june': 6,
+      'jul': 7, 'july': 7,
+      'aug': 8, 'august': 8,
+      'sep': 9, 'september': 9,
+      'oct': 10, 'october': 10,
+      'nov': 11, 'november': 11,
+      'dec': 12, 'december': 12
+    };
+    return months[monthName.toLowerCase()] || 0;
   };
 
   // Handle input focus - allow editing
   const handleInputFocus = (e) => {
+    // Don't auto-open dropdown on focus, let user type
+    setIsTyping(true);
     if (displayFormat === 'time') {
       // For time-only input, select all text for easy editing
       e.target.select();
     }
   };
 
-  // Handle input click - prevent dropdown from opening when clicking to edit
+  // Handle input click - ONLY for manual input, don't open dropdown
   const handleInputClick = (e) => {
-    if (disabled) return;
-    
-    // If clicking on the input itself (not icon), don't open dropdown immediately
-    // User can still open dropdown by clicking outside the text or pressing down arrow
-    if (e.target.tagName === 'INPUT') {
-      // Don't open dropdown, allow editing
-      return;
+    // Allow clicking input to focus and type
+    // Dropdown only opens via icon click or arrow key
+    e.stopPropagation();
+  };
+
+  // Handle icon click to toggle dropdown
+  const handleIconClick = (e) => {
+    e.stopPropagation();
+    if (!disabled) {
+      setIsOpen(!isOpen);
+      // Stop typing mode when opening dropdown
+      if (!isOpen) {
+        setIsTyping(false);
+        setInputValue(formatDisplayValue());
+      }
     }
+  };
+
+  // Handle input change while typing
+  const handleInputChange = (e) => {
+    setInputValue(e.target.value);
   };
 
   return (
     <div className={`date-time-picker ${className}`} ref={pickerRef}>
-      <div className="date-time-input-wrapper">
+      <div className="date-time-input-wrapper" onClick={(e) => e.stopPropagation()}>
         <input
           type="text"
           className={`date-time-input ${isOpen ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
           onClick={handleInputClick}
           onFocus={handleInputFocus}
-          onChange={handleManualInput}
-          onBlur={handleManualInput}
+          onChange={handleInputChange}
+          onBlur={handleManualInputBlur}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              handleManualInput(e);
+              handleManualInputBlur(e);
               e.target.blur();
             } else if (e.key === 'ArrowDown') {
               // Open dropdown with arrow down
+              e.preventDefault();
               setIsOpen(true);
+              setIsTyping(false);
+            } else if (e.key === 'Escape') {
+              // Close dropdown with escape
+              setIsOpen(false);
+              setIsTyping(false);
+              setInputValue(formatDisplayValue());
+              e.target.blur();
             }
           }}
-          value={formatDisplayValue() || ''}
+          value={inputValue}
           placeholder={placeholder}
           disabled={disabled}
           ref={inputRef}
@@ -429,7 +582,7 @@ const DateTimePicker = ({
           {(displayFormat === 'date' || displayFormat === 'datetime') && (
             <span 
               className="calendar-icon" 
-              onClick={() => !disabled && setIsOpen(!isOpen)}
+              onClick={handleIconClick}
               title="Chọn từ lịch"
             >
               📅
@@ -438,7 +591,7 @@ const DateTimePicker = ({
           {displayFormat !== 'date' && (
             <span 
               className="dropdown-toggle-icon" 
-              onClick={() => !disabled && setIsOpen(!isOpen)}
+              onClick={handleIconClick}
               title="Chọn giờ"
             >
               ▼
