@@ -458,7 +458,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
 
           {/* Date & Time Section */}
           <div className="form-row">
-            <div className="form-icon">⏰</div>
+            <div className="form-icon">🕐</div>
             <div className="form-row-content time-inputs-row">
               {/* Date Input */}
               <DateTimePicker
@@ -556,7 +556,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
 
           {/* Guests Section with Autocomplete */}
           <div className="form-row">
-            <div className="form-icon">👨‍👩‍👧‍👦</div>
+            <div className="form-icon">👤</div>
             <div className="form-row-content guest-autocomplete" ref={guestInputRef}>
               <input
                 type="text"
@@ -605,7 +605,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
 
           {/* Room Section */}
           <div className="form-row">
-            <div className="form-icon">🏛️</div>
+            <div className="form-icon">🏠</div>
             <div className="form-row-content">
               <select
                 name="room"
@@ -627,23 +627,25 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
           {errors.room && <div className="error-message">{errors.room}</div>}
 
           {/* Location Section - Auto-filled */}
-          <div className="form-row">
-            <div className="form-icon">📌</div>
-            <div className="form-row-content">
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                readOnly
-                placeholder="vị trí room"
-                className="inline-input"
-                style={{ backgroundColor: 'transparent', cursor: 'not-allowed', border: 'none' }}
-              />
+          {formData.location && (
+            <div className="form-row">
+              <div className="form-icon">📍</div>
+              <div className="form-row-content">
+                <input
+                  type="text"
+                  name="location"
+                  value={formData.location}
+                  readOnly
+                  placeholder="vị trí room"
+                  className="inline-input"
+                  style={{ backgroundColor: 'transparent', cursor: 'not-allowed', border: 'none', color: '#5f6368' }}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Room Devices Display */}
-          {formData.room && (
+          {formData.room && selectedRoomDevices.length > 0 && (
             <div className="form-row">
               <div className="form-icon">🔧</div>
               <div className="form-row-content">
@@ -671,7 +673,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                             border: '1px solid #b3d9ff'
                           }}
                         >
-                          {device.deviceName} - {device.deviceType} (SL: {device.quantity})
+                          {device.deviceName} {device.deviceType ? `- ${device.deviceType}` : ''} (SL: {device.quantityAssigned || device.quantity || 1})
                         </span>
                       ))}
                     </div>
@@ -689,25 +691,37 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
           <div className="form-row">
             <div className="form-icon">💻</div>
             <div className="form-row-content">
-              <div className="device-selection-container">
+              <div style={{ width: '100%' }}>
                 {formData.devices.length > 0 && (
-                  <div className="selected-devices-tags">
-                    {formData.devices.map(device => (
-                      <span key={device.deviceId} className="device-tag">
-                        {device.deviceName} x{device.quantity}
-                        <button
-                          type="button"
-                          className="device-tag-remove"
-                          onClick={() => {
-                            const newDevices = formData.devices.filter(d => d.deviceId !== device.deviceId);
-                            setFormData(prev => ({ ...prev, devices: newDevices }));
-                          }}
-                          title="Xóa"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontWeight: '600', marginBottom: '8px', color: '#495057', fontSize: '14px' }}>
+                      Thiết bị mượn:
+                    </div>
+                    <div className="selected-devices-tags">
+                      {formData.devices.map(device => {
+                        // ✅ Backend returns 'name' field, but form may use 'deviceName'
+                        const displayName = device.name || device.deviceName || 'Thiết bị';
+                        if (!device.name && !device.deviceName) {
+                          console.warn('⚠️ Device tag missing name:', device);
+                        }
+                        return (
+                          <span key={device.deviceId} className="device-tag">
+                            <strong>{displayName}</strong> (x{device.quantity})
+                            <button
+                              type="button"
+                              className="device-tag-remove"
+                              onClick={() => {
+                                const newDevices = formData.devices.filter(d => d.deviceId !== device.deviceId);
+                                setFormData(prev => ({ ...prev, devices: newDevices }));
+                              }}
+                              title="Xóa"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 <button
@@ -716,10 +730,10 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                   onClick={() => setShowDeviceModal(true)}
                   title="Thêm thiết bị"
                 >
-                  +
+                  + Chọn thiết bị
                 </button>
+                {errors.devices && <div className="error-message" style={{ whiteSpace: 'pre-line', marginTop: '8px' }}>{errors.devices}</div>}
               </div>
-              {errors.devices && <span className="error-message" style={{ whiteSpace: 'pre-line' }}>{errors.devices}</span>}
             </div>
           </div>
 

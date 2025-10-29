@@ -1,53 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import roomService from '../../../services/roomService';
+import React, { useState } from 'react';
 
-const RoomDevicesList = ({ room, devices }) => {
-  const [deviceInfo, setDeviceInfo] = useState({});
-  const [loading, setLoading] = useState(true);
+// ✅ NO API CALLS - Read from cache!
+const RoomDevicesList = ({ room, devices, deviceMappings }) => {
   const [showAllDevices, setShowAllDevices] = useState(false);
   const MAX_VISIBLE_DEVICES = 3;
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadDeviceInfo = async () => {
-      try {
-        setLoading(true);
-        const resp = await roomService.getDevicesByRoom(room.id);
-        if (isMounted && resp && resp.success && Array.isArray(resp.data)) {
-          const deviceMap = {};
-          resp.data.forEach(rd => {
-            const device = devices.find(d => d.id === rd.deviceId);
-            deviceMap[rd.deviceId] = {
-              name: device ? device.name : `Device #${rd.deviceId}`,
-              quantity: rd.quantityAssigned || 1
-            };
-          });
-          setDeviceInfo(deviceMap);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Error loading device info:', err);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
+  // Get devices for this room from mappings (instant!)
+  const roomDevices = deviceMappings?.[room.id] || [];
+  
+  // Build device info from mappings
+  const deviceInfo = {};
+  roomDevices.forEach(rd => {
+    const device = devices.find(d => d.id === rd.deviceId);
+    deviceInfo[rd.deviceId] = {
+      name: rd.deviceName || (device ? device.name : `Device #${rd.deviceId}`),
+      quantity: rd.quantity || 1
     };
-
-    if (room.id) {
-      loadDeviceInfo();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [room.id, devices]);
-
-  if (loading) {
-    return <span style={{ fontSize: '13px', color: '#999' }}>Đang tải...</span>;
-  }
+  });
 
   const deviceEntries = Object.entries(deviceInfo);
   

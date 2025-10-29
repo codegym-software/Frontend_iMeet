@@ -36,6 +36,14 @@ export const DataPreloaderProvider = ({ children }) => {
   // Meetings data
   const [meetings, setMeetings] = useState([]);
   const [meetingsLoading, setMeetingsLoading] = useState(true);
+  
+  // ✅ Room-Device Mappings (Pre-load 1 lần!)
+  const [roomDeviceMappings, setRoomDeviceMappings] = useState({
+    byRoom: {}, // { roomId: [{ deviceId, quantity, deviceName }] }
+    byDevice: {}, // { deviceId: [{ roomId, quantity, roomName }] }
+    raw: [] // raw mappings
+  });
+  const [mappingsLoading, setMappingsLoading] = useState(true);
 
   // Global loading state
   const [isPreloading, setIsPreloading] = useState(true);
@@ -210,6 +218,186 @@ export const DataPreloaderProvider = ({ children }) => {
       if (isMounted.current) setMeetingsLoading(false);
     }
   }, []);
+  
+  // ✅ Load room-device mappings (Pre-load ALL assignments at once!)
+  const loadRoomDeviceMappings = useCallback(async (roomsList, isMounted = { current: true }) => {
+    if (!isMounted || !isMounted.current) return;
+    
+    try {
+      if (isMounted.current) setMappingsLoading(true);
+      console.log('🔄 Loading room-device mappings...');
+      
+      if (!roomsList || roomsList.length === 0) {
+        console.log('⚠️ No rooms provided, skipping mappings');
+        if (isMounted.current) {
+          setMappingsLoading(false);
+          setRoomDeviceMappings({ byRoom: {}, byDevice: {}, raw: [] });
+        }
+        return;
+      }
+      
+      const allMappings = [];
+      
+      // Fetch device assignments for each room in parallel
+      const mappingPromises = roomsList.map(async (room) => {
+        try {
+          const roomId = room.roomId || room.id;
+          const resp = await roomService.getDevicesByRoom(roomId);
+          if (resp && resp.success && Array.isArray(resp.data)) {
+            return resp.data.map(rd => ({
+              roomId,
+              roomName: room.roomName || room.name,
+              roomLocation: room.location || '',
+              deviceId: rd.deviceId,
+              deviceName: rd.deviceName,
+              quantity: rd.quantityAssigned || 1
+            }));
+          }
+        } catch (err) {
+          console.warn(`Failed to load devices for room ${room.roomId || room.id}:`, err);
+        }
+        return [];
+      });
+      
+      const results = await Promise.all(mappingPromises);
+      results.forEach(mappings => allMappings.push(...mappings));
+      
+      // Build lookup maps for instant access
+      const byRoom = {};
+      const byDevice = {};
+      
+      allMappings.forEach(m => {
+        // By room
+        if (!byRoom[m.roomId]) byRoom[m.roomId] = [];
+        byRoom[m.roomId].push({
+          deviceId: m.deviceId,
+          deviceName: m.deviceName,
+          quantity: m.quantity
+        });
+        
+        // By device
+        if (!byDevice[m.deviceId]) byDevice[m.deviceId] = [];
+        byDevice[m.deviceId].push({
+          roomId: m.roomId,
+          roomName: m.roomName,
+          roomLocation: m.roomLocation,
+          quantity: m.quantity
+        });
+      });
+      
+      if (isMounted.current) {
+        setRoomDeviceMappings({
+          byRoom,
+          byDevice,
+          raw: allMappings
+        });
+        console.log('✅ Room-device mappings loaded:', allMappings.length, 'assignments');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load room-device mappings:', error);
+    } finally {
+      if (isMounted.current) setMappingsLoading(false);
+    }
+  }, []);
+  
+  // ✅ Update mappings for a single room (Optimistic - no full reload!)
+  const updateSingleRoomMappings = useCallback((roomId, roomName, roomLocation, devicesList) => {
+    console.log(`🔄 Updating mappings for room ${roomId} only...`);
+    
+    setRoomDeviceMappings(prev => {
+      const newByRoom = { ...prev.byRoom };
+      const newByDevice = { ...prev.byDevice };
+      const newRaw = [...prev.raw];
+      
+      // Remove old mappings for this room
+      const oldMappings = newRaw.filter(m => m.roomId === roomId);
+      oldMappings.forEach(oldMap => {
+        // Remove from byDevice
+        if (newByDevice[oldMap.deviceId]) {
+          newByDevice[oldMap.deviceId] = newByDevice[oldMap.deviceId].filter(r => r.roomId !== roomId);
+          if (newByDevice[oldMap.deviceId].length === 0) {
+            delete newByDevice[oldMap.deviceId];
+          }
+        }
+      });
+      
+      // Remove from raw
+      const filteredRaw = newRaw.filter(m => m.roomId !== roomId);
+      
+      // Add new mappings for this room
+      const newMappings = devicesList.map(device => ({
+        roomId,
+        roomName,
+        roomLocation,
+        deviceId: device.deviceId,
+        deviceName: device.deviceName || device.name,
+        quantity: device.quantity || 1
+      }));
+      
+      // Update byRoom
+      newByRoom[roomId] = devicesList.map(device => ({
+        deviceId: device.deviceId,
+        deviceName: device.deviceName || device.name,
+        quantity: device.quantity || 1
+      }));
+      
+      // Update byDevice
+      newMappings.forEach(m => {
+        if (!newByDevice[m.deviceId]) newByDevice[m.deviceId] = [];
+        newByDevice[m.deviceId].push({
+          roomId: m.roomId,
+          roomName: m.roomName,
+          roomLocation: m.roomLocation,
+          quantity: m.quantity
+        });
+      });
+      
+      console.log(`✅ Mappings updated for room ${roomId} instantly!`);
+      
+      return {
+        byRoom: newByRoom,
+        byDevice: newByDevice,
+        raw: [...filteredRaw, ...newMappings]
+      };
+    });
+  }, []);
+  
+  // ✅ Remove all mappings for a deleted room (Optimistic)
+  const removeRoomMappings = useCallback((roomId) => {
+    console.log(`🗑️ Removing all mappings for room ${roomId}...`);
+    
+    setRoomDeviceMappings(prev => {
+      const newByRoom = { ...prev.byRoom };
+      const newByDevice = { ...prev.byDevice };
+      
+      // Get all mappings for this room before removing
+      const oldMappings = prev.raw.filter(m => m.roomId === roomId);
+      
+      // Remove from byDevice
+      oldMappings.forEach(oldMap => {
+        if (newByDevice[oldMap.deviceId]) {
+          newByDevice[oldMap.deviceId] = newByDevice[oldMap.deviceId].filter(r => r.roomId !== roomId);
+          if (newByDevice[oldMap.deviceId].length === 0) {
+            delete newByDevice[oldMap.deviceId];
+          }
+        }
+      });
+      
+      // Remove from byRoom
+      delete newByRoom[roomId];
+      
+      // Remove from raw
+      const filteredRaw = prev.raw.filter(m => m.roomId !== roomId);
+      
+      console.log(`✅ Removed ${oldMappings.length} mappings for room ${roomId}`);
+      
+      return {
+        byRoom: newByRoom,
+        byDevice: newByDevice,
+        raw: filteredRaw
+      };
+    });
+  }, []);
 
   // ✅ Preload all data ONLY ONCE - No refetch when switching pages!
   useEffect(() => {
@@ -235,6 +423,12 @@ export const DataPreloaderProvider = ({ children }) => {
           loadMeetings(isMountedRef)
         ]);
         
+        // ✅ Load room-device mappings after rooms are loaded
+        const roomsData = results[3]; // loadRooms result
+        if (isMountedRef.current && roomsData && roomsData.length > 0) {
+          await loadRoomDeviceMappings(roomsData, isMountedRef);
+        }
+        
         if (isMountedRef.current) {
           setIsDataLoaded(true); // ✅ Mark as loaded
           console.log('✅ Initial data loaded and cached!');
@@ -251,7 +445,7 @@ export const DataPreloaderProvider = ({ children }) => {
     return () => {
       isMountedRef.current = false;
     };
-  }, [isDataLoaded, loadUsers, loadUserStats, loadDevices, loadRooms, loadMeetings]);
+  }, [isDataLoaded, loadUsers, loadUserStats, loadDevices, loadRooms, loadMeetings, loadRoomDeviceMappings]);
 
   const value = {
     // Data loaded flag
@@ -286,6 +480,13 @@ export const DataPreloaderProvider = ({ children }) => {
     meetingsLoading,
     loadMeetings,
     setMeetings,
+    
+    // ✅ Room-Device Mappings
+    roomDeviceMappings,
+    mappingsLoading,
+    loadRoomDeviceMappings,
+    updateSingleRoomMappings, // ✅ Optimistic update for single room
+    removeRoomMappings, // ✅ Remove mappings when deleting room
     
     // Global
     isPreloading

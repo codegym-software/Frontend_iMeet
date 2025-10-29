@@ -19,7 +19,6 @@ const MeetingList = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [notification, setNotification] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
-  const [processingId, setProcessingId] = useState(null);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null });
@@ -113,70 +112,6 @@ const MeetingList = () => {
   const handleViewDetail = (meeting) => {
     setSelectedMeeting(meeting);
     setShowDetailModal(true);
-  };
-
-  const handleApproveMeeting = async (meeting) => {
-    setConfirmModal({
-      isOpen: true,
-      type: 'confirm',
-      title: 'Xác nhận duyệt cuộc họp',
-      message: `Bạn có chắc chắn muốn duyệt cuộc họp "${meeting.title}"?`,
-      onConfirm: async () => {
-        setConfirmModal({ ...confirmModal, isOpen: false });
-        try {
-          setProcessingId(meeting.meetingId);
-          await calendarAPI.approveMeeting(meeting.meetingId);
-          
-          showNotification('success', `Đã duyệt cuộc họp "${meeting.title}" thành công!`);
-          
-          // Log activity
-          const startTime = new Date(meeting.startTime).toLocaleString('vi-VN');
-          const roomInfo = meeting.roomName ? ` | 🏢 Phòng: ${meeting.roomName}` : '';
-          addActivity('meeting', 'approve', meeting.title, `📅 Thời gian: ${startTime}${roomInfo}`);
-          
-          // Reload meetings
-          await loadMeetings();
-        } catch (error) {
-          console.error('Error approving meeting:', error);
-          showNotification('error', error.message || 'Lỗi khi duyệt cuộc họp');
-        } finally {
-          setProcessingId(null);
-        }
-      },
-      onCancel: () => setConfirmModal({ ...confirmModal, isOpen: false })
-    });
-  };
-
-  const handleRejectMeeting = async (meeting) => {
-    setConfirmModal({
-      isOpen: true,
-      type: 'warning',
-      title: 'Xác nhận từ chối cuộc họp',
-      message: `Bạn có chắc chắn muốn từ chối cuộc họp "${meeting.title}"?`,
-      onConfirm: async () => {
-        setConfirmModal({ ...confirmModal, isOpen: false });
-        try {
-          setProcessingId(meeting.meetingId);
-          await calendarAPI.rejectMeeting(meeting.meetingId);
-          
-          showNotification('success', `Đã từ chối cuộc họp "${meeting.title}"!`);
-          
-          // Log activity
-          const startTime = new Date(meeting.startTime).toLocaleString('vi-VN');
-          const roomInfo = meeting.roomName ? ` | 🏢 Phòng: ${meeting.roomName}` : '';
-          addActivity('meeting', 'reject', meeting.title, `📅 Thời gian: ${startTime}${roomInfo}`);
-          
-          // Reload meetings
-          await loadMeetings();
-        } catch (error) {
-          console.error('Error rejecting meeting:', error);
-          showNotification('error', error.message || 'Lỗi khi từ chối cuộc họp');
-        } finally {
-          setProcessingId(null);
-        }
-      },
-      onCancel: () => setConfirmModal({ ...confirmModal, isOpen: false })
-    });
   };
 
   // Filter meetings by status first, then by search term
@@ -358,10 +293,7 @@ const MeetingList = () => {
                     formatDuration={formatDuration}
                     onViewDetail={handleViewDetail}
                     onCancel={handleCancelMeeting}
-                    onApprove={handleApproveMeeting}
-                    onReject={handleRejectMeeting}
                     cancellingId={cancellingId}
-                    processingId={processingId}
                   />
                 ))}
               </tbody>

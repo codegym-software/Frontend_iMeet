@@ -9,14 +9,16 @@ import TopBar from '../../Components/main/TopBar';
 import MiniCalendar from '../../Components/main/MiniCalendar';
 import SearchSection from '../../Components/main/SearchSection';
 import UpcomingMeetings from '../../Components/main/UpcomingMeetings';
-import OtherSchedule from '../../Components/main/OtherSchedule';
 import TimeTable from '../../Components/main/MainCalendar/TimeTable';
+import RoomScheduleView from './RoomScheduleView';
+import RoomSelector from './RoomSelector';
 import Toast from '../../Components/common/Toast';
 
 const MainContent = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewType, setViewType] = useState('day');
+  const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'room'
   const [theme, setTheme] = useState(() => {
     // Load theme from localStorage or default to 'light'
     const savedTheme = localStorage.getItem('theme');
@@ -40,6 +42,10 @@ const MainContent = () => {
   // Hàm xử lý thay đổi view type
   const handleViewChange = (newViewType) => {
     setViewType(newViewType);
+    // Nếu đang ở room mode và chọn month/year/schedule, switch về calendar
+    if (viewMode === 'room' && ['month', 'year', 'schedule'].includes(newViewType)) {
+      setViewMode('calendar');
+    }
   };
 
   // Hàm xử lý thay đổi ngày
@@ -76,6 +82,8 @@ const MainContent = () => {
     }
   };
 
+  const [selectedRoomId, setSelectedRoomId] = useState(null);
+
   return (
     <div className="main">
       <TopBar 
@@ -83,6 +91,7 @@ const MainContent = () => {
         onDateChange={handleDateChange}
         viewType={viewType}
         onViewChange={handleViewChange}
+        viewMode={viewMode}
         theme={theme}
         toggleTheme={toggleTheme}
         history={history}
@@ -93,6 +102,32 @@ const MainContent = () => {
         <div className="container">
           {/* Left Panel */}
           <div className="left-panel">
+            {/* ✅ VIEW MODE TOGGLE - Swap giữa Calendar và Room */}
+            <div className="view-mode-switcher">
+              <button 
+                className={`view-mode-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+                onClick={() => setViewMode('calendar')}
+                title="Xem theo lịch cá nhân"
+              >
+                📅 Lịch
+              </button>
+              <button 
+                className={`view-mode-btn ${viewMode === 'room' ? 'active' : ''}`}
+                onClick={() => setViewMode('room')}
+                title="Xem theo phòng họp"
+              >
+                🏢 Phòng
+              </button>
+            </div>
+
+            {/* ✅ ROOM SELECTOR - Chỉ hiển thị khi ở Room mode */}
+            {viewMode === 'room' && (
+              <RoomSelector 
+                selectedRoomId={selectedRoomId}
+                onRoomSelect={setSelectedRoomId}
+              />
+            )}
+
             {/* ✅ GỘP CHUNG MINICALENDAR VÀ NAVIGATION THÀNH 1 KHỐI */}
             <div className="calendar-container">
               <div className="calendar-header">
@@ -127,18 +162,26 @@ const MainContent = () => {
 
             <SearchSection />
             <UpcomingMeetings />
-            <OtherSchedule />
           </div>
           
           {/* Right Panel */}
           <div className="right-panel">
-            <TimeTable 
-              selectedDate={selectedDate} 
-              viewType={viewType}
-              refreshTrigger={refreshTrigger}
-              onDateSelect={handleDateChange}
-              onMeetingUpdated={handleMeetingCreated}
-            />
+            {viewMode === 'calendar' ? (
+              <TimeTable 
+                selectedDate={selectedDate} 
+                viewType={viewType}
+                refreshTrigger={refreshTrigger}
+                onDateSelect={handleDateChange}
+                onMeetingUpdated={handleMeetingCreated}
+              />
+            ) : (
+              <RoomScheduleView 
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+                viewType={viewType}
+                selectedRoomId={selectedRoomId}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -22,7 +22,8 @@ const DeviceList = () => {
     devices: preloadedDevices, 
     devicesLoading: preloadedLoading,
     loadDevices: reloadDevices,
-    setDevices: setPreloadedDevices
+    setDevices: setPreloadedDevices,
+    roomDeviceMappings // ✅ Get room-device mappings
   } = usePreloadedData();
   
   const [devices, setDevices] = useState(preloadedDevices);
@@ -595,6 +596,7 @@ const DeviceList = () => {
                 actionLoading={actionLoading}
                 DeviceQuantityDisplay={DeviceQuantityDisplay}
                 DeviceRoomsList={DeviceRoomsList}
+                roomMappings={roomDeviceMappings?.byDevice || {}} // ✅ Pass mappings
               />
             ))}
           </tbody>

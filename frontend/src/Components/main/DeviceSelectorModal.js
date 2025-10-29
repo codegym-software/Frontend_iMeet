@@ -24,19 +24,63 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
     }
   }, [isOpen, selectedDevices, devices]);
 
+  // ✅ Map backend enum to Vietnamese display names
+  const normalizeDeviceType = (type) => {
+    if (!type) return 'Khác';
+    
+    const typeUpper = type.toUpperCase();
+    // Backend enum values: MIC, CAM, LAPTOP, BANG, MAN_HINH, MAY_CHIEU, KHAC
+    const mapping = {
+      'MIC': 'Micro',
+      'MICRO': 'Micro',
+      'CAM': 'Camera',
+      'CAMERA': 'Camera',
+      'LAPTOP': 'Laptop',
+      'BANG': 'Bảng điện tử',
+      'MAN_HINH': 'Màn hình',
+      'MAY_CHIEU': 'Máy chiếu',
+      'KHAC': 'Khác',
+      // Legacy mappings
+      'PROJECTOR': 'Máy chiếu',
+      'WHITEBOARD': 'Bảng điện tử',
+      'SCREEN': 'Màn hình',
+      'MONITOR': 'Màn hình'
+    };
+    
+    return mapping[typeUpper] || type;
+  };
+
   // Nhóm thiết bị theo loại
   const groupDevicesByType = (deviceList) => {
-    return deviceList.reduce((acc, device) => {
-      const type = device.deviceType || 'Khác';
-      if (!acc[type]) {
-        acc[type] = [];
+    // Log để debug (chỉ log sample, không log từng device)
+    if (deviceList.length > 0) {
+      const sampleDevice = deviceList[0];
+      const rawType = sampleDevice?.deviceType || sampleDevice?.deviceTypeName || 'Unknown';
+      console.log('📦 Grouping', deviceList.length, 'devices');
+      console.log('📦 Sample mapping:', rawType, '→', normalizeDeviceType(rawType));
+    }
+    
+    const grouped = deviceList.reduce((acc, device) => {
+      const rawType = device.deviceType || device.deviceTypeName || 'Khác';
+      const normalizedType = normalizeDeviceType(rawType);
+      
+      if (!acc[normalizedType]) {
+        acc[normalizedType] = [];
       }
-      acc[type].push(device);
+      acc[normalizedType].push(device);
       return acc;
     }, {});
+    
+    console.log('📦 Result groups:', Object.keys(grouped));
+    return grouped;
   };
 
   const devicesByType = groupDevicesByType(devices);
+  
+  // Log grouped result
+  if (isOpen && Object.keys(devicesByType).length > 0) {
+    console.log('📦 Devices grouped by type:', Object.keys(devicesByType), devicesByType);
+  }
 
   // Toggle accordion
   const toggleType = (type) => {
@@ -60,10 +104,17 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
 
       // ✅ CHECK AVAILABILITY from real-time inventory
       const deviceInfo = inventory[deviceId];
-      const available = deviceInfo?.available || device.quantity || 0;
+      const available = deviceInfo?.available ?? device.quantity ?? 0;
       
+      // ✅ KHÔNG CHO MƯỢN NẾU HẾT HÀNG
+      if (available === 0) {
+        alert(`🚫 HẾT HÀNG!\n\nThiết bị: ${device.deviceName || device.name}\nHiện tại: 0 có sẵn`);
+        return;
+      }
+      
+      // ✅ KHÔNG CHO MƯỢN QUÁ SỐ LƯỢNG CÓ SẴN
       if (newQuantity > available) {
-        alert(`❌ Không đủ thiết bị!\n\nThiết bị: ${device.deviceName || device.name}\nYêu cầu: ${newQuantity}\nCòn lại: ${available}`);
+        alert(`❌ Không đủ thiết bị!\n\nThiết bị: ${device.deviceName || device.name}\nYêu cầu: ${newQuantity}\nCòn lại: ${available}\n\n💡 Vui lòng chọn tối đa ${available}`);
         return;
       }
 
@@ -98,28 +149,16 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
     return selected ? selected.quantity : 0;
   };
 
-  // Icon cho từng loại thiết bị
+  // Icon cho từng loại thiết bị (Vietnamese normalized names)
   const getDeviceIcon = (type) => {
     const icons = {
-      'Projector': '📽️',
-      'Screen': '🖥️',
-      'Microphone': '🎤',
-      'Speaker': '🔊',
-      'Whiteboard': '📋',
+      'Micro': '🎤',
       'Camera': '📷',
       'Laptop': '💻',
-      'Tablet': '📱',
-      'Phone': '☎️',
-      'TV': '📺',
-      'Monitor': '🖥️',
-      'Keyboard': '⌨️',
-      'Mouse': '🖱️',
-      'Printer': '🖨️',
-      'Scanner': '📠',
-      'Router': '📡',
-      'Switch': '🔌',
-      'Cable': '🔌',
-      'Adapter': '🔌',
+      'Bảng điện tử': '📋',
+      'Máy chiếu': '📽️',
+      'Màn hình': '🖥️',
+      'Loa': '🔊',
       'Khác': '📦'
     };
     return icons[type] || '📦';
@@ -163,7 +202,9 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                   >
                     <div className="device-type-header-left">
                       <span className="device-type-icon">{getDeviceIcon(type)}</span>
-                      <span className="device-type-name">{type}</span>
+                      <span className="device-type-name" style={{ display: 'inline-block', minWidth: '100px' }}>
+                        {type}
+                      </span>
                       <span className="device-type-count">({typeDevices.length})</span>
                     </div>
                     <span className="device-type-arrow">
@@ -184,20 +225,44 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                         
                         const isSelected = selectedQty > 0;
 
+                        // ✅ Backend returns 'name' field (tên từ database)
+                        const deviceDisplayName = device.name || device.deviceName || 'Thiết bị';
+                        if (!device.name) {
+                          console.warn('⚠️ Device missing name from backend:', device);
+                        }
+                        
                         return (
                           <div 
                             key={device.deviceId} 
                             className={`device-card ${isSelected ? 'selected' : ''} ${isOutOfStock ? 'unavailable' : ''}`}
-                            onClick={() => {
-                              // Click vào card để chọn số lượng 1 nếu chưa chọn
-                              if (!isSelected && !isOutOfStock) {
-                                handleQuantityChange(device.deviceId, 1);
+                            onClick={(e) => {
+                              // Click vào card (ngoài buttons) để toggle +1
+                              if (e.target.closest('.quantity-btn') || e.target.closest('.quantity-input')) {
+                                return; // Ignore if clicking on quantity controls
+                              }
+                              if (!isOutOfStock) {
+                                if (isSelected) {
+                                  // Nếu đã chọn, tăng thêm 1
+                                  if (selectedQty < available) {
+                                    handleQuantityChange(device.deviceId, selectedQty + 1);
+                                  }
+                                } else {
+                                  // Chưa chọn, chọn 1
+                                  handleQuantityChange(device.deviceId, 1);
+                                }
                               }
                             }}
+                            title={isOutOfStock ? 'Hết hàng' : (isSelected ? 'Click để thêm số lượng' : 'Click để chọn')}
                           >
                             <div className="device-card-header">
-                              <div className="device-card-name">
-                                {device.name || device.deviceName}
+                              <div className="device-card-name" style={{ 
+                                fontWeight: '600',
+                                fontSize: '14px',
+                                color: '#2c3e50',
+                                display: 'block',
+                                minHeight: '20px'
+                              }}>
+                                {deviceDisplayName}
                                 {isOutOfStock && <span style={{ marginLeft: '8px', color: '#ef4444', fontWeight: 'bold' }}>❌ Hết</span>}
                               </div>
                               <div className="device-card-available" style={{ color: isOutOfStock ? '#ef4444' : '#10b981' }}>
@@ -215,46 +280,54 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                               </div>
                             )}
 
+                            {/* Quantity Controls - Always show */}
                             <div className="device-card-footer">
-                              <div className="device-card-quantity">
-                                <button
-                                  type="button"
-                                  className="quantity-btn"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleQuantityChange(device.deviceId, selectedQty - 1);
-                                  }}
-                                  disabled={selectedQty === 0 || isOutOfStock}
-                                >
-                                  −
-                                </button>
-                                <input
-                                  type="number"
-                                  className="quantity-input"
-                                  value={selectedQty}
-                                  onChange={(e) => handleQuantityChange(device.deviceId, e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  min="0"
-                                  max={available}
-                                  disabled={isOutOfStock}
-                                  placeholder={isOutOfStock ? '0' : '0'}
-                                />
-                                <button
-                                  type="button"
-                                  className="quantity-btn"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleQuantityChange(device.deviceId, selectedQty + 1);
-                                  }}
-                                  disabled={selectedQty >= available || isOutOfStock}
-                                >
-                                  +
-                                </button>
-                              </div>
-                              
-                              {isSelected && (
-                                <div className="device-card-selected-badge">
-                                  ✓ Đã chọn
+                              {!isOutOfStock ? (
+                                <>
+                                  <div className="device-card-quantity">
+                                    <button
+                                      type="button"
+                                      className="quantity-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleQuantityChange(device.deviceId, selectedQty - 1);
+                                      }}
+                                      disabled={selectedQty === 0}
+                                    >
+                                      −
+                                    </button>
+                                    <input
+                                      type="number"
+                                      className="quantity-input"
+                                      value={selectedQty}
+                                      onChange={(e) => handleQuantityChange(device.deviceId, e.target.value)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      min="0"
+                                      max={available}
+                                      placeholder="0"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="quantity-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleQuantityChange(device.deviceId, selectedQty + 1);
+                                      }}
+                                      disabled={selectedQty >= available}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                  
+                                  {isSelected && (
+                                    <div className="device-card-selected-badge">
+                                      ✓ Đã chọn {selectedQty}
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                <div className="out-of-stock-message">
+                                  🚫 Tạm hết hàng
                                 </div>
                               )}
                             </div>

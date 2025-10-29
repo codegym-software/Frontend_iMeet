@@ -203,7 +203,24 @@ const UserManagement = () => {
           role: formData.role
         };
         
-        await adminService.createUser(userData);
+        const result = await adminService.createUser(userData);
+        
+        // ✅ Optimistic update - add to local state immediately
+        if (result && result.data) {
+          const newUser = result.data;
+          const updatedUsers = [newUser, ...allUsers];
+          setAllUsers(updatedUsers);
+          setPreloadedUsers(updatedUsers);
+          
+          // Update stats optimistically
+          const updatedStats = {
+            ...stats,
+            totalUsers: (stats?.totalUsers || 0) + 1
+          };
+          setStats(updatedStats);
+          setPreloadedStats(updatedStats);
+        }
+        
         showNotification('success', `✨ Đã thêm người dùng "${userData.fullName}" thành công!`);
         
         // Log activity
@@ -212,11 +229,6 @@ const UserManagement = () => {
         
         resetForm();
         setSearchTerm(''); // Clear search term
-        
-        // Reload all users data
-        const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
-        setAllUsers(response.users || []);
-        await loadStats();
       } catch (error) {
         showNotification('error', `❌ Lỗi khi thêm người dùng: ${error.message}`);
       } finally {
@@ -258,7 +270,18 @@ const UserManagement = () => {
         }
         
         const userId = editingUser.googleId || editingUser.id;
-        await adminService.updateUser(userId, userData);
+        const result = await adminService.updateUser(userId, userData);
+        
+        // ✅ Optimistic update - update in local state immediately
+        if (result && result.data) {
+          const updatedUser = result.data;
+          const updatedUsers = allUsers.map(u => 
+            (u.id === editingUser.id || u.googleId === editingUser.googleId) ? updatedUser : u
+          );
+          setAllUsers(updatedUsers);
+          setPreloadedUsers(updatedUsers);
+        }
+        
         showNotification('success', `📝 Đã cập nhật người dùng "${userData.fullName}" thành công!`);
         
         // Log activity - show what changed
@@ -276,11 +299,6 @@ const UserManagement = () => {
         
         resetForm();
         setSearchTerm(''); // Clear search term
-        
-        // Reload all users data
-        const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
-        setAllUsers(response.users || []);
-        await loadStats();
       } catch (error) {
         showNotification('error', `❌ Lỗi khi cập nhật người dùng: ${error.message}`);
       } finally {
@@ -305,6 +323,22 @@ const UserManagement = () => {
       // Use correct ID for delete (Google ID for Google users, System ID for others)
       const userId = userToDelete?.googleId || userToDelete?.id;
       await adminService.deleteUser(userId);
+      
+      // ✅ Optimistic update - remove from local state immediately
+      const updatedUsers = allUsers.filter(u => 
+        u.id !== userToDelete?.id && u.googleId !== userToDelete?.googleId
+      );
+      setAllUsers(updatedUsers);
+      setPreloadedUsers(updatedUsers);
+      
+      // Update stats optimistically
+      const updatedStats = {
+        ...stats,
+        totalUsers: Math.max(0, (stats?.totalUsers || 0) - 1)
+      };
+      setStats(updatedStats);
+      setPreloadedStats(updatedStats);
+      
       showNotification('success', `🗑️ Đã xóa người dùng "${userToDelete?.fullName}" thành công!`);
       
       // Log activity
@@ -312,11 +346,6 @@ const UserManagement = () => {
       addActivity('user', 'delete', userToDelete?.fullName, `📧 Email: ${userToDelete?.email} | 🎭 Role: ${roleLabel}`);
       
       setSearchTerm(''); // Clear search term
-      
-      // Reload all users data
-      const response = await reloadUsers(0, 1000, 'createdAt', 'desc', '');
-      setAllUsers(response.users || []);
-      await loadStats();
     } catch (error) {
       showNotification('error', `❌ Lỗi khi xóa người dùng: ${error.message}`);
     } finally {

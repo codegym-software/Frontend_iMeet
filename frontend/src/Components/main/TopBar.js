@@ -9,7 +9,7 @@ import { FaPlus } from 'react-icons/fa';
 import calendarLogo from '../../assets/calendar-logo.png';
 import MeetingForm from './MeetingForm'; // Import MeetingForm
 
-const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, toggleTheme, onCreateEvent, onMeetingCreated }) => {
+const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, theme, toggleTheme, onCreateEvent, onMeetingCreated }) => {
   const { logout, user } = useAuth();
   const history = useHistory();
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
@@ -299,30 +299,34 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
                   {viewType === 'week' && <span className="checkmark">✓</span>}
                 </button>
 
-                <button
-                  className={`dropdown-item ${viewType === 'month' ? 'active' : ''}`}
-                  onClick={() => handleViewSelect('month')}
-                >
-                  <span className="dropdown-item-text">Month</span>
-                  {viewType === 'month' && <span className="checkmark">✓</span>}
-                </button>
+                {/* Chỉ hiển thị Month/Year/Schedule khi ở Calendar mode */}
+                {viewMode !== 'room' && (
+                  <>
+                    <button
+                      className={`dropdown-item ${viewType === 'month' ? 'active' : ''}`}
+                      onClick={() => handleViewSelect('month')}
+                    >
+                      <span className="dropdown-item-text">Month</span>
+                      {viewType === 'month' && <span className="checkmark">✓</span>}
+                    </button>
 
-                <button
-                  className={`dropdown-item ${viewType === 'year' ? 'active' : ''}`}
-                  onClick={() => handleViewSelect('year')}
-                >
-                  <span className="dropdown-item-text">Year</span>
-                  {viewType === 'year' && <span className="checkmark">✓</span>}
-                </button>
+                    <button
+                      className={`dropdown-item ${viewType === 'year' ? 'active' : ''}`}
+                      onClick={() => handleViewSelect('year')}
+                    >
+                      <span className="dropdown-item-text">Year</span>
+                      {viewType === 'year' && <span className="checkmark">✓</span>}
+                    </button>
 
-                {/* Thêm Schedule option */}
-                <button
-                  className={`dropdown-item ${viewType === 'schedule' ? 'active' : ''}`}
-                  onClick={() => handleViewSelect('schedule')}
-                >
-                  <span className="dropdown-item-text">Schedule</span>
-                  {viewType === 'schedule' && <span className="checkmark">✓</span>}
-                </button>
+                    <button
+                      className={`dropdown-item ${viewType === 'schedule' ? 'active' : ''}`}
+                      onClick={() => handleViewSelect('schedule')}
+                    >
+                      <span className="dropdown-item-text">Schedule</span>
+                      {viewType === 'schedule' && <span className="checkmark">✓</span>}
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

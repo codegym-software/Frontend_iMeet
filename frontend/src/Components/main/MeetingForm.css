@@ -14,26 +14,31 @@
 
 .create-meeting-modal.simple-style {
   background: var(--card-color);
-  border-radius: 12px;
+  border-radius: 8px;
   width: 90%;
-  max-width: 650px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 10px 30px var(--shadow-hover);
+  max-width: 500px;
+  height: 600px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px 0;
-  border-bottom: none;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  background: var(--card-color);
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 500;
   color: var(--text-color);
 }
 
@@ -57,14 +62,56 @@
 }
 
 .meeting-form.simple-form {
-  padding: 20px 24px 24px;
+  padding: 16px 20px 20px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+.meeting-form.simple-form::-webkit-scrollbar {
+  width: 6px;
+}
+
+.meeting-form.simple-form::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.meeting-form.simple-form::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.meeting-form.simple-form::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .meeting-form.icon-form {
-  padding: 20px 24px 24px;
+  padding: 16px 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+.meeting-form.icon-form::-webkit-scrollbar {
+  width: 6px;
+}
+
+.meeting-form.icon-form::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.meeting-form.icon-form::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.meeting-form.icon-form::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .form-group {
@@ -74,18 +121,19 @@
 .form-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 0;
+  gap: 12px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border-color);
 }
 
 .form-icon {
-  font-size: 24px;
-  width: 40px;
+  font-size: 20px;
+  width: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  color: #5f6368;
 }
 
 .form-row-content {
@@ -117,44 +165,62 @@
   font-style: italic;
 }
 
-/* DateTime Picker Styles */
+/* DateTime Picker Styles - Google Calendar style */
 .time-inputs-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: nowrap;
   width: 100%;
 }
 
+/* Date picker - wider for "Thứ ba, 28 tháng 10" */
+.date-picker-input {
+  flex: 1;
+  min-width: 180px;
+  max-width: 250px;
+}
+
+.date-picker-input .date-time-input {
+  padding: 8px 36px 8px 12px;
+  font-size: 14px;
+  min-height: 40px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  background: #f8f9fa;
+  color: #1a73e8;
+  font-weight: 500;
+}
+
+.date-picker-input .date-time-input:hover,
+.date-picker-input .date-time-input:focus {
+  background: #e8f0fe;
+  border-color: #1a73e8;
+}
+
+/* Time pickers - compact for "1:30PM" */
 .time-picker-input {
-  min-width: 100px;
   flex: 0 0 auto;
+  min-width: 90px;
+  max-width: 100px;
+}
+
+.time-picker-input .date-time-input {
+  padding: 8px 28px 8px 10px;
+  font-size: 14px;
+  min-height: 40px;
+  text-align: center;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  background: white;
+  font-weight: 400;
 }
 
 .time-separator {
   font-size: 16px;
-  color: #5f6368;
-  font-weight: 500;
-  margin: 0 4px;
-}
-
-.date-only-picker {
-  flex: 0 0 auto;
-  min-width: 130px;
-  max-width: 150px;
-}
-
-.time-picker-input {
-  flex: 0 0 auto;
-  min-width: 95px;
-  max-width: 110px;
-}
-
-.time-separator {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--muted-color);
-  margin: 0 4px;
+  color: #70757a;
+  font-weight: 400;
+  margin: 0 2px;
 }
 
 .time-display-wrapper {
@@ -345,10 +411,10 @@
 
 .title-input {
   width: 100%;
-  padding: 12px 0;
+  padding: 8px 0;
   border: none;
   border-bottom: 1px solid var(--border-color);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 400;
   background: var(--bg-color);
   color: var(--text-color);
@@ -368,13 +434,13 @@
 
 .description-textarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid #dee2e6;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 4px;
+  font-size: 13px;
   font-family: inherit;
   resize: vertical;
-  min-height: 80px;
+  min-height: 60px;
   transition: border-color 0.2s;
 }
 
@@ -472,20 +538,32 @@
 .form-actions.simple-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
+  gap: 8px;
+  padding: 12px 20px;
   border-top: 1px solid #e9ecef;
+  background: var(--card-color);
+  flex-shrink: 0;
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .form-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
+  gap: 8px;
+  padding: 12px 20px;
   border-top: 1px solid #e9ecef;
+  background: var(--card-color);
+  flex-shrink: 0;
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .form-actions-right {
@@ -516,12 +594,12 @@
 }
 
 .cancel-btn {
-  padding: 8px 16px;
+  padding: 6px 16px;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--bg-color);
   color: var(--text-color);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -538,12 +616,12 @@
 }
 
 .save-btn {
-  padding: 8px 20px;
+  padding: 6px 20px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--accent-color);
   color: white;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
@@ -879,72 +957,83 @@
   flex-wrap: wrap;
   gap: 8px;
   flex: 1;
+  margin-bottom: 8px;
 }
 
 .device-tag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  background-color: var(--component-bg);
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 8px 14px;
+  background-color: #f0f8ff;
+  color: #0056b3;
+  border: 1px solid #b3d9ff;
+  border-radius: 20px;
+  font-size: 14px;
   font-weight: 500;
   transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 123, 255, 0.1);
 }
 
 .device-tag:hover {
-  background-color: var(--hover-bg);
-  border-color: var(--muted-color);
+  background-color: #e0f0ff;
+  box-shadow: 0 2px 6px rgba(0, 123, 255, 0.2);
 }
 
 .device-tag-remove {
-  background: none;
+  background-color: transparent;
   border: none;
-  color: var(--danger-color);
+  color: #dc3545;
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
-  padding: 0;
+  padding: 0 4px;
   margin-left: 4px;
   transition: all 0.2s;
   font-weight: 700;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .device-tag-remove:hover {
-  color: var(--danger-hover);
-  transform: scale(1.2);
+  background-color: #dc3545;
+  color: white;
+  transform: scale(1.15);
 }
 
 /* Device Add Button */
 .device-add-btn {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  border: 2px dashed var(--border-color);
-  border-radius: 6px;
-  font-size: 20px;
+  padding: 10px 20px;
+  min-width: auto;
+  background-color: white;
+  color: #007bff;
+  border: 2px solid #007bff;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  padding: 0;
+  gap: 6px;
 }
 
 .device-add-btn:hover:not(:disabled) {
-  background-color: var(--hover-bg);
-  border-color: var(--accent-color);
-  color: var(--accent-color);
-  transform: scale(1.05);
+  background-color: #007bff;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
 }
 
 .device-add-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  background-color: #f8f9fa;
+  border-color: #dee2e6;
+  color: #6c757d;
 }

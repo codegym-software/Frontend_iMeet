@@ -1,5 +1,5 @@
 // Meeting Context - Shared meeting data cache
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import meetingService from '../services/meetingService';
 
 const MeetingContext = createContext();
@@ -19,6 +19,9 @@ export const MeetingProvider = ({ children }) => {
   
   // ✅ Track if data has been loaded - ONLY LOAD ONCE!
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  
+  // ✅ Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
 
   // Cache for 30 seconds to avoid unnecessary refetches
   const CACHE_DURATION = 30000;
@@ -37,6 +40,13 @@ export const MeetingProvider = ({ children }) => {
       setLoading(true);
       console.log('🔄 Fetching meetings from API...');
       const data = await meetingService.getAllMeetings();
+      
+      // ✅ Only update state if component is still mounted
+      if (!isMountedRef.current) {
+        console.log('🧹 Component unmounted, skipping state update');
+        return [];
+      }
+      
       const meetingsArray = Array.isArray(data) ? data : [];
       setMeetings(meetingsArray);
       setLastFetch(now);
@@ -47,7 +57,10 @@ export const MeetingProvider = ({ children }) => {
       console.error('❌ Error fetching meetings:', error);
       return [];
     } finally {
-      setLoading(false);
+      // ✅ Only update loading state if component is still mounted
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [lastFetch, meetings, CACHE_DURATION]);
 
@@ -88,6 +101,12 @@ export const MeetingProvider = ({ children }) => {
     }
     
     fetchMeetings();
+    
+    // ✅ Cleanup: Mark component as unmounted
+    return () => {
+      console.log('🧹 MeetingProvider unmounting, canceling state updates');
+      isMountedRef.current = false;
+    };
   }, [isDataLoaded, fetchMeetings]);
 
   const value = {

@@ -86,13 +86,13 @@ const UpcomingMeetings = () => {
           const startTime = new Date(meeting.startTime);
           const status = meeting.bookingStatus?.toUpperCase();
           const isFuture = startTime > now;
-          const isConfirmed = status === 'CONFIRMED';
+          const isNotCancelled = status !== 'CANCELLED';
           
           console.log(`📅 Meeting: "${meeting.title}"`);
           console.log(`   Status: ${status}, StartTime: ${startTime}`);
-          console.log(`   Future: ${isFuture}, Is Confirmed: ${isConfirmed}`);
+          console.log(`   Future: ${isFuture}, Not Cancelled: ${isNotCancelled}`);
           
-          return isFuture && isConfirmed;
+          return isFuture && isNotCancelled;
         })
         .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
         .slice(0, 3) // Chỉ lấy 3 meetings gần nhất
@@ -127,11 +127,11 @@ const UpcomingMeetings = () => {
       const meetings = await calendarAPI.getMeetingsToday();
       console.log('Today meetings from API:', meetings);
       
-      // Đếm số meetings đã xác nhận (CONFIRMED)
+      // Đếm số meetings chưa bị hủy
       const count = meetings.filter(meeting => {
         const status = meeting.bookingStatus?.toUpperCase();
         console.log(`Today meeting: ${meeting.title}, Status: ${status}`);
-        return status === 'CONFIRMED';
+        return status !== 'CANCELLED';
       }).length;
       
       console.log('Today meetings count (not cancelled):', count);
@@ -163,7 +163,7 @@ const UpcomingMeetings = () => {
     }, 5 * 60 * 1000);
     
     return () => clearInterval(refreshInterval);
-  }, [refreshTrigger]);
+  }, []); // ✅ No dependencies - only run on mount
 
   // Format thời gian còn lại
   const getTimeUntilMeeting = (meetingDate, meetingTime) => {

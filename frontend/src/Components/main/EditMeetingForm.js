@@ -159,12 +159,20 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
       newErrors.room = 'Vui lòng chọn phòng';
     }
     
-    // ✅ VALIDATE DEVICE AVAILABILITY
+    // ✅ VALIDATE DEVICE AVAILABILITY (considering current meeting's devices)
     const deviceErrors = [];
     formData.devices.forEach(device => {
-      if (!checkAvailability(device.deviceId, device.quantity)) {
-        const available = allDevices.find(d => d.deviceId === device.deviceId)?.available || 0;
-        deviceErrors.push(`${device.deviceName}: chỉ còn ${available} (yêu cầu ${device.quantity})`);
+      // Get current device in this meeting (to add back to available)
+      const currentDeviceInMeeting = meeting.devices?.find(d => d.deviceId === device.deviceId);
+      const currentQuantity = currentDeviceInMeeting?.quantity || 0;
+      
+      // Calculate actual available = current available + what this meeting is using
+      const deviceInfo = allDevices.find(d => d.deviceId === device.deviceId);
+      const actualAvailable = (deviceInfo?.available || 0) + currentQuantity;
+      
+      // Check if new quantity exceeds actual available
+      if (device.quantity > actualAvailable) {
+        deviceErrors.push(`${device.deviceName}: chỉ còn ${actualAvailable} (yêu cầu ${device.quantity})`);
       }
     });
     
@@ -408,7 +416,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
           </div>
 
           {/* Room Devices Display */}
-          {formData.room && (
+          {formData.room && selectedRoomDevices.length > 0 && (
             <div className="form-row">
               <div className="form-icon">🔧</div>
               <div className="form-row-content">
@@ -436,7 +444,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                             border: '1px solid #b3d9ff'
                           }}
                         >
-                          {device.name || device.deviceName} - {device.deviceType || device.type} (SL: {device.quantity || 1})
+                          {device.name || device.deviceName} {(device.deviceType || device.type) ? `- ${device.deviceType || device.type}` : ''} (SL: {device.quantityAssigned || device.quantity || 1})
                         </span>
                       ))}
                     </div>
@@ -454,37 +462,49 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
           <div className="form-row">
             <div className="form-icon">💻</div>
             <div className="form-row-content">
-              <div className="device-selection-container">
+              <div style={{ width: '100%' }}>
                 {formData.devices.length > 0 && (
-                  <div className="selected-devices-tags">
-                    {formData.devices.map(device => (
-                      <span key={device.deviceId} className="device-tag">
-                        {device.deviceName} x{device.quantity}
-                        {isEditable && (
-                          <button
-                            type="button"
-                            className="device-tag-remove"
-                            onClick={() => {
-                              const newDevices = formData.devices.filter(d => d.deviceId !== device.deviceId);
-                              setFormData(prev => ({ ...prev, devices: newDevices }));
-                            }}
-                            title="Xóa"
-                          >
-                            ×
-                          </button>
-                        )}
-                      </span>
-                    ))}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontWeight: '600', marginBottom: '8px', color: '#495057', fontSize: '14px' }}>
+                      Thiết bị mượn:
+                    </div>
+                    <div className="selected-devices-tags">
+                      {formData.devices.map(device => {
+                        // ✅ Backend returns 'name' field, but form may use 'deviceName'
+                        const displayName = device.name || device.deviceName || 'Thiết bị';
+                        if (!device.name && !device.deviceName) {
+                          console.warn('⚠️ Device tag missing name:', device);
+                        }
+                        return (
+                          <span key={device.deviceId} className="device-tag">
+                            <strong>{displayName}</strong> (x{device.quantity})
+                            {isEditable && (
+                              <button
+                                type="button"
+                                className="device-tag-remove"
+                                onClick={() => {
+                                  const newDevices = formData.devices.filter(d => d.deviceId !== device.deviceId);
+                                  setFormData(prev => ({ ...prev, devices: newDevices }));
+                                }}
+                                title="Xóa"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 <button
                   type="button"
                   className="device-add-btn"
                   onClick={() => setShowDeviceModal(true)}
-                  disabled={loadingDevices || !isEditable}
+                  disabled={!isEditable}
                   title="Thêm thiết bị"
                 >
-                  {loadingDevices ? '...' : '+'}
+                  + Chọn thiết bị
                 </button>
               </div>
             </div>

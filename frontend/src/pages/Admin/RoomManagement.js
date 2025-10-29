@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePreloadedData } from './DataPreloaderContext';
 import { useActivity } from './ActivityContext';
+import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
 import RoomForms from './RoomForms';
 import roomService from '../../services/roomService';
 import { FaPlus } from 'react-icons/fa';
@@ -10,6 +11,7 @@ import './styles/RoomManagement.css';
 
 const RoomManagement = () => {
   const { addActivity } = useActivity();
+  const { assignDevicesToRoom, unassignDevicesFromRoom } = useDeviceInventory();
   
   // Use devices from DataPreloaderContext instead of DeviceContext
   const { 
@@ -24,7 +26,11 @@ const RoomManagement = () => {
     rooms: preloadedRooms, 
     roomsLoading: preloadedLoading,
     loadRooms: reloadRooms,
-    setRooms: setPreloadedRooms
+    setRooms: setPreloadedRooms,
+    roomDeviceMappings, // ✅ Get room-device mappings
+    loadRoomDeviceMappings, // ✅ Get reload function (full)
+    updateSingleRoomMappings, // ✅ Get optimistic update (fast!)
+    removeRoomMappings // ✅ Remove mappings on delete
   } = usePreloadedData();
   
   const [rooms, setRooms] = useState(preloadedRooms);
@@ -244,8 +250,27 @@ const RoomManagement = () => {
           setPreloadedRooms(updatedRoomsList);
           // filteredRooms will be updated by the useEffect that watches rooms
 
-          // ✅ Optimistic update - no refetch devices!
-          // Device quantities will be updated via DeviceInventoryContext automatically
+          // ✅ Optimistically update room-device mappings (instant, no API!)
+          if (selected.length > 0 && deviceSyncSuccess) {
+            const devicesList = selected.map(devId => {
+              const device = devices.find(d => d.id === devId);
+              return {
+                deviceId: devId,
+                deviceName: device?.name || `Device ${devId}`,
+                quantity: (payload.deviceQuantities || {})[devId] || 1
+              };
+            });
+            
+            updateSingleRoomMappings(
+              newRoom.id,
+              newRoom.name,
+              newRoom.location,
+              devicesList
+            );
+            
+            // ✅ Update device inventory - track room assignments
+            assignDevicesToRoom(devicesList, newRoom.id);
+          }
 
           showNotification(
             deviceSyncSuccess ? 'success' : 'warning',
@@ -367,76 +392,126 @@ const RoomManagement = () => {
           
           try {
             const roomId = editingItem.id;
-            const existingResp = await roomService.getDevicesByRoom(roomId);
-            if (existingResp && existingResp.success) {
-              const existing = existingResp.data || [];
-              const quantities = payload.deviceQuantities || {};
-              
-              // existing items are RoomDeviceResponse with deviceId, roomDeviceId, and quantityAssigned
-              const existingDeviceIds = existing.map(x => Number(x.deviceId));
-              const selectedDeviceIds = (payload.selectedDevices || []).map(id => Number(id));
-              
-              const toAdd = selectedDeviceIds.filter(id => !existingDeviceIds.includes(id));
-              const toRemove = existing.filter(x => !selectedDeviceIds.includes(Number(x.deviceId)));
-              const toUpdate = existing.filter(x => {
-                const deviceId = Number(x.deviceId);
-                if (!selectedDeviceIds.includes(deviceId)) return false;
-                const newQuantity = quantities[deviceId] || 1;
-                const oldQuantity = x.quantityAssigned || 1;
-                return newQuantity !== oldQuantity;
-              });
-
-              hasDeviceChanges = toAdd.length > 0 || toRemove.length > 0 || toUpdate.length > 0;
-
-              // Add new assignments with specified quantities
-              if (toAdd.length > 0) {
-                const addResults = await Promise.all(
-                  toAdd.map(devId => {
-                    const quantity = quantities[devId] || 1;
-                    return roomService.assignDeviceToRoom(roomId, devId, quantity, '');
-                  })
-                );
-                const failedAdds = addResults.filter(r => !r.success);
-                if (failedAdds.length > 0) {
-                  deviceSyncSuccess = false;
-                  deviceSyncMessage += ` ${failedAdds.length}/${toAdd.length} thiết bị không thể thêm.`;
-                }
+            
+            // ✅ Use cached mappings to calculate diff (no API call!)
+            const cachedMappings = (roomDeviceMappings?.raw || []).filter(m => m.roomId === roomId);
+            console.log(`⚡ Using ${cachedMappings.length} cached mappings for diff calculation`);
+            
+            const quantities = payload.deviceQuantities || {};
+            const existingDeviceIds = cachedMappings.map(x => Number(x.deviceId));
+            const selectedDeviceIds = (payload.selectedDevices || []).map(id => Number(id));
+            
+            const toAdd = selectedDeviceIds.filter(id => !existingDeviceIds.includes(id));
+            const toRemoveDeviceIds = cachedMappings.filter(x => !selectedDeviceIds.includes(Number(x.deviceId))).map(x => x.deviceId);
+            const toUpdateDeviceIds = cachedMappings.filter(x => {
+              const deviceId = Number(x.deviceId);
+              if (!selectedDeviceIds.includes(deviceId)) return false;
+              const newQuantity = quantities[deviceId] || 1;
+              const oldQuantity = x.quantity || 1;
+              return newQuantity !== oldQuantity;
+            }).map(x => x.deviceId);
+            
+            // ✅ Only fetch roomDeviceIds if we need to update/remove (batch call)
+            let existing = [];
+            if (toRemoveDeviceIds.length > 0 || toUpdateDeviceIds.length > 0) {
+              console.log(`⚡ Fetching roomDeviceIds for ${toRemoveDeviceIds.length + toUpdateDeviceIds.length} devices...`);
+              const existingResp = await roomService.getDevicesByRoom(roomId);
+              if (existingResp && existingResp.success) {
+                existing = existingResp.data || [];
               }
-              
-              // Update quantities for existing assignments
-              if (toUpdate.length > 0) {
-                const updateResults = await Promise.all(
-                  toUpdate.map(rd => {
-                    const newQuantity = quantities[rd.deviceId] || 1;
-                    return roomService.updateRoomDevice(rd.roomDeviceId, {
+            }
+            
+            const toRemove = existing.filter(x => toRemoveDeviceIds.includes(Number(x.deviceId)));
+            const toUpdate = existing.filter(x => toUpdateDeviceIds.includes(Number(x.deviceId)));
+
+                hasDeviceChanges = toAdd.length > 0 || toRemove.length > 0 || toUpdate.length > 0;
+                
+                console.log(`⚡ Device changes: +${toAdd.length} -${toRemove.length} ~${toUpdate.length}`);
+
+                // ✅ Execute all operations in parallel (much faster!)
+                const operations = [];
+                
+                if (toAdd.length > 0) {
+                  operations.push(...toAdd.map(devId => ({
+                    type: 'add',
+                    promise: roomService.assignDeviceToRoom(roomId, devId, quantities[devId] || 1, '')
+                  })));
+                }
+                
+                if (toUpdate.length > 0) {
+                  operations.push(...toUpdate.map(rd => ({
+                    type: 'update',
+                    promise: roomService.updateRoomDevice(rd.roomDeviceId, {
                       roomId: roomId,
                       deviceId: rd.deviceId,
-                      quantityAssigned: newQuantity,
+                      quantityAssigned: quantities[rd.deviceId] || 1,
                       notes: rd.notes || ''
-                    });
-                  })
-                );
-                const failedUpdates = updateResults.filter(r => !r.success);
-                if (failedUpdates.length > 0) {
-                  deviceSyncSuccess = false;
-                  deviceSyncMessage += ` ${failedUpdates.length}/${toUpdate.length} thiết bị không thể cập nhật số lượng.`;
+                    })
+                  })));
                 }
-              }
+                
+                if (toRemove.length > 0) {
+                  operations.push(...toRemove.map(rd => ({
+                    type: 'remove',
+                    promise: roomService.removeRoomDevice(rd.roomDeviceId)
+                  })));
+                }
+                
+                // ✅ Run ALL operations in parallel (not sequential!)
+                if (operations.length > 0) {
+                  console.time(`⚡ Device sync (${operations.length} ops)`);
+                  const results = await Promise.allSettled(operations.map(op => op.promise));
+                  console.timeEnd(`⚡ Device sync (${operations.length} ops)`);
+                  
+                  const failed = results.filter((r, idx) => r.status === 'rejected' || !results[idx]?.value?.success);
+                  if (failed.length > 0) {
+                    deviceSyncSuccess = false;
+                    deviceSyncMessage = ` ${failed.length}/${operations.length} thao tác thất bại.`;
+                    console.warn('Failed operations:', failed);
+                  }
+                }
               
-              // Remove unselected assignments by roomDeviceId
+            if (deviceSyncSuccess && hasDeviceChanges) {
+              deviceSyncMessage = ` Đã cập nhật ${toAdd.length + toRemove.length + toUpdate.length} thiết bị.`;
+              
+              // ✅ Update device inventory - track room assignment changes
+              // Unassign removed devices
               if (toRemove.length > 0) {
-                const removeResults = await Promise.all(
-                  toRemove.map(rd => roomService.removeRoomDevice(rd.roomDeviceId))
-                );
-                const failedRemoves = removeResults.filter(r => !r.success);
-                if (failedRemoves.length > 0) {
-                  deviceSyncSuccess = false;
-                  deviceSyncMessage += ` ${failedRemoves.length}/${toRemove.length} thiết bị không thể xóa.`;
-                }
+                const removedDevices = toRemove.map(rd => ({
+                  deviceId: rd.deviceId,
+                  quantity: rd.quantityAssigned || 1
+                }));
+                unassignDevicesFromRoom(removedDevices, roomId);
               }
               
-              if (deviceSyncSuccess && hasDeviceChanges) {
-                deviceSyncMessage = ` Đã cập nhật ${toAdd.length + toRemove.length + toUpdate.length} thiết bị.`;
+              // Assign new devices
+              if (toAdd.length > 0) {
+                const addedDevices = toAdd.map(devId => {
+                  const device = devices.find(d => d.id === devId);
+                  return {
+                    deviceId: devId,
+                    deviceName: device?.name || `Device ${devId}`,
+                    quantity: quantities[devId] || 1
+                  };
+                });
+                assignDevicesToRoom(addedDevices, roomId);
+              }
+              
+              // Update quantities for modified devices
+              if (toUpdate.length > 0) {
+                toUpdate.forEach(rd => {
+                  const oldQuantity = rd.quantityAssigned || 1;
+                  const newQuantity = quantities[rd.deviceId] || 1;
+                  const diff = newQuantity - oldQuantity;
+                  
+                  if (diff > 0) {
+                    // Increased quantity - assign more
+                    assignDevicesToRoom([{ deviceId: rd.deviceId, quantity: diff }], roomId);
+                  } else if (diff < 0) {
+                    // Decreased quantity - unassign some
+                    unassignDevicesFromRoom([{ deviceId: rd.deviceId, quantity: Math.abs(diff) }], roomId);
+                  }
+                });
               }
             }
           } catch (syncErr) {
@@ -455,14 +530,23 @@ const RoomManagement = () => {
           setPreloadedRooms(updatedRoomsList);
           // filteredRooms will be updated by the useEffect that watches rooms
 
-          // Reload devices to update quantities after any device changes
+          // ✅ Optimistically update room-device mappings (instant, no API!)
           if (hasDeviceChanges) {
-            try {
-              // ✅ Optimistic update - no refetch!
-              // Updates already in local state
-            } catch (err) {
-              console.warn('Device sync error:', err);
-            }
+            const devicesList = (payload.selectedDevices || []).map(devId => {
+              const device = devices.find(d => d.id === devId);
+              return {
+                deviceId: devId,
+                deviceName: device?.name || `Device ${devId}`,
+                quantity: (payload.deviceQuantities || {})[devId] || 1
+              };
+            });
+            
+            updateSingleRoomMappings(
+              editingItem.id,
+              payload.name,
+              payload.location,
+              devicesList
+            );
           }
 
           showNotification(
@@ -505,10 +589,15 @@ const RoomManagement = () => {
       try {
         // First remove any assigned devices (room_device entries) to avoid FK constraint
         let hasDevices = false;
+        let roomDevicesForInventory = [];
         try {
           const resp = await roomService.getDevicesByRoom(id);
           if (resp && resp.success && Array.isArray(resp.data) && resp.data.length > 0) {
             hasDevices = true;
+            roomDevicesForInventory = resp.data.map(rd => ({
+              deviceId: rd.deviceId,
+              quantity: rd.quantityAssigned || 1
+            }));
             // Remove all room-device assignments
             await Promise.all(resp.data.map(rd => roomService.removeRoomDevice(rd.roomDeviceId)));
           }
@@ -525,6 +614,14 @@ const RoomManagement = () => {
           setRooms(updatedRoomsList);
           setPreloadedRooms(updatedRoomsList);
           // filteredRooms will be updated by the useEffect that watches rooms
+          
+          // ✅ Remove room-device mappings for deleted room
+          removeRoomMappings(id);
+          
+          // ✅ Update device inventory - unassign all devices from deleted room
+          if (roomDevicesForInventory.length > 0) {
+            unassignDevicesFromRoom(roomDevicesForInventory, id);
+          }
           
           // ✅ Optimistic update - no refetch devices!
           // Device quantities updated via DeviceInventoryContext
@@ -807,6 +904,7 @@ const RoomManagement = () => {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 RoomDevicesList={RoomDevicesList}
+                deviceMappings={roomDeviceMappings?.byRoom || {}} // ✅ Pass mappings
               />
             ))}
           </tbody>
@@ -847,6 +945,7 @@ const RoomManagement = () => {
         onAdd={handleAdd}
         onUpdate={handleUpdate}
         onCancel={resetForm}
+        roomDeviceMappings={roomDeviceMappings} // ✅ Pass mappings
       />
 
       {/* Action Loading Overlay */}

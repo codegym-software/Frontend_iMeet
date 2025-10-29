@@ -10,6 +10,79 @@ const WeekView = React.memo(({
   formatTime,
   currentTime // <-- THÊM currentTime VÀO ĐÂY
 }) => {
+  // ✅ Calculate overlapping events layout for a list of events (like Google Calendar)
+  const calculateEventLayout = (dayEvents) => {
+    if (dayEvents.length === 0) return new Map();
+    
+    // Sort events by start time, then by duration (longer first)
+    const sorted = [...dayEvents].sort((a, b) => {
+      const diff = a.start.getTime() - b.start.getTime();
+      if (diff !== 0) return diff;
+      return (b.end.getTime() - b.start.getTime()) - (a.end.getTime() - a.start.getTime());
+    });
+    
+    // Find overlapping groups
+    const columns = [];
+    
+    sorted.forEach(event => {
+      // Find a column where this event doesn't overlap with existing events
+      let placed = false;
+      for (let col of columns) {
+        const lastEvent = col[col.length - 1];
+        // Check if event starts after or at the time last event in this column ends
+        if (event.start.getTime() >= lastEvent.end.getTime()) {
+          col.push(event);
+          placed = true;
+          break;
+        }
+      }
+      
+      // If no suitable column found, create new column
+      if (!placed) {
+        columns.push([event]);
+      }
+    });
+    
+    // Calculate layout for each event
+    const layout = new Map();
+    const totalColumns = columns.length;
+    
+    sorted.forEach(event => {
+      // Find which column this event is in
+      let columnIndex = 0;
+      for (let i = 0; i < columns.length; i++) {
+        if (columns[i].includes(event)) {
+          columnIndex = i;
+          break;
+        }
+      }
+      
+      // Calculate how many columns this event overlaps with
+      let colspan = 1;
+      const eventStart = event.start.getTime();
+      const eventEnd = event.end.getTime();
+      
+      // Check if we can expand this event to occupy empty columns
+      for (let i = columnIndex + 1; i < totalColumns; i++) {
+        const hasOverlap = columns[i].some(e => {
+          return !(e.end.getTime() <= eventStart || e.start.getTime() >= eventEnd);
+        });
+        if (!hasOverlap) {
+          colspan++;
+        } else {
+          break;
+        }
+      }
+      
+      layout.set(event.id, {
+        left: (columnIndex / totalColumns) * 100,
+        width: (colspan / totalColumns) * 100
+      });
+    });
+    
+    return layout;
+  };
+
   const startOfWeek = useMemo(() => {
     const start = new Date(selectedDate);
     start.setDate(selectedDate.getDate() - selectedDate.getDay());
@@ -34,7 +107,7 @@ const WeekView = React.memo(({
   // Refs cho synchronized scrolling
   const timeLabelsRef = useRef(null);
   const contentGridRef = useRef(null);
-  const allDayRef = useRef(null);
+  // const allDayRef = useRef(null); // ✅ No longer needed with new layout
 
   // Synchronized scrolling
   useEffect(() => {
@@ -112,70 +185,65 @@ const WeekView = React.memo(({
       </div>
 
       <div className="week-grid">
-        {/* Day Headers - Fixed at top */}
-        <div className="week-day-headers-row">
-          <div className="week-time-label-spacer"></div>
-          <div className="week-day-headers-grid">
+        {/* Combined Header + All Day Section */}
+        <div className="week-header-and-allday-combined">
+          {/* Left column: All day label */}
+          <div className="week-all-day-label">
+            <div>All day</div>
+            <div className="gmt-label-small">GMT+7</div>
+          </div>
+          
+          {/* Right columns: Day headers with all-day cells */}
+          <div className="week-day-columns-grid">
             {weekDays.map((day, dayIndex) => {
               const isToday = day.toDateString() === today.toDateString();
               return (
-                <div
-                  key={dayIndex}
-                  className={`week-day-header ${isToday ? 'today' : ''}`}
-                  onClick={() => onDateSelect && onDateSelect(day)}
-                >
-                  <div className="week-day-name">
-                    {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                <div key={dayIndex} className="week-day-column-combined">
+                  {/* Day header */}
+                  <div
+                    className={`week-day-header ${isToday ? 'today' : ''}`}
+                    onClick={() => onDateSelect && onDateSelect(day)}
+                  >
+                    <div className="week-day-name">
+                      {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                    </div>
+                    <div className="week-day-number">{day.getDate()}</div>
                   </div>
-                  <div className="week-day-number">{day.getDate()}</div>
+                  
+                  {/* All-day cell for this day */}
+                  <div
+                    className={`week-all-day-cell ${isToday ? 'today' : ''}`}
+                    onClick={() => onDateSelect && onDateSelect(day)}
+                  >
+                    {weekEvents[dayIndex]?.allDay.map((event, eventIndex) => (
+                      <div
+                        key={`${event.id}-all-day`}
+                        className={`calendar-event week-all-day-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
+                        style={{
+                          backgroundColor: event.color,
+                          borderLeft: `3px solid ${event.color}`,
+                          opacity: event.opacity || 1
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEventClick(event, e);
+                        }}
+                        onMouseEnter={(e) => handleEventMouseEnter(event, e)}
+                        onMouseLeave={handleEventMouseLeave}
+                      >
+                        <div className="event-title">
+                          {event.title}
+                          {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* All day row */}
-        <div className="week-all-day-section" ref={allDayRef}>
-          <div className="week-all-day-label">
-            <div>All day</div>
-            <div className="gmt-label-small">GMT+7</div>
-          </div>
-          <div className="week-all-day-content">
-            {weekDays.map((day, dayIndex) => {
-              const isToday = day.toDateString() === today.toDateString();
-              return (
-                <div
-                  key={dayIndex}
-                  className={`week-all-day-cell ${isToday ? 'today' : ''}`}
-                  onClick={() => onDateSelect && onDateSelect(day)}
-                >
-                  {weekEvents[dayIndex]?.allDay.map((event, eventIndex) => (
-                    <div
-                      key={`${event.id}-all-day`}
-                      className={`calendar-event week-all-day-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
-                      style={{
-                        backgroundColor: event.color,
-                        borderLeft: `3px solid ${event.color}`,
-                        opacity: event.opacity || 1
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEventClick(event, e);
-                      }}
-                      onMouseEnter={(e) => handleEventMouseEnter(event, e)}
-                      onMouseLeave={handleEventMouseLeave}
-                    >
-                      <div className="event-title">
-                        {event.title}
-                        {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Time grid với synchronized scrolling */}
         <div className="week-time-section">
@@ -196,6 +264,9 @@ const WeekView = React.memo(({
               {weekDays.map((day, dayIndex) => {
                 const isToday = day.toDateString() === today.toDateString();
                 const dayEvents = weekEvents[dayIndex]?.timed || [];
+                
+                // ✅ Calculate layout for overlapping events
+                const eventLayout = calculateEventLayout(dayEvents);
 
                 return (
                   <div
@@ -218,6 +289,7 @@ const WeekView = React.memo(({
                       
                       {/* Render all events with absolute positioning */}
                       {dayEvents.map((event) => {
+                        const layout = eventLayout.get(event.id) || { left: 0, width: 100 };
                         const startHour = event.start.getHours();
                         const startMinute = event.start.getMinutes();
                         const endHour = event.end.getHours();
@@ -236,7 +308,11 @@ const WeekView = React.memo(({
                         // Example: 9:45 AM = (9 × 60) + 45 = 585px
                         const PIXELS_PER_HOUR = 60;
                         const top = (startHour * PIXELS_PER_HOUR) + startMinute;
-                        const height = Math.max(duration, 20); // Minimum 20px for visibility
+                        
+                        // ✅ EXACT height like Google Calendar
+                        // 1 minute = 1px, minimum 12px for clickability only
+                        // 5 min → 12px, 10 min → 12px, 15 min → 15px, 30 min → 30px, 60 min → 60px
+                        const height = Math.max(duration, 12);
 
                         return (
                           <div
@@ -245,6 +321,8 @@ const WeekView = React.memo(({
                             style={{
                               top: `${top}px`,
                               height: `${height}px`,
+                              left: `${layout.left}%`,
+                              width: `${layout.width}%`,
                               backgroundColor: event.color,
                               borderLeft: `3px solid ${event.color}`,
                               opacity: event.opacity || 1
@@ -257,15 +335,20 @@ const WeekView = React.memo(({
                             onMouseLeave={handleEventMouseLeave}
                           >
                             <div className="event-content">
-                              {duration < 60 ? (
-                                // Short meeting: single line
+                              {duration < 30 ? (
+                                // Very short meeting (< 30 min): compact single line
+                                <div className="event-title-inline" style={{ fontSize: '10px', lineHeight: '1.2' }}>
+                                  {event.title} ({formatTime(event.start)} - {formatTime(event.end)})
+                                </div>
+                              ) : duration < 60 ? (
+                                // Short meeting (30-60 min): single line with full info
                                 <div className="event-title-inline">
                                   {event.title}
                                   {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                                   {' '}({formatTime(event.start)} - {formatTime(event.end)})
                                 </div>
                               ) : (
-                                // Long meeting: multi-line
+                                // Long meeting (> 60 min): multi-line
                                 <>
                                   <div className="event-title">
                                     {event.title}

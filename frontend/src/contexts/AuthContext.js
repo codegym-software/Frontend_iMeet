@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import authService from '../services/authService';
 
 const AuthContext = createContext();
@@ -17,49 +17,58 @@ export const AuthProvider = ({ children }) => {
   const [authType, setAuthType] = useState(null); // 'traditional' hoặc 'oauth2'
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState(null); // 'user' hoặc 'admin'
+  
+  // ✅ Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
 
   // Kiểm tra authentication status khi component mount
   useEffect(() => {
     checkAuthStatus();
+    
+    // ✅ Cleanup: Mark component as unmounted
+    return () => {
+      console.log('🧹 AuthProvider unmounting, canceling state updates');
+      isMountedRef.current = false;
+    };
   }, []);
 
   const checkAuthStatus = async () => {
-    let isMounted = true;
-    
     try {
-      if (isMounted) setLoading(true);
+      setLoading(true);
       
       const authStatus = await authService.isAuthenticated();
       
-      if (isMounted) {
-        if (authStatus.authenticated) {
-          setUser(authStatus.user);
-          setIsAuthenticated(true);
-          setAuthType(authStatus.type);
-          setUserRole(authStatus.user?.role || 'user'); // Mặc định là 'user'
-        } else {
-          setUser(null);
-          setIsAuthenticated(false);
-          setAuthType(null);
-          setUserRole(null);
-        }
+      // ✅ Only update state if component is still mounted
+      if (!isMountedRef.current) {
+        console.log('🧹 Component unmounted, skipping auth state update');
+        return;
+      }
+      
+      if (authStatus.authenticated) {
+        setUser(authStatus.user);
+        setIsAuthenticated(true);
+        setAuthType(authStatus.type);
+        setUserRole(authStatus.user?.role || 'user'); // Mặc định là 'user'
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthType(null);
+        setUserRole(null);
       }
     } catch (error) {
-      if (isMounted) {
+      // ✅ Only update state if component is still mounted
+      if (isMountedRef.current) {
         setUser(null);
         setIsAuthenticated(false);
         setAuthType(null);
         setUserRole(null);
       }
     } finally {
-      if (isMounted) {
+      // ✅ Only update loading state if component is still mounted
+      if (isMountedRef.current) {
         setLoading(false);
       }
     }
-    
-    return () => {
-      isMounted = false;
-    };
   };
 
   // Đăng nhập truyền thống

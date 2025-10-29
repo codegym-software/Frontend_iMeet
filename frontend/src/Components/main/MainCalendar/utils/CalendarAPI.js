@@ -212,44 +212,4 @@ export const calendarAPI = {
       throw error;
     }
   },
-
-  // Admin duyệt meeting
-  async approveMeeting(meetingId) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/approve`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: getHeaders(),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to approve meeting');
-      }
-      const data = await response.json();
-      return data.data;
-    } catch (error) {
-      console.error('API Error - approveMeeting:', error);
-      throw error;
-    }
-  },
-
-  // Admin từ chối meeting
-  async rejectMeeting(meetingId) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/reject`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: getHeaders(),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to reject meeting');
-      }
-      const data = await response.json();
-      return data.data;
-    } catch (error) {
-      console.error('API Error - rejectMeeting:', error);
-      throw error;
-    }
-  },
 };

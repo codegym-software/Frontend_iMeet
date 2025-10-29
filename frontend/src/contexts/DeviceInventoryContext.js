@@ -1,7 +1,8 @@
 // Device Inventory Context - Real-time device availability tracking
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import adminService from '../services/adminService';
 import meetingService from '../services/meetingService';
+import roomService from '../services/roomService';
 
 const DeviceInventoryContext = createContext();
 
@@ -17,18 +18,34 @@ export const DeviceInventoryProvider = ({ children }) => {
   // Device inventory: { deviceId: { total, borrowed, available } }
   const [inventory, setInventory] = useState({});
   const [loading, setLoading] = useState(false);
+  
+  // ✅ Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
 
-  // Initialize inventory from devices and active meetings
+  // Initialize inventory from devices, active meetings, and room assignments
   const initializeInventory = useCallback(async () => {
     try {
       setLoading(true);
       console.log('🔄 Initializing device inventory...');
 
       // Get all devices
-      const devices = await adminService.getDevices();
+      let devicesResponse = await adminService.getDevices();
+      const devices = Array.isArray(devicesResponse) ? devicesResponse : (devicesResponse?.data || []);
       
       // Get all active meetings (not ended yet)
-      const allMeetings = await meetingService.getAllMeetings();
+      let allMeetingsResponse = await meetingService.getAllMeetings();
+      
+      // ✅ Handle different response formats
+      let allMeetings = [];
+      if (Array.isArray(allMeetingsResponse)) {
+        allMeetings = allMeetingsResponse;
+      } else if (allMeetingsResponse?.data && Array.isArray(allMeetingsResponse.data)) {
+        allMeetings = allMeetingsResponse.data;
+      } else {
+        console.warn('⚠️ Unexpected meeting response format:', allMeetingsResponse);
+        allMeetings = [];
+      }
+      
       const now = new Date();
       const activeMeetings = allMeetings.filter(m => {
         const endTime = new Date(m.endTime);
@@ -47,31 +64,95 @@ export const DeviceInventoryProvider = ({ children }) => {
         }
       });
 
+      // Get all rooms and their device assignments
+      let roomsResponse = await adminService.getRooms();
+      const allRooms = Array.isArray(roomsResponse) ? roomsResponse : (roomsResponse?.data || []);
+      console.log('🏢 Rooms loaded:', allRooms.length);
+      if (allRooms.length > 0) {
+        console.log('🏢 Sample room:', allRooms[0]);
+      }
+      const assignedMap = {};
+      
+      // Fetch device assignments for each room in parallel
+      const roomAssignmentPromises = allRooms.map(async (room) => {
+        try {
+          // ✅ Handle both 'id' and 'roomId' property names
+          const roomId = room.id || room.roomId;
+          if (!roomId) {
+            console.warn('⚠️ Room has no ID:', room);
+            return [];
+          }
+          const resp = await roomService.getDevicesByRoom(roomId);
+          if (resp && resp.success && Array.isArray(resp.data)) {
+            return resp.data;
+          }
+        } catch (err) {
+          console.warn(`Failed to load devices for room ${room.id || room.roomId}:`, err);
+        }
+        return [];
+      });
+      
+      const allRoomAssignments = await Promise.all(roomAssignmentPromises);
+      
+      // Calculate total devices assigned to rooms
+      allRoomAssignments.flat().forEach(assignment => {
+        const deviceId = assignment.deviceId;
+        const quantity = assignment.quantityAssigned || 1;
+        assignedMap[deviceId] = (assignedMap[deviceId] || 0) + quantity;
+      });
+
       // Build inventory
       const newInventory = {};
+      console.log('📦 Building inventory from', devices.length, 'devices');
+      if (devices.length > 0) {
+        console.log('📦 Sample device from backend:', devices[0]);
+      }
+      
       devices.forEach(device => {
         const deviceId = device.deviceId;
         const total = device.quantity || 0;
         const borrowed = borrowedMap[deviceId] || 0;
-        const available = Math.max(0, total - borrowed);
+        const assignedToRooms = assignedMap[deviceId] || 0;
+        const available = Math.max(0, total - borrowed - assignedToRooms);
 
         newInventory[deviceId] = {
           deviceId,
-          deviceName: device.deviceName,
-          deviceType: device.deviceTypeName,
+          // ✅ Backend returns 'name', not 'deviceName'
+          name: device.name,
+          deviceName: device.name, // Keep for backward compatibility
+          // ✅ Backend returns enum string like "MIC", "CAM", "LAPTOP"
+          deviceType: device.deviceType || 'KHAC',
           total,
           borrowed,
+          assignedToRooms,
           available
         };
+        
+        // Log warning if negative
+        if (available < 0) {
+          console.error(`🚫 Device ${deviceId} (${device.name}) has negative availability!`, {
+            total,
+            borrowed,
+            assignedToRooms,
+            calculated: total - borrowed - assignedToRooms
+          });
+        }
       });
 
-      setInventory(newInventory);
-      console.log('✅ Device inventory initialized:', newInventory);
-      console.log('📊 Active meetings using devices:', activeMeetings.length);
+      // ✅ Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setInventory(newInventory);
+        console.log('✅ Device inventory initialized:', newInventory);
+        console.log('📊 Active meetings using devices:', activeMeetings.length);
+        console.log('🏢 Devices assigned to rooms:', Object.keys(assignedMap).length, 'types');
+      }
     } catch (error) {
       console.error('❌ Error initializing inventory:', error);
     } finally {
-      setLoading(false);
+      // ✅ Only update loading state if component is still mounted
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -81,13 +162,29 @@ export const DeviceInventoryProvider = ({ children }) => {
     
     setInventory(prev => {
       const updated = { ...prev };
+      const errors = [];
+      
       devices.forEach(device => {
         const deviceId = device.deviceId;
         const quantity = device.quantity || 1;
         
         if (updated[deviceId]) {
+          // ✅ VALIDATE: Không cho mượn nếu không đủ
+          if (updated[deviceId].available < quantity) {
+            errors.push(`${updated[deviceId].deviceName}: yêu cầu ${quantity} nhưng chỉ còn ${updated[deviceId].available}`);
+            console.warn(`⚠️ Không đủ ${updated[deviceId].deviceName}! Yêu cầu: ${quantity}, Còn: ${updated[deviceId].available}`);
+            return; // Skip device này
+          }
+          
           const newBorrowed = updated[deviceId].borrowed + quantity;
-          const newAvailable = Math.max(0, updated[deviceId].total - newBorrowed);
+          const newAvailable = updated[deviceId].total - newBorrowed - (updated[deviceId].assignedToRooms || 0);
+          
+          // ✅ DOUBLE CHECK: KHÔNG BAO GIỜ ÂM!
+          if (newAvailable < 0) {
+            console.error(`🚫 CRITICAL: ${updated[deviceId].deviceName} would go negative! Blocking.`);
+            errors.push(`${updated[deviceId].deviceName}: không thể mượn (sẽ âm)`);
+            return; // Skip device này
+          }
           
           updated[deviceId] = {
             ...updated[deviceId],
@@ -96,8 +193,17 @@ export const DeviceInventoryProvider = ({ children }) => {
           };
           
           console.log(`  - ${updated[deviceId].deviceName}: ${quantity} borrowed, ${newAvailable} left`);
+        } else {
+          console.warn(`⚠️ Device ${deviceId} not found in inventory`);
         }
       });
+      
+      // Show errors if any
+      if (errors.length > 0) {
+        console.error('❌ Errors borrowing devices:', errors);
+        alert('⚠️ Không thể mượn một số thiết bị:\n\n' + errors.join('\n'));
+      }
+      
       return updated;
     });
   }, []);
@@ -114,15 +220,15 @@ export const DeviceInventoryProvider = ({ children }) => {
         
         if (updated[deviceId]) {
           const newBorrowed = Math.max(0, updated[deviceId].borrowed - quantity);
-          const newAvailable = Math.min(updated[deviceId].total, updated[deviceId].total - newBorrowed);
+          const newAvailable = updated[deviceId].total - newBorrowed - (updated[deviceId].assignedToRooms || 0);
           
           updated[deviceId] = {
             ...updated[deviceId],
             borrowed: newBorrowed,
-            available: newAvailable
+            available: Math.max(0, newAvailable)
           };
           
-          console.log(`  - ${updated[deviceId].deviceName}: ${quantity} returned, ${newAvailable} available`);
+          console.log(`  - ${updated[deviceId].deviceName}: ${quantity} returned, ${updated[deviceId].available} available`);
         }
       });
       return updated;
@@ -143,6 +249,85 @@ export const DeviceInventoryProvider = ({ children }) => {
       borrowDevices(newDevices, meetingId);
     }
   }, [borrowDevices, returnDevices]);
+
+  // Assign devices to room (when adding/updating room assignments)
+  const assignDevicesToRoom = useCallback((devicesList, roomId) => {
+    console.log('🏢 Assigning devices to room:', roomId, devicesList);
+    
+    setInventory(prev => {
+      const updated = { ...prev };
+      const errors = [];
+      
+      devicesList.forEach(device => {
+        const deviceId = device.deviceId || device.id;
+        const quantity = device.quantity || 1;
+        
+        if (updated[deviceId]) {
+          // ✅ VALIDATE: Check if available
+          if (updated[deviceId].available < quantity) {
+            errors.push(`${updated[deviceId].deviceName}: yêu cầu ${quantity} nhưng chỉ còn ${updated[deviceId].available}`);
+            console.warn(`⚠️ Không đủ ${updated[deviceId].deviceName} để gán cho phòng!`);
+            return;
+          }
+          
+          const newAssignedToRooms = (updated[deviceId].assignedToRooms || 0) + quantity;
+          const newAvailable = updated[deviceId].total - (updated[deviceId].borrowed || 0) - newAssignedToRooms;
+          
+          // ✅ DOUBLE CHECK: KHÔNG BAO GIỜ ÂM!
+          if (newAvailable < 0) {
+            console.error(`🚫 CRITICAL: ${updated[deviceId].deviceName} would go negative! Blocking.`);
+            errors.push(`${updated[deviceId].deviceName}: không thể gán (sẽ âm)`);
+            return;
+          }
+          
+          updated[deviceId] = {
+            ...updated[deviceId],
+            assignedToRooms: newAssignedToRooms,
+            available: newAvailable
+          };
+          
+          console.log(`  - ${updated[deviceId].deviceName}: ${quantity} assigned to room, ${newAvailable} left`);
+        } else {
+          console.warn(`⚠️ Device ${deviceId} not found in inventory`);
+        }
+      });
+      
+      // Show errors if any
+      if (errors.length > 0) {
+        console.error('❌ Errors assigning devices to room:', errors);
+        alert('⚠️ Không thể gán một số thiết bị:\n\n' + errors.join('\n'));
+      }
+      
+      return updated;
+    });
+  }, []);
+
+  // Unassign devices from room (when removing/updating room assignments)
+  const unassignDevicesFromRoom = useCallback((devicesList, roomId) => {
+    console.log('🏢 Unassigning devices from room:', roomId, devicesList);
+    
+    setInventory(prev => {
+      const updated = { ...prev };
+      devicesList.forEach(device => {
+        const deviceId = device.deviceId || device.id;
+        const quantity = device.quantity || 1;
+        
+        if (updated[deviceId]) {
+          const newAssignedToRooms = Math.max(0, (updated[deviceId].assignedToRooms || 0) - quantity);
+          const newAvailable = updated[deviceId].total - (updated[deviceId].borrowed || 0) - newAssignedToRooms;
+          
+          updated[deviceId] = {
+            ...updated[deviceId],
+            assignedToRooms: newAssignedToRooms,
+            available: Math.max(0, newAvailable)
+          };
+          
+          console.log(`  - ${updated[deviceId].deviceName}: ${quantity} unassigned from room, ${updated[deviceId].available} available`);
+        }
+      });
+      return updated;
+    });
+  }, []);
 
   // Check if device has enough available quantity
   const checkAvailability = useCallback((deviceId, requestedQuantity) => {
@@ -169,7 +354,25 @@ export const DeviceInventoryProvider = ({ children }) => {
   useEffect(() => {
     const checkEndedMeetings = async () => {
       try {
-        const allMeetings = await meetingService.getAllMeetings();
+        let allMeetingsResponse = await meetingService.getAllMeetings();
+        
+        // ✅ Check if component is still mounted after async operation
+        if (!isMountedRef.current) {
+          console.log('🧹 Component unmounted, skipping meeting check');
+          return;
+        }
+        
+        // ✅ Handle different response formats
+        let allMeetings = [];
+        if (Array.isArray(allMeetingsResponse)) {
+          allMeetings = allMeetingsResponse;
+        } else if (allMeetingsResponse?.data && Array.isArray(allMeetingsResponse.data)) {
+          allMeetings = allMeetingsResponse.data;
+        } else {
+          console.warn('⚠️ Unexpected meeting response format in checkEndedMeetings');
+          return;
+        }
+        
         const now = new Date();
         
         // Find meetings that just ended
@@ -184,10 +387,13 @@ export const DeviceInventoryProvider = ({ children }) => {
                  m.bookingStatus?.toUpperCase() !== 'CANCELLED';
         });
 
-        justEndedMeetings.forEach(meeting => {
-          console.log('⏰ Meeting ended, auto-returning devices:', meeting.meetingId);
-          returnDevices(meeting.devices, meeting.meetingId);
-        });
+        // ✅ Check again before state updates
+        if (isMountedRef.current) {
+          justEndedMeetings.forEach(meeting => {
+            console.log('⏰ Meeting ended, auto-returning devices:', meeting.meetingId);
+            returnDevices(meeting.devices, meeting.meetingId);
+          });
+        }
       } catch (error) {
         console.error('Error checking ended meetings:', error);
       }
@@ -195,12 +401,23 @@ export const DeviceInventoryProvider = ({ children }) => {
 
     // Check every minute
     const interval = setInterval(checkEndedMeetings, 60000);
-    return () => clearInterval(interval);
+    
+    // ✅ Cleanup: Clear interval on unmount
+    return () => {
+      console.log('🧹 Clearing device check interval');
+      clearInterval(interval);
+    };
   }, [returnDevices]);
 
-  // Initialize on mount
+  // Initialize on mount and setup cleanup
   useEffect(() => {
     initializeInventory();
+    
+    // ✅ Cleanup: Mark component as unmounted
+    return () => {
+      console.log('🧹 DeviceInventoryProvider unmounting, canceling state updates');
+      isMountedRef.current = false;
+    };
   }, [initializeInventory]);
 
   const value = {
@@ -210,6 +427,8 @@ export const DeviceInventoryProvider = ({ children }) => {
     borrowDevices,
     returnDevices,
     updateMeetingDevices,
+    assignDevicesToRoom,
+    unassignDevicesFromRoom,
     checkAvailability,
     getAvailableQuantity,
     getDevicesWithAvailability

@@ -33,13 +33,8 @@ const OtherSchedule = () => {
       filteredMeetings = filteredMeetings.filter(
         m => m.bookingStatus?.toUpperCase() === 'PENDING' || m.bookingStatus?.toUpperCase() === 'BOOKED'
       );
-    } else if (viewMode === 'upcoming') {
-      // Show only approved meetings for upcoming view
-      filteredMeetings = filteredMeetings.filter(
-        m => m.bookingStatus?.toUpperCase() === 'APPROVED'
-      );
     }
-    // 'all' mode shows everything (already filtered above)
+    // 'upcoming' and 'all' modes show everything (already filtered above)
 
     // Sort by start time
     filteredMeetings.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));

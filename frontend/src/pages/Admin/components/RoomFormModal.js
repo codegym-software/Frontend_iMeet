@@ -34,7 +34,8 @@ const RoomFormModal = ({
   roomStatuses,
   handleDeviceToggle,
   handleQuantityChange,
-  onCancel
+  onCancel,
+  inventory // ✅ Receive inventory prop
 }) => {
   const [expandedTypes, setExpandedTypes] = React.useState({});
   
@@ -327,6 +328,7 @@ const RoomFormModal = ({
                   formData={formData}
                   handleDeviceToggle={handleDeviceToggle}
                   handleQuantityChange={handleQuantityChange}
+                  inventory={inventory} // ✅ Pass inventory
                 />
               );
             });

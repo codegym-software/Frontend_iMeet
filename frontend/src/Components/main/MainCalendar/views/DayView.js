@@ -20,8 +20,82 @@ const DayView = React.memo(({
   const allDayEvents = useMemo(() => events.filter(event => event.allDay), [events]);
   const timedEvents = useMemo(() => events.filter(event => !event.allDay), [events]);
 
+  // ✅ Calculate overlapping events layout (like Google Calendar)
+  const getEventLayout = useMemo(() => {
+    if (timedEvents.length === 0) return [];
+    
+    // Sort events by start time, then by duration (longer first)
+    const sorted = [...timedEvents].sort((a, b) => {
+      const diff = a.start.getTime() - b.start.getTime();
+      if (diff !== 0) return diff;
+      return (b.end.getTime() - b.start.getTime()) - (a.end.getTime() - a.start.getTime());
+    });
+    
+    // Find overlapping groups
+    const columns = [];
+    
+    sorted.forEach(event => {
+      // Find a column where this event doesn't overlap with existing events
+      let placed = false;
+      for (let col of columns) {
+        const lastEvent = col[col.length - 1];
+        // Check if event starts after or at the time last event in this column ends
+        if (event.start.getTime() >= lastEvent.end.getTime()) {
+          col.push(event);
+          placed = true;
+          break;
+        }
+      }
+      
+      // If no suitable column found, create new column
+      if (!placed) {
+        columns.push([event]);
+      }
+    });
+    
+    // Calculate layout for each event
+    const layout = new Map();
+    const totalColumns = columns.length;
+    
+    sorted.forEach(event => {
+      // Find which column this event is in
+      let columnIndex = 0;
+      for (let i = 0; i < columns.length; i++) {
+        if (columns[i].includes(event)) {
+          columnIndex = i;
+          break;
+        }
+      }
+      
+      // Calculate how many columns this event overlaps with
+      let colspan = 1;
+      const eventStart = event.start.getTime();
+      const eventEnd = event.end.getTime();
+      
+      // Check if we can expand this event to occupy empty columns
+      for (let i = columnIndex + 1; i < totalColumns; i++) {
+        const hasOverlap = columns[i].some(e => {
+          return !(e.end.getTime() <= eventStart || e.start.getTime() >= eventEnd);
+        });
+        if (!hasOverlap) {
+          colspan++;
+        } else {
+          break;
+        }
+      }
+      
+      layout.set(event.id, {
+        left: (columnIndex / totalColumns) * 100,
+        width: (colspan / totalColumns) * 100
+      });
+    });
+    
+    return layout;
+  }, [timedEvents]);
+
   const renderTimedEvents = useMemo(() => {
     return timedEvents.map(event => {
+      const eventLayout = getEventLayout.get(event.id) || { left: 0, width: 100 };
       const startHour = event.start.getHours();
       const startMinute = event.start.getMinutes();
       const endHour = event.end.getHours();
@@ -41,7 +115,16 @@ const DayView = React.memo(({
       const GMT_OFFSET = 48;
       const PIXELS_PER_HOUR = 60;
       const top = GMT_OFFSET + (startHour * PIXELS_PER_HOUR) + startMinute;
-      const height = Math.max(duration, 20); // Minimum 20px for visibility
+      
+      // ✅ EXACT height like Google Calendar
+      // 1 minute = 1px, minimum 12px for clickability only
+      // 5 min → 12px, 10 min → 12px, 15 min → 15px, 30 min → 30px, 60 min → 60px
+      const height = Math.max(duration, 12);
+      
+      // ✅ Position for overlapping events
+      // Time labels take 84px, right padding 12px
+      const EVENT_AREA_LEFT = 84;
+      const EVENT_AREA_RIGHT = 12;
 
       return (
         <div
@@ -50,6 +133,8 @@ const DayView = React.memo(({
           style={{
             top: `${top}px`,
             height: `${height}px`,
+            left: `calc(${EVENT_AREA_LEFT}px + (100% - ${EVENT_AREA_LEFT + EVENT_AREA_RIGHT}px) * ${eventLayout.left / 100})`,
+            width: `calc((100% - ${EVENT_AREA_LEFT + EVENT_AREA_RIGHT}px) * ${eventLayout.width / 100})`,
             backgroundColor: event.color,
             borderLeft: `3px solid ${event.color}`,
             opacity: event.opacity || 1
@@ -59,15 +144,20 @@ const DayView = React.memo(({
           onMouseLeave={handleEventMouseLeave}
         >
           <div className="event-content">
-            {duration < 60 ? (
-              // Short meeting: single line format "Title (10:00 AM - 11:00 AM)"
+            {duration < 30 ? (
+              // Very short meeting (< 30 min): compact single line
+              <div className="event-title-inline" style={{ fontSize: '11px', lineHeight: '1.2' }}>
+                {event.title} ({formatTime(event.start)} - {formatTime(event.end)})
+              </div>
+            ) : duration < 60 ? (
+              // Short meeting (30-60 min): single line with full info
               <div className="event-title-inline">
                 {event.title}
                 {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                 {' '}({formatTime(event.start)} - {formatTime(event.end)})
               </div>
             ) : (
-              // Long meeting: multi-line format
+              // Long meeting (> 60 min): multi-line format
               <>
                 <div className="event-title">
                   {event.title}

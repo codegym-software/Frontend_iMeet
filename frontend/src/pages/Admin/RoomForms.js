@@ -1,6 +1,7 @@
 import React from 'react';
 import AssignDeviceModal from './components/AssignDeviceModal';
 import RoomFormModal from './components/RoomFormModal';
+import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
 
 const RoomForms = ({ 
   showAddForm, 
@@ -13,9 +14,11 @@ const RoomForms = ({
   roomStatuses, 
   onAdd, 
   onUpdate, 
-  onCancel 
+  onCancel,
+  roomDeviceMappings // ✅ Receive mappings
 }) => {
   const [deviceTypeFilter, setDeviceTypeFilter] = React.useState('');
+  const { inventory } = useDeviceInventory();
 
   // Handle device selection with quantity
   const handleDeviceToggle = (deviceId) => {
@@ -32,6 +35,15 @@ const RoomForms = ({
         deviceQuantities: newQuantities
       });
     } else {
+      // ✅ CHECK AVAILABILITY before adding
+      const deviceInfo = inventory[deviceId];
+      const available = deviceInfo?.available || 0;
+      
+      if (available === 0) {
+        alert(`🚫 HẾT HÀNG!\n\nThiết bị này hiện không còn sẵn trong kho.`);
+        return;
+      }
+      
       // Add device with default quantity 1
       setFormData({
         ...formData,
@@ -45,12 +57,25 @@ const RoomForms = ({
   const handleQuantityChange = (deviceId, quantity) => {
     const currentQuantities = formData.deviceQuantities || {};
     const device = devices.find(d => d.id === deviceId);
-    const maxQuantity = device ? device.quantity : 1000;
+    const deviceInfo = inventory[deviceId];
+    const available = deviceInfo?.available || 0;
+    const total = deviceInfo?.total || device?.quantity || 0;
+    
+    // ✅ KHÔNG CHO CHỌN NẾU HẾT HÀNG
+    if (available === 0) {
+      alert(`🚫 HẾT HÀNG!\n\nThiết bị: ${device?.name || 'N/A'}\nHiện tại: 0 có sẵn`);
+      return;
+    }
     
     // Validate quantity
     let validQuantity = parseInt(quantity) || 1;
     if (validQuantity < 1) validQuantity = 1;
-    if (validQuantity > maxQuantity) validQuantity = maxQuantity;
+    
+    // ✅ KHÔNG CHO CHỌN QUÁ SỐ LƯỢNG CÓ SẴN
+    if (validQuantity > available) {
+      alert(`❌ Không đủ thiết bị!\n\nThiết bị: ${device?.name || 'N/A'}\nYêu cầu: ${validQuantity}\nCòn lại: ${available}\n\n💡 Vui lòng chọn tối đa ${available}`);
+      validQuantity = available;
+    }
     
     setFormData({
       ...formData,
@@ -92,6 +117,7 @@ const RoomForms = ({
           handleDeviceToggle={handleDeviceToggle}
           handleQuantityChange={handleQuantityChange}
           onCancel={onCancel}
+          inventory={inventory} // ✅ Pass inventory
         />
       )}
 
@@ -111,6 +137,7 @@ const RoomForms = ({
           handleDeviceToggle={handleDeviceToggle}
           handleQuantityChange={handleQuantityChange}
           onCancel={onCancel}
+          inventory={inventory} // ✅ Pass inventory
         />
       )}
 
@@ -128,6 +155,7 @@ const RoomForms = ({
           handleQuantityChange={handleQuantityChange}
           onCancel={onCancel}
           getDeviceTypes={getDeviceTypes}
+          inventory={inventory} // ✅ Pass inventory
         />
       )}
     </>

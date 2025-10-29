@@ -24,6 +24,9 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const tooltipRef = useRef(null);
   
+  // ✅ Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  
   // State cho edit meeting form
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState(null);
@@ -93,6 +96,12 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     try {
       await calendarAPI.deleteMeeting(meetingId);
       
+      // ✅ Only update state if component is still mounted
+      if (!isMountedRef.current) {
+        console.log('🧹 Component unmounted, skipping delete state update');
+        return;
+      }
+      
       // Remove from local state
       setEvents(prevEvents => prevEvents.filter(e => e.id !== meetingId));
       
@@ -115,12 +124,15 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     } catch (error) {
       console.error('Error deleting meeting:', error);
       
-      // Show error toast
-      setToast({
-        isOpen: true,
-        message: 'Không thể xóa cuộc họp. Vui lòng thử lại.',
-        type: 'error'
-      });
+      // ✅ Only update error state if component is still mounted
+      if (isMountedRef.current) {
+        // Show error toast
+        setToast({
+          isOpen: true,
+          message: 'Không thể xóa cuộc họp. Vui lòng thử lại.',
+          type: 'error'
+        });
+      }
     }
   }, [confirmDialog.meetingId, resetEventStates, onMeetingUpdated]);
   
@@ -162,9 +174,20 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   // Cập nhật thời gian hiện tại mỗi phút
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
+      // ✅ Only update time if component is still mounted
+      if (isMountedRef.current) {
+        setCurrentTime(new Date());
+      }
     }, 60000);
     return () => clearInterval(timer);
+  }, []);
+  
+  // ✅ Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      console.log('🧹 TimeTable unmounting, canceling state updates');
+      isMountedRef.current = false;
+    };
   }, []);
 
   // Load meetings từ API
@@ -183,6 +206,12 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         
         // Gọi API để lấy meetings
         const meetingsData = await calendarAPI.getMeetingsByDateRange(startDate, endDate);
+        
+        // ✅ Only update state if component is still mounted
+        if (!isMountedRef.current) {
+          console.log('🧹 Component unmounted, skipping TimeTable state update');
+          return;
+        }
         
         console.log('Meetings data from API:', meetingsData);
         
@@ -227,10 +256,16 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         console.log('Events state updated with', transformedEvents.length, 'events');
       } catch (error) {
         console.error('Error loading meetings:', error);
-        setError('Không thể tải danh sách cuộc họp');
-        setEvents([]);
+        // ✅ Only update error state if component is still mounted
+        if (isMountedRef.current) {
+          setError('Không thể tải danh sách cuộc họp');
+          setEvents([]);
+        }
       } finally {
-        setLoading(false);
+        // ✅ Only update loading state if component is still mounted
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
     };
 

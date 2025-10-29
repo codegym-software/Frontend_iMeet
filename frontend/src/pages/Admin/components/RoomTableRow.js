@@ -8,7 +8,8 @@ const RoomTableRow = ({
   onAssignDevice, 
   onEdit, 
   onDelete,
-  RoomDevicesList 
+  RoomDevicesList,
+  deviceMappings // ✅ Accept mappings
 }) => {
   return (
     <tr 
@@ -30,7 +31,7 @@ const RoomTableRow = ({
       </td>
       <td style={{ padding: '16px' }}>
         {(room.selectedDevices || []).length > 0 ? (
-          <RoomDevicesList room={room} devices={devices} />
+          <RoomDevicesList room={room} devices={devices} deviceMappings={deviceMappings} />
         ) : (
           <span style={{ color: '#999', fontSize: '13px' }}>Không có</span>
         )}
