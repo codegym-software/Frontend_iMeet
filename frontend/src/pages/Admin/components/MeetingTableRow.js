@@ -10,8 +10,13 @@ const MeetingTableRow = ({
   onCancel, 
   cancellingId
 }) => {
-  const status = statusConfig[meeting.bookingStatus?.toLowerCase()] || statusConfig.pending;
-  const isCancelled = meeting.bookingStatus?.toLowerCase() === 'cancelled';
+  // ✅ Normalize deprecated statuses to BOOKED
+  let normalizedStatus = meeting.bookingStatus?.toLowerCase();
+  if (normalizedStatus === 'pending' || normalizedStatus === 'confirmed') {
+    normalizedStatus = 'booked';
+  }
+  const status = statusConfig[normalizedStatus] || statusConfig.booked;
+  const isCancelled = normalizedStatus === 'cancelled';
 
   return (
     <tr
@@ -136,8 +141,8 @@ const MeetingTableRow = ({
             <FaEye />
           </button>
           
-          {/* Show Cancel button for confirmed meetings */}
-          {meeting.bookingStatus?.toLowerCase() === 'confirmed' && onCancel && (
+          {/* Show Cancel button for booked and in_progress meetings */}
+          {(normalizedStatus === 'booked' || normalizedStatus === 'in_progress') && onCancel && (
             <button
               onClick={() => onCancel(meeting)}
               disabled={cancellingId === meeting.meetingId}

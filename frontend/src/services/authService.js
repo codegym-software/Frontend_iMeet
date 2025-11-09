@@ -1,23 +1,38 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../constants/api';
 
-const API_BASE_URL = 'http://localhost:8081';
+const API_BASE_URL_FOR_FETCH = API_BASE_URL;
 
 // Cấu hình axios với credentials
+// Trong development, baseURL sẽ là '' (empty string) để dùng relative URL (qua proxy)
+// Trong production, baseURL sẽ là absolute URL từ env
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL, // '' trong dev, absolute URL trong prod
   withCredentials: true, // Quan trọng để gửi cookies session
   headers: {
     'Content-Type': 'application/json',
-  }
+    'Accept': 'application/json',
+  },
+  // Thêm timeout để tránh chờ quá lâu
+  timeout: 30000,
 });
 
 class AuthService {
   // Đăng nhập truyền thống bằng username/email/password
   async login(usernameOrEmail, password) {
     try {
+      // Backend expects both 'email' and 'usernameOrEmail' for backward compatibility
+      // Sử dụng config riêng để tránh CORS issues
       const response = await apiClient.post('/api/auth/login', {
-        usernameOrEmail,
+        email: usernameOrEmail, // Backend controller uses request.getEmail()
+        usernameOrEmail: usernameOrEmail, // Also send for compatibility
         password
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        withCredentials: true,
       });
       
       // Lưu token vào localStorage nếu login thành công
@@ -49,7 +64,7 @@ class AuthService {
   // Bắt đầu quá trình đăng nhập Cognito (Server-side flow)
   initiateCognitoLogin() {
     // Chuyển hướng trực tiếp đến endpoint OAuth2 của backend
-    window.location.href = `${API_BASE_URL}/oauth2/authorization/cognito`;
+    window.location.href = `${API_BASE_URL_FOR_FETCH}/oauth2/authorization/cognito`;
   }
 
   // Bắt đầu quá trình đăng nhập Cognito (Server-side OAuth2 flow)
@@ -61,7 +76,7 @@ class AuthService {
       window.location.href = loginUrl;
     } catch (error) {
       // Fallback: vẫn chuyển hướng như cũ nếu lỗi
-      window.location.href = `${API_BASE_URL}/oauth2/authorization/cognito`;
+      window.location.href = `${API_BASE_URL_FOR_FETCH}/oauth2/authorization/cognito`;
     }
   }
 
@@ -75,7 +90,7 @@ class AuthService {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Lấy thông tin user đơn giản từ server
-      const response = await fetch('http://localhost:8081/api/oauth2/user', {
+      const response = await fetch(`${API_BASE_URL_FOR_FETCH}/api/oauth2/user`, {
         credentials: 'include'
       });
       
@@ -389,10 +404,9 @@ class AuthService {
       console.log('changePassword - Response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('changePassword - Error:', error);
-      console.error('changePassword - Error response:', error.response?.data);
-      console.error('changePassword - Error response status:', error.response?.status);
-      console.error('changePassword - Full error object:', JSON.stringify(error.response?.data, null, 2));
+      console.warn('⚠️ changePassword - Error:', error.message || error);
+      console.warn('⚠️ changePassword - Error response:', error.response?.data);
+      console.warn('⚠️ changePassword - Error response status:', error.response?.status);
       
       // Throw error với message rõ ràng
       if (error.response?.data) {

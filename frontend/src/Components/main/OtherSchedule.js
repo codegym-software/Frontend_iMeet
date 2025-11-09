@@ -71,15 +71,23 @@ const OtherSchedule = () => {
   };
 
   const getStatusColor = (status) => {
-    const statusUpper = status?.toUpperCase();
+    // ✅ Normalize CONFIRMED → BOOKED for backward compatibility
+    let statusUpper = status?.toUpperCase();
+    if (statusUpper === 'CONFIRMED') {
+      statusUpper = 'BOOKED';
+    }
+    
     switch (statusUpper) {
       case 'PENDING':
       case 'BOOKED':
         return '#fbbc04';
       case 'APPROVED':
+      case 'IN_PROGRESS':
         return '#34a853';
       case 'CANCELLED':
         return '#ea4335';
+      case 'COMPLETED':
+        return '#5f6368';
       default:
         return '#5f6368';
     }

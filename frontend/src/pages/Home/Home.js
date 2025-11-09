@@ -60,25 +60,40 @@ const MainContent = () => {
     setCurrentMonth(newMonth);
   };
 
-  // Hàm xử lý khi tạo meeting thành công - OPTIMISTIC UPDATE
+  // Hàm xử lý khi tạo meeting - OPTIMISTIC UPDATE
   const handleMeetingCreated = (meetingData, message) => {
-    console.log('✅ Meeting created - using optimistic update');
-    
-    // Add to shared cache immediately - NO API CALL!
     if (meetingData) {
+      // Add to shared cache immediately - NO API CALL!
       addMeeting(meetingData);
-    }
-    
-    // Trigger minimal refresh for calendar view only
-    setRefreshTrigger(prev => prev + 1);
-    
-    // Show toast if message provided
-    if (message) {
-      setToast({
-        isOpen: true,
-        message: message,
-        type: 'success'
-      });
+      
+      // ✅ Trigger immediate refresh để hiển thị meeting mới ngay lập tức
+      // Không cần delay vì đã có optimistic update
+      setRefreshTrigger(prev => prev + 1);
+      
+      // ✅ Also trigger a delayed refresh để đảm bảo backend đã xử lý xong
+      setTimeout(() => {
+        setRefreshTrigger(prev => prev + 1);
+      }, 1500); // Delayed refresh after 1.5 seconds
+      
+      // Show success toast
+      if (message) {
+        setToast({
+          isOpen: true,
+          message: message,
+          type: 'success'
+        });
+      }
+    } else {
+      // Error case - meetingData is null
+      
+      // Show error toast
+      if (message) {
+        setToast({
+          isOpen: true,
+          message: message,
+          type: 'error'
+        });
+      }
     }
   };
 

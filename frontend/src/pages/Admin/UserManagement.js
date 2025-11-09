@@ -426,7 +426,9 @@ const UserManagement = () => {
       <div className="page-header">
         <div>
           <h1 className="page-title">Quản lý Người Dùng</h1>
-          <p className="page-subtitle">Quản lý tài khoản và phân quyền người dùng trong hệ thống</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <p className="page-subtitle">Quản lý tài khoản và phân quyền người dùng trong hệ thống</p>
+          </div>
         </div>
         <button onClick={() => setShowAddForm(true)} className="add-button" title="Thêm người dùng mới">
           <FaPlus />

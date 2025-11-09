@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8081';
+import { API_BASE_URL } from '../constants/api';
 
 class AdminService {
   // Lấy token từ localStorage
@@ -39,7 +39,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.warn('⚠️ Could not fetch users:', error.message);
       throw error;
     }
   }
@@ -58,7 +58,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching user:', error);
+      console.warn('⚠️ Could not fetch user:', error.message);
       throw error;
     }
   }
@@ -79,7 +79,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error creating user:', error);
+      console.warn('⚠️ Could not create user:', error.message);
       throw error;
     }
   }
@@ -100,7 +100,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error updating user:', error);
+      console.warn('⚠️ Could not update user:', error.message);
       throw error;
     }
   }
@@ -120,7 +120,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error deleting user:', error);
+      console.warn('⚠️ Could not delete user:', error.message);
       throw error;
     }
   }
@@ -139,7 +139,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching user stats:', error);
+      console.warn('⚠️ Could not fetch user stats:', error.message);
       throw error;
     }
   }
@@ -171,7 +171,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error creating admin:', error);
+      console.warn('⚠️ Could not create admin:', error.message);
       throw error;
     }
   }
@@ -190,7 +190,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error checking admin:', error);
+      console.warn('⚠️ Could not check admin:', error.message);
       throw error;
     }
   }
@@ -213,7 +213,7 @@ class AdminService {
       // Backend wraps response in ApiResponse { success, message, data }
       return json.data || [];
     } catch (error) {
-      console.error('Error fetching rooms:', error);
+      console.warn('⚠️ Could not fetch rooms:', error.message);
       throw error;
     }
   }
@@ -244,7 +244,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error creating room:', error);
+      console.warn('⚠️ Could not create room:', error.message);
       throw error;
     }
   }
@@ -265,7 +265,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error updating room:', error);
+      console.warn('⚠️ Could not update room:', error.message);
       throw error;
     }
   }
@@ -285,7 +285,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error deleting room:', error);
+      console.warn('⚠️ Could not delete room:', error.message);
       throw error;
     }
   }
@@ -304,7 +304,7 @@ class AdminService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching room:', error);
+      console.warn('⚠️ Could not fetch room:', error.message);
       throw error;
     }
   }
@@ -334,7 +334,7 @@ class AdminService {
       // Otherwise, return empty array as fallback
       return [];
     } catch (error) {
-      console.error('Error fetching devices:', error);
+      console.warn('⚠️ Could not fetch devices:', error.message);
       throw error;
     }
   }
@@ -358,7 +358,7 @@ class AdminService {
       // Return the full response so DeviceList can access json.data
       return json;
     } catch (error) {
-      console.error('Error creating device:', error);
+      console.warn('⚠️ Could not create device:', error.message);
       throw error;
     }
   }
@@ -382,7 +382,7 @@ class AdminService {
       // Return the full response so DeviceList can access json.data
       return json;
     } catch (error) {
-      console.error('Error updating device:', error);
+      console.warn('⚠️ Could not update device:', error.message);
       throw error;
     }
   }
@@ -410,7 +410,7 @@ class AdminService {
         return { message: 'deleted' };
       }
     } catch (error) {
-      console.error('Error deleting device:', error);
+      console.warn('⚠️ Could not delete device:', error.message);
       throw error;
     }
   }

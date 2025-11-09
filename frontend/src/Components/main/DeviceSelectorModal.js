@@ -5,24 +5,11 @@ import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
 const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConfirm }) => {
   const [tempSelectedDevices, setTempSelectedDevices] = useState([]);
   const [expandedTypes, setExpandedTypes] = useState({});
+  const [searchQuery, setSearchQuery] = useState(''); // ✅ Search state
+  const [selectedFilterType, setSelectedFilterType] = useState('all'); // ✅ Filter by type state
   
   // ✅ Get real-time inventory
   const { inventory } = useDeviceInventory();
-
-  // Khởi tạo tempSelectedDevices khi modal mở
-  useEffect(() => {
-    if (isOpen) {
-      setTempSelectedDevices([...selectedDevices]);
-      
-      // Mở tất cả accordion
-      const devicesByType = groupDevicesByType(devices);
-      const allExpanded = {};
-      Object.keys(devicesByType).forEach(type => {
-        allExpanded[type] = true;
-      });
-      setExpandedTypes(allExpanded);
-    }
-  }, [isOpen, selectedDevices, devices]);
 
   // ✅ Map backend enum to Vietnamese display names
   const normalizeDeviceType = (type) => {
@@ -50,16 +37,20 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
     return mapping[typeUpper] || type;
   };
 
+  // ✅ Filter devices by search query and type filter
+  const filteredDevices = devices.filter(device => {
+    const deviceName = (device.name || device.deviceName || '').toLowerCase();
+    const searchMatch = searchQuery === '' || deviceName.includes(searchQuery.toLowerCase());
+    
+    const rawType = device.deviceType || device.deviceTypeName || 'Khác';
+    const normalizedType = normalizeDeviceType(rawType);
+    const typeMatch = selectedFilterType === 'all' || normalizedType === selectedFilterType;
+    
+    return searchMatch && typeMatch;
+  });
+
   // Nhóm thiết bị theo loại
   const groupDevicesByType = (deviceList) => {
-    // Log để debug (chỉ log sample, không log từng device)
-    if (deviceList.length > 0) {
-      const sampleDevice = deviceList[0];
-      const rawType = sampleDevice?.deviceType || sampleDevice?.deviceTypeName || 'Unknown';
-      console.log('📦 Grouping', deviceList.length, 'devices');
-      console.log('📦 Sample mapping:', rawType, '→', normalizeDeviceType(rawType));
-    }
-    
     const grouped = deviceList.reduce((acc, device) => {
       const rawType = device.deviceType || device.deviceTypeName || 'Khác';
       const normalizedType = normalizeDeviceType(rawType);
@@ -71,11 +62,38 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
       return acc;
     }, {});
     
-    console.log('📦 Result groups:', Object.keys(grouped));
     return grouped;
   };
 
-  const devicesByType = groupDevicesByType(devices);
+  const devicesByType = groupDevicesByType(filteredDevices);
+  
+  // ✅ Get all unique device types for filter
+  const allDeviceTypes = React.useMemo(() => {
+    const types = new Set();
+    devices.forEach(device => {
+      const rawType = device.deviceType || device.deviceTypeName || 'Khác';
+      types.add(normalizeDeviceType(rawType));
+    });
+    return ['all', ...Array.from(types).sort()];
+  }, [devices]);
+
+  // Khởi tạo tempSelectedDevices khi modal mở
+  useEffect(() => {
+    if (isOpen) {
+      setTempSelectedDevices([...selectedDevices]);
+      // ✅ Reset search and filter when modal opens
+      setSearchQuery('');
+      setSelectedFilterType('all');
+      
+      // Mở tất cả accordion
+      const devicesByTypeForExpansion = groupDevicesByType(devices);
+      const allExpanded = {};
+      Object.keys(devicesByTypeForExpansion).forEach(type => {
+        allExpanded[type] = true;
+      });
+      setExpandedTypes(allExpanded);
+    }
+  }, [isOpen, selectedDevices, devices]);
   
   // Log grouped result
   if (isOpen && Object.keys(devicesByType).length > 0) {
@@ -174,6 +192,13 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
     onClose();
   };
 
+  // ✅ Reset all selections
+  const handleReset = () => {
+    setTempSelectedDevices([]);
+    setSearchQuery('');
+    setSelectedFilterType('all');
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -187,10 +212,35 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
           <button className="device-modal-close" onClick={handleCancel}>×</button>
         </div>
 
+        {/* ✅ Search and Filter Bar */}
+        <div className="device-modal-toolbar">
+          <div className="device-search-container">
+            <input
+              type="text"
+              className="device-search-input"
+              placeholder="🔍 Tìm kiếm thiết bị..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="device-filter-container">
+            <select
+              className="device-filter-select"
+              value={selectedFilterType}
+              onChange={(e) => setSelectedFilterType(e.target.value)}
+            >
+              <option value="all">Tất cả loại</option>
+              {allDeviceTypes.slice(1).map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <div className="device-modal-body">
-          {devices.length === 0 ? (
+          {filteredDevices.length === 0 ? (
             <div className="device-modal-empty">
-              <p>Không có thiết bị nào khả dụng</p>
+              <p>{searchQuery || selectedFilterType !== 'all' ? 'Không tìm thấy thiết bị phù hợp' : 'Không có thiết bị nào khả dụng'}</p>
             </div>
           ) : (
             <div className="device-types-accordion">
@@ -227,32 +277,27 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
 
                         // ✅ Backend returns 'name' field (tên từ database)
                         const deviceDisplayName = device.name || device.deviceName || 'Thiết bị';
-                        if (!device.name) {
-                          console.warn('⚠️ Device missing name from backend:', device);
-                        }
                         
                         return (
                           <div 
                             key={device.deviceId} 
                             className={`device-card ${isSelected ? 'selected' : ''} ${isOutOfStock ? 'unavailable' : ''}`}
                             onClick={(e) => {
-                              // Click vào card (ngoài buttons) để toggle +1
+                              // Click vào card (ngoài buttons) để toggle
                               if (e.target.closest('.quantity-btn') || e.target.closest('.quantity-input')) {
                                 return; // Ignore if clicking on quantity controls
                               }
                               if (!isOutOfStock) {
                                 if (isSelected) {
-                                  // Nếu đã chọn, tăng thêm 1
-                                  if (selectedQty < available) {
-                                    handleQuantityChange(device.deviceId, selectedQty + 1);
-                                  }
+                                  // ✅ Nếu đã chọn, click lại sẽ bỏ chọn (set quantity = 0)
+                                  handleQuantityChange(device.deviceId, 0);
                                 } else {
                                   // Chưa chọn, chọn 1
                                   handleQuantityChange(device.deviceId, 1);
                                 }
                               }
                             }}
-                            title={isOutOfStock ? 'Hết hàng' : (isSelected ? 'Click để thêm số lượng' : 'Click để chọn')}
+                            title={isOutOfStock ? 'Hết hàng' : (isSelected ? 'Click để bỏ chọn' : 'Click để chọn')}
                           >
                             <div className="device-card-header">
                               <div className="device-card-name" style={{ 
@@ -318,12 +363,6 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                                       +
                                     </button>
                                   </div>
-                                  
-                                  {isSelected && (
-                                    <div className="device-card-selected-badge">
-                                      ✓ Đã chọn {selectedQty}
-                                    </div>
-                                  )}
                                 </>
                               ) : (
                                 <div className="out-of-stock-message">
@@ -365,12 +404,19 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
         </div>
 
         <div className="device-modal-footer">
-          <button type="button" className="device-modal-btn-cancel" onClick={handleCancel}>
-            Hủy
-          </button>
-          <button type="button" className="device-modal-btn-confirm" onClick={handleConfirm}>
-            Xác nhận ({tempSelectedDevices.length})
-          </button>
+          <div className="device-modal-footer-left">
+            <button type="button" className="device-modal-btn-reset" onClick={handleReset} title="Đặt lại tất cả">
+              🔄 Đặt lại
+            </button>
+          </div>
+          <div className="device-modal-footer-right">
+            <button type="button" className="device-modal-btn-cancel" onClick={handleCancel}>
+              Hủy
+            </button>
+            <button type="button" className="device-modal-btn-confirm" onClick={handleConfirm}>
+              Xác nhận ({tempSelectedDevices.length})
+            </button>
+          </div>
         </div>
       </div>
     </div>

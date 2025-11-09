@@ -1,13 +1,16 @@
 // components/UpcomingMeetings.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './UpcomingMeetings.css';
 import { calendarAPI } from './MainCalendar/utils/CalendarAPI';
+import { useMeetings } from '../../contexts/MeetingContext';
 
 const UpcomingMeetings = () => {
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [todayMeetingsCount, setTodayMeetingsCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(false);
+  const { meetings } = useMeetings(); // ✅ Listen to MeetingContext changes
+  const prevMeetingsLengthRef = useRef(0);
 
   // Format thời gian từ Date object
   const formatTime = (date) => {
@@ -38,61 +41,42 @@ const UpcomingMeetings = () => {
     try {
       setLoading(true);
       console.log('🔄 Loading upcoming meetings...');
-      console.log('API URL:', 'http://localhost:8081/api/meetings/upcoming');
       
       // Gọi API lấy upcoming meetings
-      let meetings = await calendarAPI.getUpcomingMeetings();
+      const meetings = await calendarAPI.getUpcomingMeetings();
       console.log('✅ Raw meetings from API:', meetings);
       console.log('📊 Total meetings received:', meetings?.length || 0);
       
-      // Nếu không có meetings, thử lấy tất cả meetings để debug
+      // Nếu không có meetings, return empty
       if (!meetings || meetings.length === 0) {
-        console.warn('⚠️ No meetings returned from /upcoming API');
-        console.log('🔍 Trying to fetch ALL meetings for debugging...');
-        
-        try {
-          const allMeetings = await calendarAPI.getAllMeetings();
-          console.log('📋 All meetings in database:', allMeetings);
-          console.log('📊 Total meetings in DB:', allMeetings?.length || 0);
-          
-          if (allMeetings && allMeetings.length > 0) {
-            console.log('🔎 Sample meeting:', allMeetings[0]);
-            console.log('📅 All meetings details:');
-            allMeetings.forEach((m, idx) => {
-              console.log(`  ${idx + 1}. "${m.title}"`);
-              console.log(`     Start: ${m.startTime}`);
-              console.log(`     Status: ${m.bookingStatus}`);
-              console.log(`     Future: ${new Date(m.startTime) > new Date()}`);
-            });
-            meetings = allMeetings; // Use all meetings for now
-          } else {
-            console.error('❌ Database is empty! Please create some meetings first.');
-            setUpcomingMeetings([]);
-            return;
-          }
-        } catch (err) {
-          console.error('❌ Error fetching all meetings:', err);
-          setUpcomingMeetings([]);
-          return;
-        }
+        console.log('ℹ️ No upcoming meetings');
+        setUpcomingMeetings([]);
+        setLoading(false);
+        return;
       }
       
-      // Lọc meetings sắp tới (chưa diễn ra và không bị cancelled)
+      // ✅ Lấy current user ID
+      const currentUser = JSON.parse(localStorage.getItem('user') || localStorage.getItem('oauth2User') || '{}');
+      const currentUserId = currentUser.userId || currentUser.id;
+      console.log('👤 Current user ID:', currentUserId);
+      
+      // Lọc meetings sắp tới (của user, chưa diễn ra và không bị cancelled)
       const now = new Date();
       console.log('🕐 Current time:', now);
       
-      const filteredMeetings = meetings
+      // ✅ Remove duplicates dựa trên meetingId
+      const uniqueMeetings = Array.from(new Map(meetings.map(m => [m.meetingId, m])).values());
+      console.log(`✅ Unique meetings: ${uniqueMeetings.length} (removed ${meetings.length - uniqueMeetings.length} duplicates)`);
+      
+      const filteredMeetings = uniqueMeetings
         .filter(meeting => {
           const startTime = new Date(meeting.startTime);
           const status = meeting.bookingStatus?.toUpperCase();
           const isFuture = startTime > now;
           const isNotCancelled = status !== 'CANCELLED';
+          const isUserMeeting = !currentUserId || meeting.userId === currentUserId; // ✅ Filter theo user
           
-          console.log(`📅 Meeting: "${meeting.title}"`);
-          console.log(`   Status: ${status}, StartTime: ${startTime}`);
-          console.log(`   Future: ${isFuture}, Not Cancelled: ${isNotCancelled}`);
-          
-          return isFuture && isNotCancelled;
+          return isUserMeeting && isFuture && isNotCancelled;
         })
         .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
         .slice(0, 3) // Chỉ lấy 3 meetings gần nhất
@@ -151,19 +135,45 @@ const UpcomingMeetings = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Load data khi component mount
+  // ✅ Load data khi component mount và khi có meeting mới
   useEffect(() => {
-    loadUpcomingMeetings();
-    loadTodayMeetingsCount();
+    let isMounted = true;
+    
+    const loadData = async () => {
+      if (isMounted) {
+        await loadUpcomingMeetings();
+        await loadTodayMeetingsCount();
+      }
+    };
+    
+    loadData();
     
     // Refresh mỗi 5 phút
     const refreshInterval = setInterval(() => {
-      loadUpcomingMeetings();
-      loadTodayMeetingsCount();
+      if (isMounted) {
+        loadData();
+      }
     }, 5 * 60 * 1000);
     
-    return () => clearInterval(refreshInterval);
-  }, []); // ✅ No dependencies - only run on mount
+    return () => {
+      isMounted = false;
+      clearInterval(refreshInterval);
+    };
+  }, []); // ✅ Empty dependency array - chỉ chạy khi mount
+
+  // ✅ Auto-refresh when meetings change (new meeting created)
+  useEffect(() => {
+    const currentMeetingsLength = meetings?.length || 0;
+    
+    // Check if a new meeting was added
+    if (currentMeetingsLength > prevMeetingsLengthRef.current) {
+      console.log('🔄 New meeting detected, refreshing Upcoming Meetings...');
+      loadUpcomingMeetings();
+      loadTodayMeetingsCount();
+    }
+    
+    prevMeetingsLengthRef.current = currentMeetingsLength;
+  }, [meetings]);
 
   // Format thời gian còn lại
   const getTimeUntilMeeting = (meetingDate, meetingTime) => {

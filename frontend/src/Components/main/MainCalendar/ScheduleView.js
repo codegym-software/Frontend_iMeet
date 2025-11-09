@@ -211,15 +211,23 @@ const ScheduleView = ({ selectedDate, onMeetingUpdated, refreshTrigger }) => {
   };
 
   const getStatusColor = (status) => {
-    const statusUpper = status?.toUpperCase();
+    // ✅ Normalize CONFIRMED → BOOKED for backward compatibility
+    let statusUpper = status?.toUpperCase();
+    if (statusUpper === 'CONFIRMED') {
+      statusUpper = 'BOOKED';
+    }
+    
     switch (statusUpper) {
       case 'PENDING':
       case 'BOOKED':
         return '#fbbc04'; // Yellow for pending
       case 'APPROVED':
+      case 'IN_PROGRESS':
         return '#34a853'; // Green for approved
       case 'CANCELLED':
         return '#ea4335'; // Red for cancelled
+      case 'COMPLETED':
+        return '#5f6368'; // Gray for completed
       default:
         return '#5f6368'; // Gray for unknown
     }

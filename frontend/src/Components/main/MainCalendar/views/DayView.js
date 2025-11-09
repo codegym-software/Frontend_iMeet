@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo } from 'react';
+import { CalendarHelpers } from '../utils/CalendarHelpers';
 
 const DayView = React.memo(({
   selectedDate,
@@ -6,19 +7,25 @@ const DayView = React.memo(({
   currentTime,
   onDateSelect,
   handleEventClick,
-  handleEventMouseEnter,
-  handleEventMouseLeave,
+  handleEventDoubleClick,
+  handleEventContextMenu,
   handleTimeSlotClick,
   formatTime
 }) => {
   const today = new Date();
-  const isToday = selectedDate.toDateString() === today.toDateString();
+  const isToday = CalendarHelpers.isSameDate(selectedDate, today);
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
   const timeSlotsRef = useRef(null);
 
-  const allDayEvents = useMemo(() => events.filter(event => event.allDay), [events]);
-  const timedEvents = useMemo(() => events.filter(event => !event.allDay), [events]);
+  // ✅ FIX: Filter events cho đúng ngày được select (fix lỗi timezone)
+  const dayEvents = useMemo(() => 
+    events.filter(event => CalendarHelpers.isEventOnDate(event, selectedDate)),
+    [events, selectedDate]
+  );
+
+  const allDayEvents = useMemo(() => dayEvents.filter(event => event.allDay), [dayEvents]);
+  const timedEvents = useMemo(() => dayEvents.filter(event => !event.allDay), [dayEvents]);
 
   // ✅ Calculate overlapping events layout (like Google Calendar)
   const getEventLayout = useMemo(() => {
@@ -129,19 +136,18 @@ const DayView = React.memo(({
       return (
         <div
           key={event.id}
-          className={`calendar-event timed-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
+          className={`calendar-event timed-event`}
           style={{
             top: `${top}px`,
             height: `${height}px`,
             left: `calc(${EVENT_AREA_LEFT}px + (100% - ${EVENT_AREA_LEFT + EVENT_AREA_RIGHT}px) * ${eventLayout.left / 100})`,
             width: `calc((100% - ${EVENT_AREA_LEFT + EVENT_AREA_RIGHT}px) * ${eventLayout.width / 100})`,
             backgroundColor: event.color,
-            borderLeft: `3px solid ${event.color}`,
-            opacity: event.opacity || 1
+            borderLeft: `3px solid ${event.color}`
           }}
           onClick={(e) => handleEventClick(event, e)}
-          onMouseEnter={(e) => handleEventMouseEnter(event, e)}
-          onMouseLeave={handleEventMouseLeave}
+          onDoubleClick={(e) => handleEventDoubleClick && handleEventDoubleClick(event)}
+          onContextMenu={(e) => handleEventContextMenu && handleEventContextMenu(event, e)}
         >
           <div className="event-content">
             {duration < 30 ? (
@@ -153,7 +159,6 @@ const DayView = React.memo(({
               // Short meeting (30-60 min): single line with full info
               <div className="event-title-inline">
                 {event.title}
-                {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                 {' '}({formatTime(event.start)} - {formatTime(event.end)})
               </div>
             ) : (
@@ -161,7 +166,6 @@ const DayView = React.memo(({
               <>
                 <div className="event-title">
                   {event.title}
-                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                 </div>
                 <div className="event-time">
                   {formatTime(event.start)} - {formatTime(event.end)}
@@ -172,7 +176,7 @@ const DayView = React.memo(({
         </div>
       );
     });
-  }, [timedEvents, handleEventClick, handleEventMouseEnter, handleEventMouseLeave, formatTime]);
+  }, [timedEvents, handleEventClick, handleEventDoubleClick, formatTime]);
 
   // Scroll to current time
   useEffect(() => {
@@ -207,19 +211,17 @@ const DayView = React.memo(({
             {allDayEvents.map(event => (
               <div
                 key={event.id}
-                className={`calendar-event all-day-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
+                className={`calendar-event all-day-event`}
                 style={{
                   backgroundColor: event.color,
-                  borderLeft: `3px solid ${event.color}`,
-                  opacity: event.opacity || 1
+                  borderLeft: `3px solid ${event.color}`
                 }}
                 onClick={(e) => handleEventClick(event, e)}
-                onMouseEnter={(e) => handleEventMouseEnter(event, e)}
-                onMouseLeave={handleEventMouseLeave}
+                onDoubleClick={(e) => handleEventDoubleClick && handleEventDoubleClick(event)}
+                onContextMenu={(e) => handleEventContextMenu && handleEventContextMenu(event, e)}
               >
                 <div className="event-title">
                   {event.title}
-                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                 </div>
               </div>
             ))}

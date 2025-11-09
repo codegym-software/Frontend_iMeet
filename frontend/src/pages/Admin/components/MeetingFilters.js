@@ -34,7 +34,7 @@ const MeetingFilters = ({ searchTerm, setSearchTerm, filterStatus, setFilterStat
 
         {/* Status Filter */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {['all', 'pending', 'confirmed', 'cancelled'].map(status => (
+          {['all', 'booked', 'in_progress', 'completed', 'cancelled'].map(status => (
             <button
               key={status}
               onClick={() => {

@@ -1,14 +1,17 @@
 import React, { useRef, useEffect, useMemo } from 'react';
+import { CalendarHelpers } from '../utils/CalendarHelpers';
 
 const WeekView = React.memo(({
   selectedDate,
   events,
   onDateSelect,
   handleEventClick,
+  handleEventDoubleClick,
+  handleEventContextMenu,
   handleEventMouseEnter,
   handleEventMouseLeave,
   formatTime,
-  currentTime // <-- THÊM currentTime VÀO ĐÂY
+  currentTime
 }) => {
   // ✅ Calculate overlapping events layout for a list of events (like Google Calendar)
   const calculateEventLayout = (dayEvents) => {
@@ -149,16 +152,10 @@ const WeekView = React.memo(({
     });
 
     events.forEach(event => {
-      // Ensure event.start is a Date object
-      const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
-      
-      // Compare dates by setting time to midnight for accurate day matching
-      const eventDateOnly = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
-      
-      const dayIndex = weekDays.findIndex(day => {
-        const dayDateOnly = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-        return dayDateOnly.getTime() === eventDateOnly.getTime();
-      });
+      // ✅ FIX: Sử dụng helper để check event thuộc ngày nào (fix lỗi timezone)
+      const dayIndex = weekDays.findIndex(day => 
+        CalendarHelpers.isEventOnDate(event, day)
+      );
 
       if (dayIndex !== -1) {
         if (event.allDay) {
@@ -218,22 +215,26 @@ const WeekView = React.memo(({
                     {weekEvents[dayIndex]?.allDay.map((event, eventIndex) => (
                       <div
                         key={`${event.id}-all-day`}
-                        className={`calendar-event week-all-day-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
+                        className={`calendar-event week-all-day-event`}
                         style={{
                           backgroundColor: event.color,
-                          borderLeft: `3px solid ${event.color}`,
-                          opacity: event.opacity || 1
+                          borderLeft: `3px solid ${event.color}`
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEventClick(event, e);
                         }}
-                        onMouseEnter={(e) => handleEventMouseEnter(event, e)}
-                        onMouseLeave={handleEventMouseLeave}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          handleEventDoubleClick && handleEventDoubleClick(event);
+                        }}
+                        onContextMenu={(e) => {
+                          e.stopPropagation();
+                          handleEventContextMenu && handleEventContextMenu(event, e);
+                        }}
                       >
                         <div className="event-title">
                           {event.title}
-                          {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                         </div>
                       </div>
                     ))}
@@ -317,22 +318,25 @@ const WeekView = React.memo(({
                         return (
                           <div
                             key={event.id}
-                            className={`calendar-event week-timed-event ${(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') ? 'pending-event' : ''}`}
+                            className={`calendar-event week-timed-event`}
                             style={{
                               top: `${top}px`,
                               height: `${height}px`,
                               left: `${layout.left}%`,
                               width: `${layout.width}%`,
                               backgroundColor: event.color,
-                              borderLeft: `3px solid ${event.color}`,
-                              opacity: event.opacity || 1
+                              borderLeft: `3px solid ${event.color}`
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleEventClick(event, e);
                             }}
-                            onMouseEnter={(e) => handleEventMouseEnter(event, e)}
-                            onMouseLeave={handleEventMouseLeave}
+                            onContextMenu={(e) => {
+                              e.stopPropagation();
+                              handleEventContextMenu && handleEventContextMenu(event, e);
+                            }}
+                            onMouseEnter={(e) => handleEventMouseEnter && handleEventMouseEnter(event, e)}
+                            onMouseLeave={() => handleEventMouseLeave && handleEventMouseLeave()}
                           >
                             <div className="event-content">
                               {duration < 30 ? (
@@ -344,7 +348,6 @@ const WeekView = React.memo(({
                                 // Short meeting (30-60 min): single line with full info
                                 <div className="event-title-inline">
                                   {event.title}
-                                  {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                                   {' '}({formatTime(event.start)} - {formatTime(event.end)})
                                 </div>
                               ) : (
@@ -352,7 +355,6 @@ const WeekView = React.memo(({
                                 <>
                                   <div className="event-title">
                                     {event.title}
-                                    {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                                   </div>
                                   <div className="event-time">
                                     {formatTime(event.start)} - {formatTime(event.end)}

@@ -1,23 +1,34 @@
 import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8081';
+import { API_BASE_URL } from '../constants/api';
 
 // Create axios instance with default config
+// Luôn dùng absolute URL từ constants/api.js
+console.log('[API Client] Creating axios instance with baseURL:', API_BASE_URL);
+
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL, // Absolute URL: https://imeeet.onrender.com
   withCredentials: true, // Important for sending session cookies
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
   },
+  // Thêm timeout để tránh chờ quá lâu
+  timeout: 30000,
 });
 
-// Add request interceptor to include auth token
+// Add request interceptor to include auth token and log request
 apiClient.interceptors.request.use(
   (config) => {
+    // Log full URL để debug
+    const fullUrl = (config.baseURL || '') + (config.url || '');
+    console.log('[API Client] Request URL:', config.method?.toUpperCase(), fullUrl);
+    
+    // Add auth token nếu có
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
     return config;
   },
   (error) => {

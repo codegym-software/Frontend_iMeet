@@ -42,7 +42,7 @@ export const DeviceInventoryProvider = ({ children }) => {
       } else if (allMeetingsResponse?.data && Array.isArray(allMeetingsResponse.data)) {
         allMeetings = allMeetingsResponse.data;
       } else {
-        console.warn('⚠️ Unexpected meeting response format:', allMeetingsResponse);
+        // Silently handle empty/invalid response - don't spam console
         allMeetings = [];
       }
       
@@ -362,14 +362,15 @@ export const DeviceInventoryProvider = ({ children }) => {
           return;
         }
         
-        // ✅ Handle different response formats
+        // ✅ Handle different response formats - getAllMeetings already returns array
         let allMeetings = [];
         if (Array.isArray(allMeetingsResponse)) {
           allMeetings = allMeetingsResponse;
         } else if (allMeetingsResponse?.data && Array.isArray(allMeetingsResponse.data)) {
           allMeetings = allMeetingsResponse.data;
         } else {
-          console.warn('⚠️ Unexpected meeting response format in checkEndedMeetings');
+          // If empty array or null, just continue without error
+          console.log('⚠️ No meetings found or empty response in checkEndedMeetings');
           return;
         }
         
@@ -388,14 +389,15 @@ export const DeviceInventoryProvider = ({ children }) => {
         });
 
         // ✅ Check again before state updates
-        if (isMountedRef.current) {
+        if (isMountedRef.current && justEndedMeetings.length > 0) {
           justEndedMeetings.forEach(meeting => {
             console.log('⏰ Meeting ended, auto-returning devices:', meeting.meetingId);
             returnDevices(meeting.devices, meeting.meetingId);
           });
         }
       } catch (error) {
-        console.error('Error checking ended meetings:', error);
+        // Silently handle errors - don't spam console
+        console.log('⚠️ Error checking ended meetings (will retry):', error.message);
       }
     };
 

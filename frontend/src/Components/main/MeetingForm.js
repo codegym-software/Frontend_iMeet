@@ -8,18 +8,45 @@ import adminService from '../../services/adminService';
 import DeviceSelectorModal from './DeviceSelectorModal';
 import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
 import { useMeetingWithDevices } from '../../hooks/useMeetingWithDevices';
+import ColorPicker from '../common/ColorPicker';
+import { saveMeetingColor } from '../../utils/meetingColorStorage';
+import meetingService from '../../services/meetingService';
 
 const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
+  // ✅ Fix: Create new Date objects without mutating selectedDate
+  const getInitialStartDateTime = () => {
+    if (selectedDate) {
+      const date = new Date(selectedDate);
+      date.setHours(9, 0, 0, 0);
+      return date;
+    }
+    const now = new Date();
+    now.setHours(9, 0, 0, 0);
+    return now;
+  };
+
+  const getInitialEndDateTime = () => {
+    if (selectedDate) {
+      const date = new Date(selectedDate);
+      date.setHours(10, 0, 0, 0);
+      return date;
+    }
+    const now = new Date();
+    now.setHours(10, 0, 0, 0);
+    return now;
+  };
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    startDateTime: selectedDate ? new Date(selectedDate.setHours(9, 0, 0, 0)) : new Date(),
-    endDateTime: selectedDate ? new Date(selectedDate.setHours(10, 0, 0, 0)) : new Date(),
+    startDateTime: getInitialStartDateTime(),
+    endDateTime: getInitialEndDateTime(),
     guests: '',
     room: '',
     location: '',
     devices: [], // Changed from device to devices array
-    isAllDay: false
+    isAllDay: false,
+    color: '#4285f4'
   });
 
   const [errors, setErrors] = useState({});
@@ -32,6 +59,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [currentPickerMonth, setCurrentPickerMonth] = useState(new Date());
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const guestInputRef = useRef(null);
   const suggestionsRef = useRef(null);
   const datePickerRef = useRef(null);
@@ -388,17 +416,60 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
         endTime: formatLocalDateTime(formData.endDateTime),
         isAllDay: formData.isAllDay,
         roomId: parseInt(formData.room),
-        participants: formData.guests ? [formData.guests] : [],
-        deviceIds: formData.devices.map(d => d.deviceId) // Extract deviceIds from devices array
+        participants: formData.guests ? formData.guests.split(',').map(g => g.trim()).filter(g => g) : [],
+        // ✅ Backend expects 'devices' array with MeetingDeviceRequestItem format
+        // Format: [{ deviceId: Long, quantityBorrowed: Integer, notes: String }]
+        devices: formData.devices.map(d => ({
+          deviceId: d.deviceId,
+          quantityBorrowed: d.quantity || 1,
+          notes: d.notes || ''
+        })),
+        color: formData.color
       };
       
       // Call API to create meeting
       const createdMeeting = await calendarAPI.createMeeting(meetingData);
       
-      console.log('✅ Meeting created successfully:', createdMeeting);
+      // ✅ Save color to localStorage (frontend-only)
+      if (createdMeeting?.meetingId || createdMeeting?.id) {
+        const meetingId = createdMeeting.meetingId || createdMeeting.id;
+        saveMeetingColor(meetingId, formData.color);
+      }
       
       // ✅ OPTIMISTIC UPDATE - Instant UI refresh!
       createMeetingWithDevices(createdMeeting);
+      
+      // ✅ Invite participants if guests are provided
+      if (formData.guests && formData.guests.trim()) {
+        try {
+          const meetingId = createdMeeting?.meetingId || createdMeeting?.id;
+          if (meetingId) {
+            // Parse emails from guests field (comma-separated)
+            const emails = formData.guests
+              .split(',')
+              .map(email => email.trim())
+              .filter(email => email && email.includes('@')); // Basic email validation
+            
+            if (emails.length > 0) {
+              // Invite participants (async, don't wait for result)
+              meetingService.inviteParticipants(meetingId, emails, formData.description || null)
+                .then(result => {
+                  if (result.success) {
+                    console.log('✅ Đã mời thành công:', result.data.length, 'người');
+                  } else {
+                    console.warn('⚠️ Mời không thành công:', result.message);
+                  }
+                })
+                .catch(error => {
+                  console.warn('⚠️ Lỗi khi mời:', error);
+                });
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Lỗi khi mời người tham gia:', error);
+          // Don't fail the meeting creation if invite fails
+        }
+      }
       
       // Call parent onSubmit callback
       if (onSubmit) {
@@ -411,9 +482,14 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
           onClose();
         }
       }, 100);
-    } catch (error) {
-      console.error('Error creating meeting:', error);
-      setErrors({ submit: error.message || 'Không thể tạo cuộc họp. Vui lòng thử lại.' });
+            } catch (error) {
+              console.error('⚠️ Error creating meeting:', error.message);
+              setErrors({ submit: error.message || 'Không thể tạo cuộc họp. Vui lòng thử lại.' });
+      
+      // Gọi onSubmit với error message để hiển thị toast
+      if (onSubmit) {
+        onSubmit(null, error.message || 'Không thể tạo cuộc họp. Vui lòng thử lại.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -442,17 +518,47 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
             </div>
           )}
 
-          {/* Title Input */}
-          <div className="form-group">
-            <input
-              type="text"
-              name="title"
-              value={formData.title}
-              onChange={handleChange}
-              placeholder="Thêm tiêu đề"
-              className={`title-input ${errors.title ? 'error' : ''}`}
-              autoFocus
-            />
+          {/* Title Input with Color Picker */}
+          <div className="form-group" style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                placeholder="Thêm tiêu đề"
+                className={`title-input ${errors.title ? 'error' : ''}`}
+                style={{ flex: 1 }}
+                autoFocus
+              />
+              {/* Color Picker Button */}
+              <button
+                type="button"
+                className="meeting-form-color-btn"
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                title="Chọn màu"
+              >
+                <div 
+                  className="meeting-form-color-indicator"
+                  style={{ backgroundColor: formData.color }}
+                ></div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              {showColorPicker && (
+                <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 1000, marginTop: '8px' }}>
+                  <ColorPicker
+                    selectedColor={formData.color}
+                    onColorSelect={(color) => {
+                      setFormData(prev => ({ ...prev, color: color }));
+                      setShowColorPicker(false);
+                    }}
+                    onClose={() => setShowColorPicker(false)}
+                  />
+                </div>
+              )}
+            </div>
             {errors.title && <span className="error-message">{errors.title}</span>}
           </div>
 
@@ -563,7 +669,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                 name="guests"
                 value={formData.guests}
                 onChange={handleGuestChange}
-                placeholder="thêm khách"
+                placeholder="Thêm email khách (phân cách bằng dấu phẩy)"
                 className="inline-input"
                 autoComplete="off"
               />
@@ -583,7 +689,16 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                     <div
                       key={user.id}
                       className="suggestion-item"
-                      onClick={() => handleGuestSelect(user)}
+                      onClick={() => {
+                        // Add email to existing guests (comma-separated)
+                        const currentGuests = formData.guests ? formData.guests.split(',').map(g => g.trim()).filter(g => g) : [];
+                        if (!currentGuests.includes(user.email)) {
+                          const newGuests = [...currentGuests, user.email].join(', ');
+                          setFormData(prev => ({ ...prev, guests: newGuests }));
+                        }
+                        setShowSuggestions(false);
+                        setGuestSuggestions([]);
+                      }}
                     >
                       <div className="suggestion-email">{user.email}</div>
                       <div className="suggestion-name">{user.name}</div>
@@ -596,8 +711,15 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
               {showSuggestions && !isLoading && guestSuggestions.length === 0 && (
                 <div className="suggestions-dropdown">
                   <div className="suggestion-item no-results">
-                    Không tìm thấy kết quả
+                    Không tìm thấy kết quả. Bạn có thể nhập email trực tiếp.
                   </div>
+                </div>
+              )}
+              
+              {/* Helper text */}
+              {formData.guests && (
+                <div style={{ fontSize: '12px', color: '#5f6368', marginTop: '4px' }}>
+                  Email sẽ được gửi lời mời sau khi tạo cuộc họp
                 </div>
               )}
             </div>
@@ -700,11 +822,11 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
                     <div className="selected-devices-tags">
                       {formData.devices.map(device => {
                         // ✅ Backend returns 'name' field, but form may use 'deviceName'
-                        const displayName = device.name || device.deviceName || 'Thiết bị';
-                        if (!device.name && !device.deviceName) {
-                          console.warn('⚠️ Device tag missing name:', device);
-                        }
-                        return (
+                                const displayName = device.name || device.deviceName || 'Thiết bị';
+                                if (!device.name && !device.deviceName) {
+                                  // Silently handle missing name
+                                }
+                                return (
                           <span key={device.deviceId} className="device-tag">
                             <strong>{displayName}</strong> (x{device.quantity})
                             <button
@@ -760,6 +882,7 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit }) => {
               />
             </div>
           </div>
+
 
           {/* Form Actions */}
           <div className="form-actions simple-actions">

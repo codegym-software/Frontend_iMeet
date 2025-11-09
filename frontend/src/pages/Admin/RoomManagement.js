@@ -772,9 +772,11 @@ const RoomManagement = () => {
           <h1 style={{ fontSize: '32px', fontWeight: '700', color: '#2c3e50', marginBottom: '8px' }}>
             Quản lý Phòng
           </h1>
-          <p style={{ fontSize: '16px', color: '#7f8c8d', margin: 0 }}>
-            Quản lý và theo dõi tất cả phòng họp, hội thảo trong hệ thống
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <p style={{ fontSize: '16px', color: '#7f8c8d', margin: 0 }}>
+              Quản lý và theo dõi tất cả phòng họp, hội thảo trong hệ thống
+            </p>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button 

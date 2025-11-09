@@ -80,38 +80,73 @@ const RoomScheduleView = ({ selectedDate: parentSelectedDate, onDateChange, view
 
   // Helper function to get color based on status
   const getStatusColor = (status) => {
+    // ✅ Normalize CONFIRMED → BOOKED for backward compatibility
+    const normalizedStatus = status?.toUpperCase() === 'CONFIRMED' ? 'BOOKED' : status?.toUpperCase();
+    
     const colorMap = {
       'PENDING': '#f9ab00',
-      'BOOKED': '#f9ab00',
-      'CONFIRMED': '#1a73e8',
-      'APPROVED': '#34a853',
-      'CANCELLED': '#ea4335',
-      'REJECTED': '#ea4335'
+      'BOOKED': '#1a73e8',  // BOOKED = Đã đặt (approved by admin)
+      'CONFIRMED': '#1a73e8',  // ⚠️ DEPRECATED - Map to BOOKED
+      'IN_PROGRESS': '#34a853',  // Đang diễn ra
+      'COMPLETED': '#5f6368',  // Đã kết thúc
+      'CANCELLED': '#ea4335'  // Đã hủy
     };
-    return colorMap[status?.toUpperCase()] || '#1a73e8';
+    return colorMap[normalizedStatus] || '#1a73e8';
   };
 
   // Convert meetings to events format for TimeTable
   const events = useMemo(() => {
-    return meetings.map(meeting => ({
-      id: meeting.meetingId,
-      title: meeting.title,
-      start: new Date(meeting.startTime),
-      end: new Date(meeting.endTime),
-      color: getStatusColor(meeting.bookingStatus),
-      bookingStatus: meeting.bookingStatus,
-      description: meeting.description,
-      roomId: meeting.roomId,
-      roomName: meeting.roomName,
-      organizerName: meeting.organizerName,
-      guests: meeting.guests,
-      devices: meeting.devices,
-      ...meeting
-    }));
+    // Get current user ID
+    const currentUser = JSON.parse(localStorage.getItem('user') || localStorage.getItem('oauth2User') || '{}');
+    const currentUserId = currentUser.userId || currentUser.id;
+    
+    return meetings.map(meeting => {
+      const isOwner = meeting.userId === currentUserId;
+      
+      // ✅ Nếu KHÔNG phải lịch của user: chỉ hiển thị block/màu, không có chi tiết
+      if (!isOwner) {
+        return {
+          id: meeting.meetingId,
+          title: '🔒 Đã đặt', // Chỉ hiển thị "Đã đặt", không có tên meeting
+          start: new Date(meeting.startTime),
+          end: new Date(meeting.endTime),
+          color: '#9e9e9e', // Màu xám để phân biệt
+          bookingStatus: meeting.bookingStatus,
+          roomId: meeting.roomId,
+          isOwner: false, // Flag để biết đây không phải lịch của mình
+          // KHÔNG có: description, organizerName, guests, devices
+        };
+      }
+      
+      // ✅ Nếu LÀ lịch của user: hiển thị đầy đủ chi tiết
+      return {
+        id: meeting.meetingId,
+        title: meeting.title,
+        start: new Date(meeting.startTime),
+        end: new Date(meeting.endTime),
+        color: getStatusColor(meeting.bookingStatus),
+        bookingStatus: meeting.bookingStatus,
+        description: meeting.description,
+        roomId: meeting.roomId,
+        roomName: meeting.roomName,
+        organizerName: meeting.organizerName,
+        guests: meeting.guests,
+        devices: meeting.devices,
+        userId: meeting.userId,
+        isOwner: true, // Flag để biết đây là lịch của mình
+        ...meeting
+      };
+    });
   }, [meetings]);
 
   // Event handlers
   const handleEventClick = useCallback((event) => {
+    // ✅ Chỉ cho phép click vào lịch của mình
+    if (!event.isOwner) {
+      console.log('⚠️ Cannot view details of other users meetings');
+      return; // Không làm gì nếu không phải lịch của mình
+    }
+    
     const meeting = meetings.find(m => m.meetingId === event.id);
     if (meeting) {
       setEditingMeeting(meeting);

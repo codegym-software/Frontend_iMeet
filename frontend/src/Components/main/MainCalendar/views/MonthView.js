@@ -1,12 +1,13 @@
 import React, { useMemo } from 'react';
+import { CalendarHelpers } from '../utils/CalendarHelpers';
 
 const MonthView = React.memo(({
   selectedDate,
   events,
   onDateSelect,
   handleEventClick,
-  handleEventMouseEnter,
-  handleEventMouseLeave,
+  handleEventDoubleClick,
+  handleEventContextMenu,
   formatTime
 }) => {
   const { calendarGrid } = useMemo(() => {
@@ -24,11 +25,12 @@ const MonthView = React.memo(({
       currentDay.setDate(startDay.getDate() + index);
 
       const isCurrentMonth = currentDay.getMonth() === month;
-      const isToday = currentDay.toDateString() === today.toDateString();
-      const isSelected = currentDay.toDateString() === selectedDate.toDateString();
+      const isToday = CalendarHelpers.isSameDate(currentDay, today);
+      const isSelected = CalendarHelpers.isSameDate(currentDay, selectedDate);
 
+      // ✅ FIX: Sử dụng isEventOnDate để check chính xác, tránh lỗi timezone
       const dayEvents = events.filter(event =>
-        event.start.toDateString() === currentDay.toDateString()
+        CalendarHelpers.isEventOnDate(event, currentDay)
       );
 
       return {
@@ -81,15 +83,20 @@ const MonthView = React.memo(({
                       className="month-event-indicator"
                       style={{ backgroundColor: event.color }}
                       onClick={(e) => handleEventClick(event, e)}
-                      onMouseEnter={(e) => handleEventMouseEnter(event, e)}
-                      onMouseLeave={handleEventMouseLeave}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleEventDoubleClick && handleEventDoubleClick(event);
+                      }}
+                      onContextMenu={(e) => {
+                        e.stopPropagation();
+                        handleEventContextMenu && handleEventContextMenu(event, e);
+                      }}
                     >
                       <span className="event-time">
                         {event.allDay ? 'All day' : formatTime(event.start)}
                       </span>
                       <span className="event-title">
                         {event.title}
-                        {(event.bookingStatus === 'PENDING' || event.bookingStatus === 'BOOKED') && ' (chờ duyệt ⏳)'}
                       </span>
                     </div>
                   ))}

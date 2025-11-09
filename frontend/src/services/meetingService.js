@@ -4,11 +4,61 @@ const meetingService = {
   // Get all meetings
   getAllMeetings: async () => {
     try {
+      const token = localStorage.getItem('token');
+      console.log('🔍 Fetching meetings with token');
+      
       const response = await apiClient.get('/api/meetings');
-      return response.data;
+      
+      // Backend returns ApiResponse {success, message, data}
+      // ✅ Backend now always returns 200 OK with ApiResponse in body
+      // Check if response indicates success
+      if (response.data && response.data.success === false) {
+        console.warn('⚠️ Backend returned error:', response.data.message);
+        return [];
+      }
+      
+      // Return data array, or empty array if no data
+      const meetings = response.data?.data || [];
+      console.log('✅ Meetings fetched:', meetings.length);
+      return meetings;
     } catch (error) {
-      console.error('Error fetching meetings:', error);
-      throw error;
+      // Handle all errors gracefully - don't throw, just warn and return empty
+      const status = error.response?.status || 'Network Error';
+      
+      // ✅ Try to parse error response from backend
+      let errorMessage = '';
+      let errorData = null;
+      if (error.response?.data) {
+        errorData = error.response.data;
+        // Backend might return error in ApiResponse format (even with 500 status)
+        if (errorData.success === false && errorData.message) {
+          // ✅ Backend returned ApiResponse format
+          errorMessage = errorData.message;
+          console.warn('⚠️ Backend returned error (ApiResponse format):', errorMessage);
+          return [];
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        }
+      }
+      
+      // Log error details for debugging
+      if (status === 500) {
+        console.warn(`⚠️ Meetings endpoint returned 500`);
+        if (errorMessage) {
+          console.warn(`Error message: ${errorMessage}`);
+        }
+        if (errorData) {
+          console.warn('Error response:', errorData);
+        }
+      } else {
+        console.warn(`⚠️ Could not fetch meetings. Status: ${status}. Error: ${errorMessage || error.message}`);
+      }
+      
+      return [];
     }
   },
 
@@ -16,10 +66,10 @@ const meetingService = {
   getMeetingById: async (meetingId) => {
     try {
       const response = await apiClient.get(`/api/meetings/${meetingId}`);
-      return response.data;
+      return response.data.data || null;
     } catch (error) {
-      console.error('Error fetching meeting:', error);
-      throw error;
+      console.warn('⚠️ Could not fetch meeting. Returning null. Status:', error.response?.status || 'Network Error');
+      return null;
     }
   },
 
@@ -27,19 +77,11 @@ const meetingService = {
   cancelMeeting: async (meetingId) => {
     try {
       const url = `/api/meetings/${meetingId}`;
-      console.log('Calling DELETE:', url);
-      console.log('Full URL:', apiClient.defaults.baseURL + url);
-      console.log('Headers:', apiClient.defaults.headers);
-      
       const response = await apiClient.delete(url);
-      console.log('Delete response:', response);
-      return response.data;
+      return response.data.data || response.data;
     } catch (error) {
-      console.error('Error cancelling meeting:', error);
-      console.error('Error status:', error.response?.status);
-      console.error('Error data:', error.response?.data);
-      console.error('Error config:', error.config);
-      throw error;
+      console.warn('⚠️ Could not cancel meeting. Status:', error.response?.status || 'Network Error');
+      return { success: false, message: error.response?.data?.message || 'Failed to cancel meeting' };
     }
   },
 
@@ -47,25 +89,22 @@ const meetingService = {
   updateMeetingStatus: async (meetingId, status) => {
     try {
       const response = await apiClient.patch(`/api/meetings/${meetingId}/status`, { status });
-      return response.data;
+      return response.data.data || response.data;
     } catch (error) {
-      console.error('Error updating meeting status:', error);
-      throw error;
+      console.warn('⚠️ Could not update meeting status. Status:', error.response?.status || 'Network Error');
+      return { success: false, message: error.response?.data?.message || 'Failed to update status' };
     }
   },
 
   // Get meetings by status
   getMeetingsByStatus: async (status) => {
     try {
-      // Convert status to uppercase for enum matching
       const statusEnum = status.toUpperCase();
       const response = await apiClient.get(`/api/meetings/status/${statusEnum}`);
-      return response.data;
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error fetching meetings by status:', error);
-      console.error('Status value:', status);
-      console.error('API URL:', apiClient.defaults.baseURL);
-      throw error;
+      console.warn('⚠️ Could not fetch meetings by status. Returning empty data.');
+      return [];
     }
   },
 
@@ -73,10 +112,10 @@ const meetingService = {
   getMeetingsByRoom: async (roomId) => {
     try {
       const response = await apiClient.get(`/api/meetings/room/${roomId}`);
-      return response.data;
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error fetching meetings by room:', error);
-      throw error;
+      console.warn('⚠️ Could not fetch meetings by room. Returning empty data.');
+      return [];
     }
   },
 
@@ -84,10 +123,10 @@ const meetingService = {
   getMeetingsByUser: async (userId) => {
     try {
       const response = await apiClient.get(`/api/meetings/user/${userId}`);
-      return response.data;
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error fetching meetings by user:', error);
-      throw error;
+      console.warn('⚠️ Could not fetch meetings by user. Returning empty data.');
+      return [];
     }
   },
 
@@ -95,10 +134,10 @@ const meetingService = {
   getUpcomingMeetings: async () => {
     try {
       const response = await apiClient.get('/api/meetings/upcoming');
-      return response.data;
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error fetching upcoming meetings:', error);
-      throw error;
+      console.warn('⚠️ Could not fetch upcoming meetings. Returning empty data.');
+      return [];
     }
   },
 
@@ -106,10 +145,10 @@ const meetingService = {
   getMeetingsToday: async () => {
     try {
       const response = await apiClient.get('/api/meetings/today');
-      return response.data;
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error fetching today meetings:', error);
-      throw error;
+      console.warn('⚠️ Could not fetch today meetings. Returning empty data.');
+      return [];
     }
   },
 
@@ -119,10 +158,10 @@ const meetingService = {
       const response = await apiClient.get('/api/meetings/search', {
         params: { title }
       });
-      return response.data;
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error searching meetings:', error);
-      throw error;
+      console.warn('⚠️ Could not search meetings. Returning empty data.');
+      return [];
     }
   },
 
@@ -132,10 +171,10 @@ const meetingService = {
       const response = await apiClient.get('/api/meetings/date-range', {
         params: { startTime, endTime }
       });
-      return response.data;
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error fetching meetings by date range:', error);
-      throw error;
+      console.warn('⚠️ Could not fetch meetings by date range. Returning empty data.');
+      return [];
     }
   },
 
@@ -145,10 +184,10 @@ const meetingService = {
       const response = await apiClient.get('/api/meetings/check-availability', {
         params: { roomId, startTime, endTime }
       });
-      return response.data;
+      return response.data.data;
     } catch (error) {
-      console.error('Error checking room availability:', error);
-      throw error;
+      console.warn('⚠️ Could not check room availability. Returning null.');
+      return null;
     }
   },
 
@@ -158,10 +197,10 @@ const meetingService = {
       const response = await apiClient.get(`/api/meetings/room-schedule/${roomId}`, {
         params: { startTime, endTime }
       });
-      return response.data;
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error fetching room schedule:', error);
-      throw error;
+      console.warn('⚠️ Could not fetch room schedule. Returning empty data.');
+      return [];
     }
   }
 };
