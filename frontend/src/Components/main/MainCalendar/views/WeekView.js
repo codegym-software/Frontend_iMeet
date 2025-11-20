@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { CalendarHelpers } from '../utils/CalendarHelpers';
 
 const WeekView = React.memo(({
@@ -7,11 +7,13 @@ const WeekView = React.memo(({
   onDateSelect,
   handleEventClick,
   handleEventDoubleClick,
-  handleEventContextMenu,
   handleEventMouseEnter,
   handleEventMouseLeave,
   formatTime,
-  currentTime
+  currentTime, // <-- THÊM currentTime VÀO ĐÂY
+  onSelectionComplete,
+  lockedSelection,
+  onLockSelection
 }) => {
   // ✅ Calculate overlapping events layout for a list of events (like Google Calendar)
   const calculateEventLayout = (dayEvents) => {
@@ -104,12 +106,23 @@ const WeekView = React.memo(({
 
   const today = new Date();
 
-  // Xử lý an toàn khi currentTime là undefined
-  const safeCurrentTime = currentTime || new Date();
-
   // Refs cho synchronized scrolling
   const timeLabelsRef = useRef(null);
   const contentGridRef = useRef(null);
+  const columnRefs = useRef([]);
+  const [selection, setSelection] = useState(null); // { startDate, endDate, startDayIndex }
+  const isSelectingRef = useRef(false);
+  const startDayIndexRef = useRef(null);
+  const selectionRef = useRef(null);
+  const onSelectionCompleteRef = useRef(onSelectionComplete);
+
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
+
+  useEffect(() => {
+    onSelectionCompleteRef.current = onSelectionComplete;
+  }, [onSelectionComplete]);
   // const allDayRef = useRef(null); // ✅ No longer needed with new layout
 
   // Synchronized scrolling
@@ -142,6 +155,24 @@ const WeekView = React.memo(({
 
   // Tính toán events cho từng ngày trong tuần
   const weekEvents = useMemo(() => {
+    console.log('📅 WeekView: Calculating weekEvents', {
+      eventsCount: events?.length || 0,
+      weekDays: weekDays.map(d => d.toISOString().split('T')[0])
+    });
+
+    // ✅ Log events structure
+    if (events && events.length > 0) {
+      console.log('📋 WeekView: Events received', events.map(e => ({
+        id: e.id,
+        title: e.title,
+        start: e.start?.toISOString(),
+        end: e.end?.toISOString(),
+        allDay: e.allDay
+      })));
+    } else {
+      console.warn('⚠️ WeekView: No events received!', { events });
+    }
+
     const eventsByDay = {};
 
     weekDays.forEach((day, index) => {
@@ -151,7 +182,7 @@ const WeekView = React.memo(({
       };
     });
 
-    events.forEach(event => {
+    events.forEach((event, eventIndex) => {
       // ✅ FIX: Sử dụng helper để check event thuộc ngày nào (fix lỗi timezone)
       const dayIndex = weekDays.findIndex(day => 
         CalendarHelpers.isEventOnDate(event, day)
@@ -160,14 +191,142 @@ const WeekView = React.memo(({
       if (dayIndex !== -1) {
         if (event.allDay) {
           eventsByDay[dayIndex].allDay.push(event);
+          console.log(`✅ WeekView: Event "${event.title}" added to day ${dayIndex} (all-day)`);
         } else {
           eventsByDay[dayIndex].timed.push(event);
+          console.log(`✅ WeekView: Event "${event.title}" added to day ${dayIndex} (timed)`, {
+            start: event.start?.toISOString(),
+            end: event.end?.toISOString()
+          });
         }
+      } else {
+        console.log(`❌ WeekView: Event "${event.title}" not matched to any day`, {
+          eventStart: event.start?.toISOString(),
+          eventEnd: event.end?.toISOString(),
+          weekDays: weekDays.map(d => d.toISOString().split('T')[0])
+        });
       }
+    });
+
+    // ✅ Log final weekEvents structure
+    console.log('📊 WeekView: Final weekEvents distribution', {
+      totalEvents: events.length,
+      byDay: Object.keys(eventsByDay).map(dayIndex => ({
+        day: weekDays[parseInt(dayIndex)].toISOString().split('T')[0],
+        allDay: eventsByDay[dayIndex].allDay.length,
+        timed: eventsByDay[dayIndex].timed.length
+      }))
     });
 
     return eventsByDay;
   }, [events, weekDays]);
+
+  const pixelToDate = useCallback((day, pixelY) => {
+    const PIXELS_PER_HOUR = 60;
+    const totalMinutes = Math.min(Math.max(Math.round(pixelY), 0), 24 * 60 - 1);
+    const hour = Math.floor(totalMinutes / PIXELS_PER_HOUR);
+    const minute = totalMinutes % PIXELS_PER_HOUR;
+    const date = new Date(day);
+    date.setHours(hour, minute, 0, 0);
+    return date;
+  }, []);
+
+  const getPixelPosition = useCallback((event) => {
+    const container = contentGridRef.current;
+    if (!container) return null;
+    const rect = container.getBoundingClientRect();
+    return event.clientY - rect.top + container.scrollTop;
+  }, []);
+
+  const getDayIndexFromEvent = useCallback((event) => {
+    if (!columnRefs.current) return -1;
+    return columnRefs.current.findIndex((col) => {
+      if (!col) return false;
+      const rect = col.getBoundingClientRect();
+      return event.clientX >= rect.left && event.clientX <= rect.right;
+    });
+  }, []);
+
+  const handleColumnMouseDown = useCallback((dayIndex, day, event) => {
+    if (event.target.closest('.calendar-event')) {
+      return;
+    }
+    if (onLockSelection) {
+      onLockSelection(null);
+    }
+    const pixelY = getPixelPosition(event);
+    if (pixelY == null) return;
+    const startDate = pixelToDate(day, pixelY);
+    if (!startDate) return;
+    isSelectingRef.current = true;
+    startDayIndexRef.current = dayIndex;
+    setSelection({
+      startDayIndex: dayIndex,
+      startDate,
+      endDate: startDate
+    });
+  }, [getPixelPosition, pixelToDate, onLockSelection]);
+
+  useEffect(() => {
+    const handleMouseMove = (event) => {
+      if (!isSelectingRef.current) return;
+      const startIndex = startDayIndexRef.current;
+      if (startIndex == null) return;
+
+      const columnIndex = getDayIndexFromEvent(event);
+      if (columnIndex !== startIndex) {
+        return;
+      }
+
+      const pixelY = getPixelPosition(event);
+      if (pixelY == null) return;
+
+      const day = weekDays[startIndex];
+      if (!day) return;
+
+      const endDate = pixelToDate(day, pixelY);
+      if (!endDate) return;
+
+      setSelection(prev => prev ? { ...prev, endDate } : prev);
+    };
+
+    const handleMouseUp = () => {
+      if (!isSelectingRef.current) return;
+      isSelectingRef.current = false;
+      const currentSelection = selectionRef.current;
+      const startIndex = startDayIndexRef.current;
+      startDayIndexRef.current = null;
+
+      if (!currentSelection || startIndex == null) {
+        setSelection(null);
+        return;
+      }
+
+      const start = new Date(Math.min(currentSelection.startDate.getTime(), currentSelection.endDate.getTime()));
+      const end = new Date(Math.max(currentSelection.startDate.getTime(), currentSelection.endDate.getTime()));
+      if (end.getTime() - start.getTime() < 15 * 60 * 1000) {
+        end.setTime(start.getTime() + 15 * 60 * 1000);
+      }
+
+      if (onLockSelection) {
+        onLockSelection({ start, end });
+      }
+
+      if (onSelectionCompleteRef.current) {
+        onSelectionCompleteRef.current({ start, end });
+      }
+
+      setSelection(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [getDayIndexFromEvent, getPixelPosition, pixelToDate, weekDays, onLockSelection]);
 
   return (
     <div className="time-table week-view">
@@ -214,7 +373,7 @@ const WeekView = React.memo(({
                   >
                     {weekEvents[dayIndex]?.allDay.map((event, eventIndex) => (
                       <div
-                        key={`${event.id}-all-day`}
+                        key={`event-${event.id}-all-day-${dayIndex}-${eventIndex}`}
                         className={`calendar-event week-all-day-event`}
                         style={{
                           backgroundColor: event.color,
@@ -224,14 +383,9 @@ const WeekView = React.memo(({
                           e.stopPropagation();
                           handleEventClick(event, e);
                         }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          handleEventDoubleClick && handleEventDoubleClick(event);
-                        }}
-                        onContextMenu={(e) => {
-                          e.stopPropagation();
-                          handleEventContextMenu && handleEventContextMenu(event, e);
-                        }}
+                        onDoubleClick={(e) => handleEventDoubleClick && handleEventDoubleClick(event, e)}
+                        onMouseEnter={(e) => handleEventMouseEnter(event, e)}
+                        onMouseLeave={handleEventMouseLeave}
                       >
                         <div className="event-title">
                           {event.title}
@@ -273,8 +427,13 @@ const WeekView = React.memo(({
                   <div
                     key={dayIndex}
                     className={`week-day-column ${isToday ? 'today' : ''}`}
+                    ref={(el) => { columnRefs.current[dayIndex] = el; }}
                   >
-                    <div className="week-day-time-cells">
+                    <div
+                      className="week-day-time-cells"
+                      onMouseDown={(e) => handleColumnMouseDown(dayIndex, day, e)}
+                      style={{ position: 'relative' }}
+                    >
                       {/* Render hour cells for clicking */}
                       {Array.from({ length: 24 }, (_, hour) => (
                         <div
@@ -287,6 +446,93 @@ const WeekView = React.memo(({
                           }}
                         />
                       ))}
+                      
+                      {selection && selection.startDayIndex === dayIndex && (
+                        <div
+                          className="week-selection-overlay"
+                          style={{
+                            position: 'absolute',
+                            top: `${Math.min(
+                              selection.startDate.getHours() * 60 + selection.startDate.getMinutes(),
+                              selection.endDate.getHours() * 60 + selection.endDate.getMinutes()
+                            )}px`,
+                            height: `${Math.max(
+                              Math.abs(
+                                (selection.endDate.getTime() - selection.startDate.getTime()) / (1000 * 60)
+                              ),
+                              12
+                            )}px`,
+                            left: 0,
+                            right: 0,
+                            backgroundColor: 'rgba(66, 133, 244, 0.2)',
+                            border: '2px solid #4285f4',
+                            borderRadius: '4px',
+                            pointerEvents: 'none',
+                            zIndex: 2
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '4px',
+                              left: '6px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              color: '#4285f4',
+                              backgroundColor: 'white',
+                              padding: '2px 4px',
+                              borderRadius: '2px'
+                            }}
+                          >
+                            {formatTime(selection.startDate <= selection.endDate ? selection.startDate : selection.endDate)}
+                            {' — '}
+                            {formatTime(selection.endDate >= selection.startDate ? selection.endDate : selection.startDate)}
+                          </div>
+                        </div>
+                      )}
+
+                      {!selection && lockedSelection && CalendarHelpers.isEventOnDate(
+                        {
+                          start: lockedSelection.start,
+                          end: lockedSelection.end
+                        },
+                        day
+                      ) && (
+                        <div
+                          className="week-selection-overlay"
+                          style={{
+                            position: 'absolute',
+                            top: `${lockedSelection.start.getHours() * 60 + lockedSelection.start.getMinutes()}px`,
+                            height: `${Math.max(
+                              (lockedSelection.end.getTime() - lockedSelection.start.getTime()) / (1000 * 60),
+                              12
+                            )}px`,
+                            left: 0,
+                            right: 0,
+                            backgroundColor: 'rgba(66, 133, 244, 0.2)',
+                            border: '2px solid #4285f4',
+                            borderRadius: '4px',
+                            pointerEvents: 'none',
+                            zIndex: 2
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '4px',
+                              left: '6px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              color: '#4285f4',
+                              backgroundColor: 'white',
+                              padding: '2px 4px',
+                              borderRadius: '2px'
+                            }}
+                          >
+                            {formatTime(lockedSelection.start)} — {formatTime(lockedSelection.end)}
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Render all events with absolute positioning */}
                       {dayEvents.map((event) => {
@@ -317,7 +563,7 @@ const WeekView = React.memo(({
 
                         return (
                           <div
-                            key={event.id}
+                            key={`event-${event.id}-${dayIndex}-${event.start.getTime()}`}
                             className={`calendar-event week-timed-event`}
                             style={{
                               top: `${top}px`,
@@ -331,12 +577,8 @@ const WeekView = React.memo(({
                               e.stopPropagation();
                               handleEventClick(event, e);
                             }}
-                            onContextMenu={(e) => {
-                              e.stopPropagation();
-                              handleEventContextMenu && handleEventContextMenu(event, e);
-                            }}
-                            onMouseEnter={(e) => handleEventMouseEnter && handleEventMouseEnter(event, e)}
-                            onMouseLeave={() => handleEventMouseLeave && handleEventMouseLeave()}
+                            onMouseEnter={(e) => handleEventMouseEnter(event, e)}
+                            onMouseLeave={handleEventMouseLeave}
                           >
                             <div className="event-content">
                               {duration < 30 ? (

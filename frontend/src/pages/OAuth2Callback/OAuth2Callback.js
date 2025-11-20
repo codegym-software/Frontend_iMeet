@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import authService from '../../services/authService';
-import { API_BASE_URL } from '../../constants/api';
 
 const OAuth2Callback = () => {
   const [status, setStatus] = useState('processing');
@@ -23,7 +22,7 @@ const OAuth2Callback = () => {
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Lấy thông tin user từ server
-      const response = await fetch(`${API_BASE_URL}/api/oauth2/user`, {
+      const response = await fetch('http://localhost:8081/api/oauth2/user', {
         credentials: 'include'
       });
       

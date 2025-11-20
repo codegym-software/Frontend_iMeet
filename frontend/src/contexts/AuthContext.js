@@ -200,6 +200,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
+    currentUser: user,
     setUser: setUserDirectly,
     isAuthenticated,
     authType,

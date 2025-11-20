@@ -2,15 +2,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './UpcomingMeetings.css';
 import { calendarAPI } from './MainCalendar/utils/CalendarAPI';
-import { useMeetings } from '../../contexts/MeetingContext';
 
-const UpcomingMeetings = () => {
+const UpcomingMeetings = ({ onMeetingDoubleClick }) => {
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [todayMeetingsCount, setTodayMeetingsCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(false);
-  const { meetings } = useMeetings(); // ✅ Listen to MeetingContext changes
-  const prevMeetingsLengthRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   // Format thời gian từ Date object
   const formatTime = (date) => {
@@ -39,28 +37,30 @@ const UpcomingMeetings = () => {
   // Load upcoming meetings từ API
   const loadUpcomingMeetings = async () => {
     try {
-      setLoading(true);
+      if (isMountedRef.current) setLoading(true);
       console.log('🔄 Loading upcoming meetings...');
-      
-      // Gọi API lấy upcoming meetings
-      const meetings = await calendarAPI.getUpcomingMeetings();
-      console.log('✅ Raw meetings from API:', meetings);
-      console.log('📊 Total meetings received:', meetings?.length || 0);
-      
-      // Nếu không có meetings, return empty
-      if (!meetings || meetings.length === 0) {
-        console.log('ℹ️ No upcoming meetings');
-        setUpcomingMeetings([]);
-        setLoading(false);
-        return;
-      }
       
       // ✅ Lấy current user ID
       const currentUser = JSON.parse(localStorage.getItem('user') || localStorage.getItem('oauth2User') || '{}');
       const currentUserId = currentUser.userId || currentUser.id;
       console.log('👤 Current user ID:', currentUserId);
       
-      // Lọc meetings sắp tới (của user, chưa diễn ra và không bị cancelled)
+      // Gọi API lấy upcoming meetings (với user ID)
+      const meetings = await calendarAPI.getUpcomingMeetings(currentUserId);
+      console.log('✅ Raw meetings from API:', meetings);
+      console.log('📊 Total meetings received:', meetings?.length || 0);
+      
+      // Nếu không có meetings, return empty
+      if (!meetings || meetings.length === 0) {
+        console.log('ℹ️ No upcoming meetings');
+        if (isMountedRef.current) {
+          setUpcomingMeetings([]);
+          setLoading(false);
+        }
+        return;
+      }
+      
+      // Lọc meetings sắp tới (chưa diễn ra và không bị cancelled)
       const now = new Date();
       console.log('🕐 Current time:', now);
       
@@ -74,9 +74,8 @@ const UpcomingMeetings = () => {
           const status = meeting.bookingStatus?.toUpperCase();
           const isFuture = startTime > now;
           const isNotCancelled = status !== 'CANCELLED';
-          const isUserMeeting = !currentUserId || meeting.userId === currentUserId; // ✅ Filter theo user
           
-          return isUserMeeting && isFuture && isNotCancelled;
+          return isFuture && isNotCancelled;
         })
         .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
         .slice(0, 3) // Chỉ lấy 3 meetings gần nhất
@@ -94,13 +93,13 @@ const UpcomingMeetings = () => {
       
       console.log('✨ Filtered upcoming meetings:', filteredMeetings);
       console.log('📈 Showing', filteredMeetings.length, 'meetings');
-      setUpcomingMeetings(filteredMeetings);
+      if (isMountedRef.current) setUpcomingMeetings(filteredMeetings);
     } catch (error) {
       console.error('❌ Error loading upcoming meetings:', error);
       console.error('Error details:', error.message);
-      setUpcomingMeetings([]);
+      if (isMountedRef.current) setUpcomingMeetings([]);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -108,7 +107,13 @@ const UpcomingMeetings = () => {
   const loadTodayMeetingsCount = async () => {
     try {
       console.log('Loading today meetings count...');
-      const meetings = await calendarAPI.getMeetingsToday();
+      
+      // ✅ Lấy current user ID
+      const currentUser = JSON.parse(localStorage.getItem('user') || localStorage.getItem('oauth2User') || '{}');
+      const currentUserId = currentUser.userId || currentUser.id;
+      console.log('👤 Current user ID:', currentUserId);
+      
+      const meetings = await calendarAPI.getMeetingsToday(currentUserId);
       console.log('Today meetings from API:', meetings);
       
       // Đếm số meetings chưa bị hủy
@@ -119,61 +124,46 @@ const UpcomingMeetings = () => {
       }).length;
       
       console.log('Today meetings count (not cancelled):', count);
-      setTodayMeetingsCount(count);
+      if (isMountedRef.current) setTodayMeetingsCount(count);
     } catch (error) {
       console.error('Error loading today meetings count:', error);
-      setTodayMeetingsCount(0);
+      if (isMountedRef.current) setTodayMeetingsCount(0);
     }
   };
 
   // Cập nhật thời gian hiện tại mỗi giây (real-time)
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
+      if (isMountedRef.current) setCurrentTime(new Date());
     }, 1000); // Cập nhật mỗi giây
 
     return () => clearInterval(timer);
   }, []);
 
-  // ✅ Load data khi component mount và khi có meeting mới
+  // Load data khi component mount
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
     
     const loadData = async () => {
-      if (isMounted) {
-        await loadUpcomingMeetings();
-        await loadTodayMeetingsCount();
-      }
+      if (!isMountedRef.current) return;
+      await loadUpcomingMeetings();
+      await loadTodayMeetingsCount();
     };
     
     loadData();
     
     // Refresh mỗi 5 phút
     const refreshInterval = setInterval(() => {
-      if (isMounted) {
+      if (isMountedRef.current) {
         loadData();
       }
     }, 5 * 60 * 1000);
     
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
       clearInterval(refreshInterval);
     };
-  }, []); // ✅ Empty dependency array - chỉ chạy khi mount
-
-  // ✅ Auto-refresh when meetings change (new meeting created)
-  useEffect(() => {
-    const currentMeetingsLength = meetings?.length || 0;
-    
-    // Check if a new meeting was added
-    if (currentMeetingsLength > prevMeetingsLengthRef.current) {
-      console.log('🔄 New meeting detected, refreshing Upcoming Meetings...');
-      loadUpcomingMeetings();
-      loadTodayMeetingsCount();
-    }
-    
-    prevMeetingsLengthRef.current = currentMeetingsLength;
-  }, [meetings]);
+  }, []); // ✅ Empty dependency array - chỉ chạy khi mount // ✅ No dependencies - only run on mount
 
   // Format thời gian còn lại
   const getTimeUntilMeeting = (meetingDate, meetingTime) => {
@@ -216,6 +206,20 @@ const UpcomingMeetings = () => {
               <div 
                 key={meeting.id} 
                 className={`meeting-item ${isNextMeeting(index) ? 'next-meeting' : ''}`}
+                onDoubleClick={async () => {
+                  if (onMeetingDoubleClick) {
+                    try {
+                      // Load full meeting data from API
+                      const fullMeeting = await calendarAPI.getMeetingById(meeting.id);
+                      if (fullMeeting) {
+                        onMeetingDoubleClick(fullMeeting);
+                      }
+                    } catch (error) {
+                      console.error('Error loading meeting details:', error);
+                    }
+                  }
+                }}
+                style={{ cursor: onMeetingDoubleClick ? 'pointer' : 'default' }}
               >
                 <div className="meeting-time">
                   <span className="time">{meeting.time}</span>

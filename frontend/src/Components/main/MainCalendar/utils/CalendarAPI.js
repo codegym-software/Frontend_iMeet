@@ -1,6 +1,5 @@
 // API service module
-import { API_BASE_URL } from '../../../../constants/api';
-const API_BASE_URL_WITH_API = `${API_BASE_URL}/api`;
+const API_BASE_URL = 'http://localhost:8081/api';
 
 // Helper function to get headers with auth token
 const getHeaders = () => {
@@ -20,7 +19,7 @@ export const calendarAPI = {
   // Lấy tất cả meetings
   async getAllMeetings() {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings`, {
+      const response = await fetch(`${API_BASE_URL}/meetings`, {
         credentials: 'include',
         headers: getHeaders(),
       });
@@ -44,11 +43,35 @@ export const calendarAPI = {
     }
   },
 
+  // Lấy cuộc họp theo phòng
+  async getMeetingsByRoom(roomId, signal) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/meetings/room/${roomId}`, {
+        credentials: 'include',
+        headers: getHeaders(),
+        signal,
+      });
+      if (!response.ok) {
+        console.warn('⚠️ Could not fetch meetings by room. Status:', response.status);
+        return [];
+      }
+      const data = await response.json();
+      if (data.success === false) {
+        console.warn('⚠️ Backend error (meetings by room):', data.message);
+        return [];
+      }
+      return data.data || [];
+    } catch (error) {
+      console.warn('⚠️ Could not fetch meetings by room. Returning empty data.');
+      return [];
+    }
+  },
+
   // Lấy meetings theo khoảng thời gian (với optional user filter)
   async getMeetingsByDateRange(startDate, endDate, userId = null) {
     try {
       // ✅ Build URL với optional userId parameter
-      let url = `${API_BASE_URL_WITH_API}/meetings/date-range?startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`;
+      let url = `${API_BASE_URL}/meetings/date-range?startTime=${startDate.toISOString()}&endTime=${endDate.toISOString()}`;
       
       if (userId) {
         url += `&userId=${userId}`;
@@ -82,10 +105,19 @@ export const calendarAPI = {
     }
   },
 
-  // Lấy meetings hôm nay
-  async getMeetingsToday() {
+  // Lấy meetings hôm nay (với optional user filter)
+  async getMeetingsToday(userId = null) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings/today`, {
+      let url = `${API_BASE_URL}/meetings/today`;
+      
+      if (userId) {
+        url += `?userId=${userId}`;
+        console.log(`📅 Fetching today meetings for user ${userId}`);
+      } else {
+        console.log(`📅 Fetching all today meetings`);
+      }
+      
+      const response = await fetch(url, {
         credentials: 'include',
         headers: getHeaders(),
       });
@@ -109,10 +141,19 @@ export const calendarAPI = {
     }
   },
 
-  // Lấy upcoming meetings
-  async getUpcomingMeetings() {
+  // Lấy upcoming meetings (với optional user filter)
+  async getUpcomingMeetings(userId = null) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings/upcoming`, {
+      let url = `${API_BASE_URL}/meetings/upcoming`;
+      
+      if (userId) {
+        url += `?userId=${userId}`;
+        console.log(`📅 Fetching upcoming meetings for user ${userId}`);
+      } else {
+        console.log(`📅 Fetching all upcoming meetings`);
+      }
+      
+      const response = await fetch(url, {
         credentials: 'include',
         headers: getHeaders(),
       });
@@ -139,7 +180,7 @@ export const calendarAPI = {
   // Lấy meeting theo ID
   async getMeetingById(meetingId) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings/${meetingId}`, {
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}`, {
         credentials: 'include',
         headers: getHeaders(),
       });
@@ -163,63 +204,181 @@ export const calendarAPI = {
     }
   },
 
+  // Mời người tham gia vào meeting
+  async inviteParticipants(meetingId, inviteRequest) {
+    try {
+      console.log('📧 Inviting participants to meeting:', meetingId, inviteRequest);
+      
+      // Ensure inviteRequest has the correct structure
+      const requestBody = {
+        emails: inviteRequest.emails || [],
+        message: inviteRequest.message || null
+      };
+      
+      console.log('📧 Request body:', JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/invite`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getHeaders(),
+        body: JSON.stringify(requestBody),
+      });
+      
+      // Try to parse response as JSON
+      let data;
+      try {
+        const text = await response.text();
+        console.log('📧 Response text:', text);
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('❌ Failed to parse invite response:', parseError);
+        throw new Error('Invalid response from server');
+      }
+      
+      if (data.success === false) {
+        console.error('❌ Backend error:', data.message);
+        throw new Error(data.message || 'Không thể mời người tham gia');
+      }
+      
+      if (!response.ok) {
+        console.error('❌ HTTP error:', response.status, data);
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+      
+      console.log('✅ Successfully invited participants:', data.data);
+      return data.data;
+    } catch (error) {
+      console.error('❌ Invite participants error:', error);
+      throw error;
+    }
+  },
+
+  // Lấy danh sách invitees của meeting
+  async getMeetingInvitees(meetingId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/invitees`, {
+        credentials: 'include',
+        headers: getHeaders(),
+      });
+      
+      if (response.status === 404) {
+        console.warn('⚠️ No invitees found for meeting:', meetingId);
+        return [];
+      }
+      
+      if (!response.ok) {
+        console.warn('⚠️ Could not fetch invitees. Status:', response.status);
+        return [];
+      }
+      
+      const data = await response.json();
+      
+      if (data.success === false) {
+        console.warn('⚠️ Backend error:', data.message);
+        return [];
+      }
+      
+      return data.data || [];
+    } catch (error) {
+      console.warn('⚠️ Could not fetch invitees. Returning empty array.');
+      return [];
+    }
+  },
+
   // Tạo meeting mới
   async createMeeting(meetingData) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings`, {
+      console.log('📤 Creating meeting with data:', meetingData);
+      
+      const response = await fetch(`${API_BASE_URL}/meetings`, {
         method: 'POST',
         credentials: 'include',
         headers: getHeaders(),
         body: JSON.stringify(meetingData),
       });
       
-      const data = await response.json();
+      console.log('📥 Response status:', response.status, response.statusText);
+      
+      // Get response text first (can only read once)
+      const responseText = await response.text();
+      
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ Failed to parse JSON. Response text:', responseText.substring(0, 200));
+        throw new Error(`Server response is not valid JSON. Status: ${response.status}`);
+      }
+      console.log('📥 Response data:', data);
       
       // Check backend success flag first
       if (data.success === false) {
-        console.warn('⚠️ Could not create meeting:', data.message);
+        console.warn('⚠️ Backend returned error:', data.message);
         throw new Error(data.message || 'Không thể tạo cuộc họp');
       }
       
       if (!response.ok) {
-        console.warn('⚠️ Could not create meeting. Status:', response.status);
-        throw new Error(data.message || 'Không thể tạo cuộc họp');
+        console.warn('⚠️ HTTP error. Status:', response.status);
+        throw new Error(data.message || `HTTP ${response.status}: Không thể tạo cuộc họp`);
+      }
+      
+      if (!data.data) {
+        console.warn('⚠️ Response missing data field:', data);
+        throw new Error('Response không chứa dữ liệu meeting');
       }
       
       console.log('✅ Meeting created successfully:', data.data);
       return data.data;
     } catch (error) {
-      console.warn('⚠️ Create meeting error:', error.message);
-      throw error;
+      console.error('❌ Create meeting error:', error);
+      // Re-throw with more context
+      if (error.message) {
+        throw error;
+      } else {
+        throw new Error('Lỗi không xác định khi tạo cuộc họp: ' + error.toString());
+      }
     }
   },
 
   // Cập nhật meeting
   async updateMeeting(meetingId, meetingData) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings/${meetingId}`, {
+      console.log('📤 Updating meeting:', meetingId, meetingData);
+      
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: getHeaders(),
         body: JSON.stringify(meetingData),
       });
       
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('❌ Failed to parse response:', parseError);
+        throw new Error('Invalid response from server');
+      }
       
       if (data.success === false) {
-        console.warn('⚠️ Could not update meeting:', data.message);
+        console.error('❌ Backend error:', data.message);
         throw new Error(data.message || 'Không thể cập nhật cuộc họp');
       }
       
       if (!response.ok) {
-        console.warn('⚠️ Could not update meeting. Status:', response.status);
-        throw new Error(data.message || 'Không thể cập nhật cuộc họp');
+        console.error('❌ HTTP error:', response.status, data);
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
       }
       
       console.log('✅ Meeting updated successfully:', data.data);
-      return data.data;
+      return {
+        meeting: data.data,
+        message: data.message || 'Cập nhật cuộc họp thành công'
+      };
     } catch (error) {
-      console.warn('⚠️ Update meeting error:', error.message);
+      console.error('❌ Update meeting error:', error);
       throw error;
     }
   },
@@ -227,13 +386,20 @@ export const calendarAPI = {
   // Xóa meeting
   async deleteMeeting(meetingId) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings/${meetingId}`, {
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: getHeaders(),
       });
       
-      const data = await response.json();
+      let data = {};
+      try {
+        const text = await response.text();
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('❌ Failed to parse delete response:', parseError);
+        throw new Error('Invalid response from server');
+      }
       
       if (data.success === false) {
         console.warn('⚠️ Could not delete meeting:', data.message);
@@ -246,7 +412,10 @@ export const calendarAPI = {
       }
       
       console.log('✅ Meeting deleted successfully');
-      return true;
+      return {
+        success: true,
+        message: data.message || 'Hủy cuộc họp thành công'
+      };
     } catch (error) {
       console.warn('⚠️ Delete meeting error:', error.message);
       throw error;
@@ -256,7 +425,7 @@ export const calendarAPI = {
   // Cập nhật trạng thái meeting
   async updateMeetingStatus(meetingId, status) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings/${meetingId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/status`, {
         method: 'PATCH',
         credentials: 'include',
         headers: getHeaders(),
@@ -271,11 +440,24 @@ export const calendarAPI = {
     }
   },
 
-  // Kiểm tra phòng có trống không
-  async checkRoomAvailability(roomId, startTime, endTime) {
+  // Kiểm tra phòng có trống không (hỗ trợ excludeMeetingId khi đang sửa)
+  async checkRoomAvailability(roomId, startTime, endTime, excludeMeetingId = null) {
     try {
+      const formatLocalDateTime = (date) => {
+        const d = date instanceof Date ? date : new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+      const start = formatLocalDateTime(startTime);
+      const end = formatLocalDateTime(endTime);
+      const excludeParam = excludeMeetingId != null ? `&excludeMeetingId=${excludeMeetingId}` : '';
       const response = await fetch(
-        `${API_BASE_URL_WITH_API}/meetings/check-availability?roomId=${roomId}&startTime=${startTime.toISOString()}&endTime=${endTime.toISOString()}`,
+        `${API_BASE_URL}/meetings/check-availability?roomId=${roomId}&startTime=${encodeURIComponent(start)}&endTime=${encodeURIComponent(end)}${excludeParam}`,
         {
           credentials: 'include',
           headers: getHeaders(),
@@ -293,7 +475,7 @@ export const calendarAPI = {
   // Tìm kiếm meetings
   async searchMeetings(title) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/meetings/search?title=${encodeURIComponent(title)}`, {
+      const response = await fetch(`${API_BASE_URL}/meetings/search?title=${encodeURIComponent(title)}`, {
         credentials: 'include',
         headers: getHeaders(),
       });

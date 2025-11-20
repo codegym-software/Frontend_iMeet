@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../constants/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8081';
 
 class RoomService {
   // Lấy token từ localStorage
@@ -472,6 +472,48 @@ class RoomService {
   // Lấy phòng có sẵn
   async getAvailableRooms() {
     return this.getRoomsByStatus('available');
+  }
+
+  // Lấy phòng trống theo khoảng thời gian (startTime, endTime)
+  async getAvailableRoomsInRange(startTime, endTime) {
+    try {
+      // Format datetime to ISO string for backend
+      const startDateTime = startTime instanceof Date ? startTime.toISOString() : new Date(startTime).toISOString();
+      const endDateTime = endTime instanceof Date ? endTime.toISOString() : new Date(endTime).toISOString();
+      
+      const params = new URLSearchParams({
+        startTime: startDateTime,
+        endTime: endDateTime
+      });
+      
+      const response = await fetch(`${API_BASE_URL}/api/rooms/available-in-range?${params}`, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const apiResponse = await response.json();
+      
+      if (apiResponse.success) {
+        return {
+          success: true,
+          data: apiResponse.data.map(room => this.mapRoomFromBackend(room)),
+          message: apiResponse.message
+        };
+      } else {
+        throw new Error(apiResponse.message || 'Lỗi khi lấy phòng trống theo khoảng thời gian');
+      }
+    } catch (error) {
+      console.error('Error fetching available rooms in range:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: []
+      };
+    }
   }
 
   // Lấy phòng theo sức chứa

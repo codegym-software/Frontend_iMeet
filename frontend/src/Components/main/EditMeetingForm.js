@@ -1,309 +1,612 @@
 // components/EditMeetingForm.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import './MeetingForm.css';
+import './EditMeetingForm.css';
 import { roomAPI } from './MainCalendar/utils/RoomAPI';
 import { calendarAPI } from './MainCalendar/utils/CalendarAPI';
 import DateTimePicker from '../common/DateTimePicker';
 import adminService from '../../services/adminService';
-import DeviceSelectorModal from './DeviceSelectorModal';
 import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
 import { useMeetingWithDevices } from '../../hooks/useMeetingWithDevices';
-import ColorPicker from '../common/ColorPicker';
-import roomService from '../../services/roomService';
-import { saveMeetingColor, getMeetingColor } from '../../utils/meetingColorStorage';
-import meetingService from '../../services/meetingService';
+
+const normalizeRoomId = (room) => Number(room?.roomId ?? room?.id);
 
 const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
+  console.log('EditMeetingForm - Meeting data:', meeting);
   
-  // ✅ ALWAYS EDITABLE - Allow editing all meetings (except cancelled)
-  // Only prevent editing if meeting is cancelled
-  const isEditable = meeting?.bookingStatus?.toUpperCase() !== 'CANCELLED';
+  // Check if meeting is editable - allow editing for all meetings except CANCELLED and COMPLETED
+  const bookingStatus = meeting?.bookingStatus?.toUpperCase();
+  const isEditable = bookingStatus !== 'CANCELLED' && bookingStatus !== 'COMPLETED';
+  
+  // ✅ NEW: Track full meeting details loaded from API
+  const [fullMeeting, setFullMeeting] = useState(meeting);
   
   const [formData, setFormData] = useState({
     title: meeting?.title || '',
     description: meeting?.description || '',
     startDateTime: meeting?.start ? new Date(meeting.start) : new Date(),
     endDateTime: meeting?.end ? new Date(meeting.end) : new Date(),
-    guests: meeting?.attendees?.join(', ') || '',
+    guests: [], // Changed to array to support multiple emails
     room: meeting?.roomId || '',
     devices: meeting?.deviceIds?.map(id => ({ deviceId: id, quantity: 1, deviceName: 'Device' + id })) || [],
-    isAllDay: meeting?.allDay || false,
-    color: meeting?.color || '#4285f4'
+    isAllDay: meeting?.allDay || false
   });
 
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [guestSuggestions, setGuestSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [guestInputValue, setGuestInputValue] = useState('');
+  const guestInputRef = useRef(null);
+  const suggestionsRef = useRef(null);
   const [rooms, setRooms] = useState([]);
-  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [availableRooms, setAvailableRooms] = useState([]); // Available rooms in selected time range
+  const [unavailableRooms, setUnavailableRooms] = useState([]); // Unavailable rooms in selected time range
+  const [selectedRoomDevices, setSelectedRoomDevices] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
-  const [showDeviceModal, setShowDeviceModal] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [selectedColor, setSelectedColor] = useState(meeting?.color || '#4285f4');
-  const [roomDevices, setRoomDevices] = useState([]); // Devices in selected room
-  const [loadingRoomDevices, setLoadingRoomDevices] = useState(false);
-  const datePickerRef = useRef(null);
+  const [invitees, setInvitees] = useState([]); // List of invitees with status
+  const [inviteeFilter, setInviteeFilter] = useState('all'); // 'all', 'PENDING', 'ACCEPTED', 'DECLINED'
+  const [loadingInvitees, setLoadingInvitees] = useState(true);
+
+  const normalizeInvitees = useCallback((list = []) => {
+    return list.map(inv => ({
+      id: inv.inviteeId || inv.id,
+      email: (inv.email || '').trim(),
+      fullName: inv.fullName || inv.name || inv.userName || null,
+      status: (inv.status || inv.inviteStatus || 'PENDING').toUpperCase(),
+      respondedAt: inv.respondedAt || inv.responseAt || inv.updatedAt || null
+    }));
+  }, []);
+  const [deviceSearch, setDeviceSearch] = useState(''); // Tìm kiếm thiết bị
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState('all'); // Lọc loại thiết bị
+  const [showDeviceFilter, setShowDeviceFilter] = useState(false); // Collapse/expand filter
   
   // ✅ USE CACHE - No more slow API calls!
-  const { getDevicesWithAvailability, checkAvailability } = useDeviceInventory();
+  const { getDevicesWithAvailability, checkAvailability, inventory, loading: inventoryLoading } = useDeviceInventory();
   const { updateMeetingWithDevices, deleteMeetingWithDevices } = useMeetingWithDevices();
   
-  // Get devices from cache - INSTANT!
+  // Get devices from cache - INSTANT! (with fallback)
   const allDevices = getDevicesWithAvailability();
   
-  // Format date for display
-  const formatDateDisplay = (date) => {
-    const months = ['thg 1', 'thg 2', 'thg 3', 'thg 4', 'thg 5', 'thg 6', 
-                    'thg 7', 'thg 8', 'thg 9', 'thg 10', 'thg 11', 'thg 12'];
-    return `${date.getDate()} ${months[date.getMonth()]}, ${date.getFullYear()}`;
-  };
-
-  // Format time for display
-  const formatTimeDisplay = (date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
-  // Update formData when meeting changes
+  // Debug: Log devices when they change
   useEffect(() => {
-    if (meeting) {
+    console.log('📱 EditMeetingForm - Devices loaded:', allDevices.length, 'devices', allDevices);
+    if (allDevices.length === 0) {
+      console.warn('⚠️ No devices available from inventory!');
+      console.log('  - Inventory loading:', inventoryLoading);
+      console.log('  - Inventory state:', Object.keys(inventory).length, 'items');
+    }
+  }, [allDevices, inventory, inventoryLoading]);
+  
+  // Update formData when meeting changes - use useMemo to prevent infinite loops
+  const meetingId = meeting?.id || meeting?.meetingId;
+  
+  // ✅ NEW: Fetch full meeting details including devices when form opens
+  useEffect(() => {
+    if (meetingId && !fullMeeting?.devices) {
+      // Meeting doesn't have devices yet, fetch full details
+      console.log('📥 Fetching full meeting details for ID:', meetingId);
+      calendarAPI.getMeetingById(meetingId)
+        .then(fullMeetingData => {
+          if (fullMeetingData) {
+            console.log('✅ Full meeting loaded with devices:', fullMeetingData);
+            setFullMeeting(fullMeetingData);
+          }
+        })
+        .catch(error => {
+          console.error('❌ Error fetching meeting details:', error);
+        });
+    } else if (!fullMeeting?.devices && meeting?.devices) {
+      // If meeting prop already has devices, use it
+      setFullMeeting(meeting);
+    }
+  }, [meetingId]);
+  
+  useEffect(() => {
+    if (fullMeeting && meetingId) {
+      console.log('Updating formData with fullMeeting:', fullMeeting);
+      // Convert attendees to guests array format (robust guards)
+      const attendeesRaw = Array.isArray(fullMeeting.attendees)
+        ? fullMeeting.attendees
+        : (typeof fullMeeting.attendees === 'string'
+            ? fullMeeting.attendees.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+            : []);
+      const guestsArray = attendeesRaw.map(email => ({ email, fullName: null }));
       
-      // ✅ Get color from localStorage first, then meeting data, then default
-      const storedColor = getMeetingColor(meeting.meetingId);
-      const meetingColor = storedColor || meeting.color || '#4285f4';
+      // ✅ FIX: Extract device data from fullMeeting inside useEffect so we use the updated state
+      const meetingDevicesData = fullMeeting?.devices;
+      const meetingDeviceIdsData = fullMeeting?.deviceIds;
       
-      // ✅ Map devices with proper names from allDevices
-      let devicesData = [];
-      if (meeting.devices && Array.isArray(meeting.devices)) {
-        devicesData = meeting.devices.map(device => {
-          const deviceId = device.deviceId || device.id;
-          const deviceInfo = allDevices.find(d => d.deviceId === deviceId);
+      // Load devices from meeting - check both deviceIds and devices array
+      let meetingDevices = [];
+      if (meetingDevicesData && Array.isArray(meetingDevicesData)) {
+        // If devices array exists, use it
+        console.log('📱 EditForm - Loading devices from meeting:', meetingDevicesData);
+        meetingDevices = meetingDevicesData.map(d => {
+          // Handle both numeric and string device IDs
+          const deviceId = d.deviceId || d.id;
+          const deviceInfo = allDevices.find(ad => {
+            // Compare as numbers to handle type mismatches
+            return Number(ad.deviceId) === Number(deviceId);
+          });
+          console.log(`  Device ${deviceId}: found=${!!deviceInfo}, qty=${d.quantityBorrowed}`);
           return {
             deviceId: deviceId,
-            quantity: device.quantity || 1,
-            deviceName: device.deviceName || device.name || deviceInfo?.name || `Device ${deviceId}`,
-            name: device.name || deviceInfo?.name || `Device ${deviceId}`
+            quantity: d.quantityBorrowed || d.quantity || 1,
+            deviceName: deviceInfo?.name || d.name || d.deviceName || `Device ${deviceId}`,
+            notes: d.notes || null
           };
         });
-      } else if (meeting.deviceIds && Array.isArray(meeting.deviceIds)) {
-        devicesData = meeting.deviceIds.map(deviceId => {
-          const deviceInfo = allDevices.find(d => d.deviceId === deviceId);
+      } else if (meetingDeviceIdsData && Array.isArray(meetingDeviceIdsData)) {
+        // Fallback to deviceIds
+        meetingDevices = meetingDeviceIdsData.map(id => {
+          const device = allDevices.find(d => Number(d.deviceId) === Number(id));
           return {
-            deviceId: deviceId,
+            deviceId: id,
             quantity: 1,
-            deviceName: deviceInfo?.name || `Device ${deviceId}`,
-            name: deviceInfo?.name || `Device ${deviceId}`
+            deviceName: device?.name || `Device ${id}`
           };
         });
       }
       
+      console.log('✅ EditForm - Final devices array:', meetingDevices);
       setFormData({
-        title: meeting.title || '',
-        description: meeting.description || '',
-        startDateTime: meeting.start ? new Date(meeting.start) : new Date(),
-        endDateTime: meeting.end ? new Date(meeting.end) : new Date(),
-        guests: meeting.attendees?.join(', ') || '',
-        room: meeting.roomId || '',
-        devices: devicesData,
-        isAllDay: meeting.allDay || false,
-        color: meetingColor
+        title: fullMeeting.title || '',
+        description: fullMeeting.description || '',
+        startDateTime: fullMeeting.start ? new Date(fullMeeting.start) : new Date(),
+        endDateTime: fullMeeting.end ? new Date(fullMeeting.end) : new Date(),
+        guests: guestsArray,
+        room: fullMeeting.roomId || '',
+        devices: meetingDevices,
+        isAllDay: fullMeeting.allDay || false
       });
-      setSelectedColor(meetingColor);
+
+      if (Array.isArray(fullMeeting.invitees) && fullMeeting.invitees.length > 0) {
+        setInvitees(normalizeInvitees(fullMeeting.invitees));
+      }
     }
-  }, [meeting, allDevices]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingId, fullMeeting?.devices, fullMeeting?.invitees, normalizeInvitees]); // Only depend on meeting ID to prevent infinite loops
 
-  // Load rooms
+  // Track if component is mounted to prevent memory leaks
+  const isMountedRef = useRef(true);
+  
   useEffect(() => {
-    let isMounted = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
+  // Load rooms only - devices từ cache rồi!
+  useEffect(() => {
     const loadRooms = async () => {
       try {
-        if (isMounted) setLoadingRooms(true);
+        if (isMountedRef.current) setLoadingRooms(true);
         const roomsData = await roomAPI.getAvailableRooms();
-        if (isMounted) {
-          setRooms(roomsData);
+        if (isMountedRef.current) {
+          const sortedRooms = [...roomsData].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          setRooms(sortedRooms);
+          // Initially, show all rooms as available
+          setAvailableRooms(sortedRooms);
+          setUnavailableRooms([]);
           
-          // Set selected room
+          // Load devices for current room
           if (formData.room) {
             const currentRoom = roomsData.find(r => r.roomId === parseInt(formData.room));
-            if (currentRoom) {
-              setSelectedRoom(currentRoom);
+            if (currentRoom?.devices) {
+              setSelectedRoomDevices(currentRoom.devices);
             }
           }
         }
       } catch (error) {
-        if (isMounted) {
+        if (isMountedRef.current) {
           console.error('Error loading rooms:', error);
           setErrors(prev => ({ ...prev, room: 'Không thể tải danh sách phòng' }));
         }
       } finally {
-        if (isMounted) setLoadingRooms(false);
+        if (isMountedRef.current) setLoadingRooms(false);
       }
     };
 
     loadRooms();
+    // ✅ Devices từ cache - không cần fetch nữa!
+  }, []);
+
+  // Fetch available rooms when start/end time changes (for edit form, exclude current meeting's room)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchRoomsAvailability = async () => {
+      if (!formData.startDateTime || !formData.endDateTime) return;
+      
+      try {
+        console.log('📡 Checking room availability for:', formData.startDateTime, 'to', formData.endDateTime);
+        
+        // Get rooms that are FREE (không có meeting) trong khoảng thời gian được chọn
+        const availableData = await roomAPI.getAvailableRoomsInRange(
+          formData.startDateTime,
+          formData.endDateTime
+        );
+        
+        if (isMounted) {
+          // Map room IDs từ availableData - phòm trống
+          const availableIds = availableData.map(r => normalizeRoomId(r));
+          
+          console.log('🔍 All rooms:', rooms.map(r => ({ id: r.roomId || r.id, name: r.name })));
+          console.log('✅ Available rooms (không có lịch):', availableIds);
+          
+          // Chia phòm thành 2 nhóm
+          let available = rooms
+            .filter(r => availableIds.includes(normalizeRoomId(r)))
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          
+          let unavailable = rooms
+            .filter(r => !availableIds.includes(normalizeRoomId(r)))
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+          // Nếu đang edit, giữ phòm hiện tại ở nhóm available (ở đầu)
+          const currentRoomId = formData.room ? Number(formData.room) : null;
+          if (currentRoomId) {
+            const currentRoomInAvailable = available.some(r => {
+              const id = normalizeRoomId(r);
+              return id === currentRoomId;
+            });
+            
+            if (!currentRoomInAvailable) {
+              // Phòm hiện tại bị unavailable, cần move nó lên available
+              const currentRoom = rooms.find(r => {
+                const id = normalizeRoomId(r);
+                return id === currentRoomId;
+              });
+              
+              if (currentRoom) {
+                // Remove từ unavailable
+                unavailable = unavailable.filter(r => {
+                  const id = normalizeRoomId(r);
+                  return id !== currentRoomId;
+                });
+                // Add vào đầu available
+                available = [currentRoom, ...available];
+              }
+            }
+          }
+          
+          setAvailableRooms(available);
+          setUnavailableRooms(unavailable);
+          console.log('📊 Result:', available.length, 'available,', unavailable.length, 'unavailable, currentRoomId=', currentRoomId);
+
+          if (formData.room && !available.some(r => normalizeRoomId(r) === Number(formData.room))) {
+            setFormData(prev => ({
+              ...prev,
+              room: ''
+            }));
+            setErrors(prev => ({
+              ...prev,
+              room: 'Phòng đã có lịch trong khoảng thời gian này. Vui lòng chọn phòng khác.'
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error fetching room availability:', error);
+        // Fallback: show all rooms as available
+        if (isMounted) {
+          setAvailableRooms(rooms);
+          setUnavailableRooms([]);
+        }
+      }
+    };
+
+    fetchRoomsAvailability();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [formData.startDateTime, formData.endDateTime, rooms, formData.room]);
 
-  // Update selected room when formData.room changes and load room devices
+  // Load room devices when room changes
   useEffect(() => {
+    const loadRoomDevices = async () => {
     if (formData.room) {
-      const currentRoom = rooms.find(r => r.roomId === parseInt(formData.room));
-      if (currentRoom) {
-        setSelectedRoom(currentRoom);
-        
-        // ✅ Load devices in this room
-        const loadRoomDevices = async () => {
-          try {
-            setLoadingRoomDevices(true);
-            const roomId = currentRoom.roomId || currentRoom.id;
-            const response = await roomService.getDevicesByRoom(roomId);
-            if (response && response.success && Array.isArray(response.data)) {
-              setRoomDevices(response.data.map(rd => ({
-                deviceId: rd.deviceId,
-                deviceName: rd.deviceName,
-                quantity: rd.quantityAssigned || 1
-              })));
-            } else {
-              setRoomDevices([]);
-            }
-          } catch (error) {
-            console.error('Error loading room devices:', error);
-            setRoomDevices([]);
-          } finally {
-            setLoadingRoomDevices(false);
+        try {
+          const roomDevices = await roomAPI.getRoomDevices(parseInt(formData.room));
+          if (isMountedRef.current) {
+            setSelectedRoomDevices(roomDevices || []);
           }
-        };
-        
-        loadRoomDevices();
-      }
-    } else {
-      setSelectedRoom(null);
-      setRoomDevices([]);
-    }
-  }, [formData.room, rooms]);
-  
-  // Close date pickers when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
-        setShowStartDatePicker(false);
-        setShowEndDatePicker(false);
-        setShowStartTimePicker(false);
-        setShowEndTimePicker(false);
+        } catch (error) {
+          console.error('Error loading room devices:', error);
+          if (isMountedRef.current) {
+            setSelectedRoomDevices([]);
+          }
+        }
+      } else {
+        if (isMountedRef.current) {
+        setSelectedRoomDevices([]);
+        }
       }
     };
     
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+    loadRoomDevices();
+  }, [formData.room]);
+
+  // Load invitees when meeting changes
+  useEffect(() => {
+    const loadInvitees = async () => {
+      if (!meetingId) {
+        setInvitees([]);
+        if (isMountedRef.current) setLoadingInvitees(false);
+        return;
+      }
+
+      if (isMountedRef.current) setLoadingInvitees(true);
+      try {
+        const inviteesData = await calendarAPI.getMeetingInvitees(meetingId);
+        if (isMountedRef.current) {
+          setInvitees(normalizeInvitees(inviteesData || []));
+        }
+      } catch (error) {
+        console.error('Error loading invitees:', error);
+        if (isMountedRef.current) {
+          setInvitees([]);
+        }
+      } finally {
+        if (isMountedRef.current) setLoadingInvitees(false);
+      }
     };
-  }, []);
+    
+    loadInvitees();
+  }, [meetingId, normalizeInvitees]);
+
+  const inviteeSummary = useMemo(() => {
+    return invitees.reduce((acc, inv) => {
+      const status = inv.status || 'PENDING';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, { PENDING: 0, ACCEPTED: 0, DECLINED: 0 });
+  }, [invitees]);
+
+  const filteredInvitees = useMemo(() => {
+    if (inviteeFilter === 'all') return invitees;
+    return invitees.filter(inv => inv.status === inviteeFilter);
+  }, [invitees, inviteeFilter]);
+
+  const handleRoomChange = (e) => {
+    const { value } = e.target;
+    const roomId = value ? Number(value) : '';
+
+    if (roomId) {
+      const isRoomAvailable = availableRooms.some(room => normalizeRoomId(room) === roomId);
+      if (!isRoomAvailable) {
+        setErrors(prev => ({
+          ...prev,
+          room: 'Phòng đã có lịch trong khoảng thời gian này. Vui lòng chọn phòng khác.'
+        }));
+        return;
+      }
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      room: roomId
+    }));
+
+    if (errors.room) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.room;
+        return newErrors;
+      });
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
     
     // Clear error when user starts typing
     if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  // Search users for guest autocomplete
+  const searchUsers = async (query) => {
+    if (!query || query.length < 2) {
+      setGuestSuggestions([]);
+      return [];
+    }
+
+    try {
+      setIsLoading(true);
+      // Call getUsers with individual parameters, not an object
+      const response = await adminService.getUsers(0, 10, 'email', 'asc', query.trim());
+      
+      // Response structure: { users: [...] } or { data: { content: [...] } }
+      let users = [];
+      if (response && response.users && Array.isArray(response.users)) {
+        users = response.users;
+      } else if (response && response.data && response.data.content && Array.isArray(response.data.content)) {
+        users = response.data.content;
+      } else if (response && response.data && Array.isArray(response.data)) {
+        users = response.data;
+      }
+      
+      const mappedUsers = users.map(user => ({
+        id: user.userId || user.id,
+        email: user.email,
+        fullName: user.fullName || user.name || null
+      }));
+      
+      return mappedUsers;
+    } catch (error) {
+      console.warn('⚠️ Error searching users:', error);
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Validate email format - more lenient to allow various email formats
+  const isValidEmail = (email) => {
+    if (!email || typeof email !== 'string') return false;
+    
+    const trimmed = email.trim();
+    if (trimmed.length === 0) return false;
+    
+    // More lenient email regex - allows most valid email formats
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    
+    return emailRegex.test(trimmed);
+  };
+
+  // Handle guest input change
+  const handleGuestChange = async (e) => {
+    const value = e.target.value;
+    setGuestInputValue(value);
+
+    // Clear error when user starts typing
+    if (errors.guests) {
       setErrors(prev => ({
         ...prev,
-        [name]: ''
+        guests: ''
       }));
     }
+
+    // Show suggestions if query is not empty and doesn't contain comma
+    if (value.trim().length > 1 && !value.includes(',')) {
+      const suggestions = await searchUsers(value.trim());
+      setGuestSuggestions(suggestions);
+      setShowSuggestions(true);
+    } else {
+      setGuestSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Handle guest input key press (Enter, Comma)
+  const handleGuestKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addGuest(guestInputValue.trim());
+    } else if (e.key === 'Backspace' && guestInputValue === '' && formData.guests.length > 0) {
+      // Remove last guest if input is empty and backspace is pressed
+      removeGuest(formData.guests.length - 1);
+    }
+  };
+
+  // Add guest (from suggestion or manual input)
+  const addGuest = (emailOrUser) => {
+    let email = '';
+    let fullName = null;
+
+    if (typeof emailOrUser === 'string') {
+      email = emailOrUser.trim();
+    } else if (emailOrUser && emailOrUser.email) {
+      email = emailOrUser.email.trim();
+      fullName = emailOrUser.fullName || emailOrUser.name || null;
+    }
+
+    if (!email) {
+      setErrors(prev => ({
+        ...prev,
+        guests: 'Vui lòng nhập email'
+      }));
+      return;
+    }
+
+    // Validate email format
+    if (!isValidEmail(email)) {
+      setErrors(prev => ({
+        ...prev,
+        guests: `Email không hợp lệ: "${email}". Vui lòng kiểm tra lại định dạng email.`
+      }));
+      return;
+    }
+
+    // Check if email already exists
+    if (formData.guests.some(g => g.email.toLowerCase() === email.toLowerCase())) {
+      setErrors(prev => ({
+        ...prev,
+        guests: `Email "${email}" đã được thêm rồi`
+      }));
+      setGuestInputValue('');
+      return;
+    }
+    
+    // Add to guests list
+    setFormData(prev => ({
+      ...prev,
+      guests: [...prev.guests, { email, fullName }]
+    }));
+
+    setGuestInputValue('');
+    setShowSuggestions(false);
+    setGuestSuggestions([]);
+    
+    // Clear any previous errors
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.guests;
+      return newErrors;
+    });
+  };
+
+  // Handle guest selection from suggestions
+  const handleGuestSelect = (user) => {
+    addGuest(user);
+  };
+
+  // Remove guest
+  const removeGuest = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      guests: prev.guests.filter((_, i) => i !== index)
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (isLoading) return;
-    
-    // Validate form
-    const newErrors = {};
-    
-    // Validate title
-    if (!formData.title.trim()) {
-      newErrors.title = 'Vui lòng nhập tiêu đề cuộc họp';
-    } else if (formData.title.trim().length > 100) {
-      newErrors.title = 'Tiêu đề không được quá 100 ký tự';
-    }
-    
-    // Validate start time
-    if (!formData.startDateTime) {
-      newErrors.startDateTime = 'Vui lòng chọn thời gian bắt đầu';
-    }
-    
-    // Validate end time
-    if (!formData.endDateTime) {
-      newErrors.endDateTime = 'Vui lòng chọn thời gian kết thúc';
-    }
-    
-    // Validate date range
-    if (formData.startDateTime && formData.endDateTime) {
-      if (formData.endDateTime <= formData.startDateTime) {
-        newErrors.endDateTime = 'Thời gian kết thúc phải sau thời gian bắt đầu';
-      }
-      
-      // Check if meeting is in past
-      const now = new Date();
-      if (formData.startDateTime < now) {
-        newErrors.startDateTime = 'Không thể đặt lịch trong quá khứ';
-      }
-      
-      // Check reasonable duration
-      const duration = formData.endDateTime.getTime() - formData.startDateTime.getTime();
-      const durationInHours = duration / (1000 * 60 * 60);
-      if (durationInHours > 24) {
-        newErrors.endDateTime = 'Cuộc họp không được kéo dài quá 24 giờ';
-      }
-    }
-
-    // Validate room
-    if (!formData.room) {
-      newErrors.room = 'Vui lòng chọn phòng họp';
-    }
-    
-    // Validate color
-    if (!formData.color) {
-      newErrors.color = 'Vui lòng chọn màu cho lịch';
-    }
-    
-    // Validate description
-    if (formData.description && formData.description.trim().length > 500) {
-      newErrors.description = 'Mô tả không được quá 500 ký tự';
-    }
-
-    // Validate devices (if any selected)
-    if (formData.devices && formData.devices.length > 0) {
-      const invalidDevices = formData.devices.filter(d => !d.deviceId || d.quantity <= 0);
-      if (invalidDevices.length > 0) {
-        newErrors.devices = 'Vui lòng kiểm tra lại số lượng thiết bị mượn';
-      }
-    }
-    
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-    
     setIsLoading(true);
-    
+    setErrors({});
+
     try {
-      // Helper function to format date as LocalDateTime string
+      // Resolve meeting ID once to avoid shadowing errors
+      const currentMeetingId = (meeting?.meetingId || meeting?.id || meetingId);
+      if (!currentMeetingId) {
+        throw new Error('Không tìm thấy ID của cuộc họp. Vui lòng thử lại.');
+      }
+      // Validate
+      if (!formData.title.trim()) {
+        setErrors({ title: 'Tiêu đề không được để trống' });
+        setIsLoading(false);
+        return;
+      }
+
+      if (!formData.room) {
+        setErrors({ room: 'Vui lòng chọn phòng họp' });
+        setIsLoading(false);
+        return;
+      }
+
+      // Pre-check room availability before updating (exclude current meeting to avoid self-conflict)
+      try {
+        const isAvailable = await calendarAPI.checkRoomAvailability(
+          parseInt(formData.room),
+          formData.startDateTime,
+          formData.endDateTime,
+          currentMeetingId
+        );
+        if (!isAvailable) {
+          throw new Error('Phòng đã có lịch trong khoảng thời gian này. Vui lòng chọn phòng khác.');
+        }
+      } catch (availErr) {
+        throw availErr;
+      }
+
+      // Format dates
       const formatLocalDateTime = (date) => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -314,602 +617,1128 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
         return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
       };
       
-      // ✅ Get meeting ID (support both id and meetingId)
-      const meetingId = meeting.meetingId || meeting.id;
-      if (!meetingId) {
-        throw new Error('Không tìm thấy ID cuộc họp');
-      }
+      // Get current attendees from invitees, not meeting
+      const currentInvitees = invitees || [];
+      const currentAttendeeEmails = currentInvitees.map(invitee => invitee.email.toLowerCase().trim());
       
-      // Prepare meeting data for API
+      // Get all guest emails from form
+      const allGuestEmails = formData.guests
+        .map(g => g.email)
+        .filter(email => email && email.trim().length > 0 && isValidEmail(email.trim()))
+        .map(email => email.trim().toLowerCase());
+      
+      // Only invite NEW emails that are not already invited
+      const inviteEmails = allGuestEmails.filter(email => !currentAttendeeEmails.includes(email));
+      
+      console.log('📧 Current invitees:', currentAttendeeEmails);
+      console.log('📧 All guest emails:', allGuestEmails); 
+      console.log('📧 New invite emails:', inviteEmails);
+
+      // Prepare meeting data
       const meetingData = {
         title: formData.title,
         description: formData.description || '',
         startTime: formatLocalDateTime(formData.startDateTime),
         endTime: formatLocalDateTime(formData.endDateTime),
         isAllDay: formData.isAllDay,
-        roomId: parseInt(formData.room),
-        participants: formData.guests ? formData.guests.split(',').map(g => g.trim()).filter(g => g) : [],
-        // ✅ Backend expects 'devices' array with MeetingDeviceRequestItem format
-        // Format: [{ deviceId: Long, quantityBorrowed: Integer, notes: String }]
-        devices: formData.devices.map(d => ({
-          deviceId: d.deviceId,
-          quantityBorrowed: d.quantity || 1,
-          notes: d.notes || ''
-        })),
-        color: formData.color || selectedColor
+        roomId: parseInt(formData.room)
       };
       
-      // Call API to update meeting
-      const updatedMeeting = await calendarAPI.updateMeeting(meetingId, meetingData);
-      
-      // ✅ Save color to localStorage (frontend-only)
-      const finalMeetingId = updatedMeeting.meetingId || updatedMeeting.id || meetingId;
-      if (finalMeetingId && meetingData.color) {
-        saveMeetingColor(finalMeetingId, meetingData.color);
+      // Only add devices if there are any
+      if (formData.devices && formData.devices.length > 0) {
+        meetingData.devices = formData.devices.map(d => ({
+          deviceId: d.deviceId,
+          quantityBorrowed: d.quantity || 1,
+          notes: d.notes || null
+        }));
       }
       
-      // ✅ OPTIMISTIC UPDATE
-      updateMeetingWithDevices(meeting, updatedMeeting);
+      // Handled earlier with invitees list instead of meeting.attendees
       
-      // ✅ Invite new participants if guests are provided
-      if (formData.guests && formData.guests.trim()) {
+      // Don't send inviteEmails in updateMeeting - backend doesn't handle it
+      // We'll call invite API separately after update
+      
+      // Log meeting data before sending
+      console.log('📤 Sending update meeting data:', JSON.stringify(meetingData, null, 2));
+      console.log('📧 Current attendees:', currentAttendeeEmails);
+      console.log('📧 All guest emails:', allGuestEmails);
+      console.log('📧 New invite emails to add:', inviteEmails);
+      
+      console.log('📝 Updating meeting with ID:', currentMeetingId);
+      
+      // Call API to update meeting (without inviteEmails)
+      const { meeting: updatedMeeting, message: updateMessage } = await calendarAPI.updateMeeting(currentMeetingId, meetingData);
+      
+      if (!updatedMeeting) {
+        throw new Error('Không nhận được dữ liệu meeting sau khi cập nhật');
+      }
+      
+      console.log('✅ Meeting updated successfully:', updatedMeeting);
+      
+      // If there are new invite emails, call invite API separately
+      if (inviteEmails.length > 0) {
         try {
-          const finalMeetingId = updatedMeeting?.meetingId || updatedMeeting?.id || meetingId;
-          if (finalMeetingId) {
-            // Parse emails from guests field (comma-separated)
-            const emails = formData.guests
-              .split(',')
-              .map(email => email.trim())
-              .filter(email => email && email.includes('@')); // Basic email validation
-            
-            if (emails.length > 0) {
-              // Invite participants (async, don't wait for result)
-              meetingService.inviteParticipants(finalMeetingId, emails, formData.description || null)
-                .then(result => {
-                  if (result.success) {
-                    console.log('✅ Đã mời thành công:', result.data.length, 'người');
-                  } else {
-                    console.warn('⚠️ Mời không thành công:', result.message);
-                  }
-                })
-                .catch(error => {
-                  console.warn('⚠️ Lỗi khi mời:', error);
-                });
-            }
-          }
-        } catch (error) {
-          console.warn('⚠️ Lỗi khi mời người tham gia:', error);
-          // Don't fail the meeting update if invite fails
+          console.log('📧 Inviting additional participants:', inviteEmails);
+          const inviteResult = await calendarAPI.inviteParticipants(currentMeetingId, {
+            emails: inviteEmails,
+            message: null
+          });
+          console.log('✅ Successfully invited additional participants:', inviteResult);
+        } catch (inviteError) {
+          console.warn('⚠️ Failed to invite additional participants:', inviteError);
+          // Show warning but don't fail the whole update
+          setErrors(prev => ({ 
+            ...prev, 
+            invite: `Cập nhật meeting thành công nhưng không thể mời một số người tham gia: ${inviteError.message || 'Unknown error'}` 
+          }));
         }
+      }
+      
+      // ✅ OPTIMISTIC UPDATE - Return old devices, borrow new ones
+      try {
+        updateMeetingWithDevices(meeting, updatedMeeting);
+      } catch (deviceError) {
+        console.warn('⚠️ Error updating device inventory:', deviceError);
+        // Don't fail the whole update if device update fails
       }
       
       // Call parent onSubmit callback
-      if (onSubmit) {
-        onSubmit(updatedMeeting, 'Cập nhật cuộc họp thành công!');
+      if (isMountedRef.current && onSubmit) {
+        onSubmit(updatedMeeting, updateMessage || 'Cập nhật cuộc họp thành công!');
       }
       
       // Close form after success
-      setTimeout(() => {
-        if (onClose) {
-          onClose();
-        }
-      }, 100);
-    } catch (error) {
-      console.error('❌ Error updating meeting:', error);
-      
-      // Extract error message from various error formats
-      let errorMessage = 'Không thể cập nhật cuộc họp. Vui lòng thử lại.';
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
+      if (isMountedRef.current) {
+        setTimeout(() => {
+          if (isMountedRef.current && onClose) {
+            onClose();
+          }
+        }, 100);
       }
-      
-      setErrors({ submit: errorMessage });
-      
-      // Show error toast if onSubmit callback exists
-      if (onSubmit) {
-        onSubmit(null, errorMessage);
+    } catch (error) {
+      console.error('Error updating meeting:', error);
+      if (isMountedRef.current) {
+        setErrors({ submit: error.message || 'Không thể cập nhật cuộc họp. Vui lòng thử lại.' });
+        // Thông báo lỗi lên parent để hiển thị Toast
+        if (onSubmit) {
+          onSubmit(null, error.message || 'Không thể cập nhật cuộc họp. Vui lòng thử lại.');
+        }
       }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
-  // Get meeting color
-  const getMeetingColor = () => {
-    return selectedColor || formData.color || '#4285f4';
-  };
-
   return (
-    <div className="edit-meeting-fullscreen">
-      {/* Top Bar */}
-      <div className="edit-meeting-topbar">
-        <button 
-          className="edit-meeting-close-btn"
-          onClick={onClose}
-          title="Đóng"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-        <div className="edit-meeting-topbar-right">
-          <button 
-            type="submit"
-            form="edit-meeting-form"
-            className="edit-meeting-save-btn"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Đang lưu...' : 'Lưu'}
-          </button>
-          <button className="edit-meeting-more-btn">
-            Thao tác khác
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Title Section */}
-      <div className="edit-meeting-title-section">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
-          {isEditingTitle ? (
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => {
-                setFormData(prev => ({ ...prev, title: e.target.value }));
-                setIsEditingTitle(false);
-              }}
-              onBlur={() => setIsEditingTitle(false)}
-              className="edit-meeting-title-input"
-              autoFocus
-              disabled={!isEditable}
-              style={{ flex: 1 }}
-            />
-          ) : (
-            <div 
-              className="edit-meeting-title-display"
-              onClick={() => isEditable && setIsEditingTitle(true)}
-              style={{ cursor: isEditable ? 'text' : 'default', flex: 1 }}
+    <div className="create-meeting-modal-overlay">
+      <div className="google-calendar-form">
+        {/* Header */}
+        <div className="google-calendar-header">
+          <div className="google-calendar-header-left">
+            <button className="google-calendar-close-btn" onClick={onClose}>×</button>
+          </div>
+          <div className="google-calendar-header-right">
+            <button
+              type="button"
+              className="google-calendar-save-btn"
+              onClick={handleSubmit}
+              disabled={isLoading || !isEditable}
             >
-              {formData.title || 'Nhập tiêu đề'}
+              {isLoading ? 'Đang lưu...' : 'Lưu'}
+            </button>
+          </div>
+        </div>
+        
+        {/* Notice for non-editable meetings */}
+        {!isEditable && (
+          <div style={{
+            padding: '12px 24px',
+            backgroundColor: '#fff3cd',
+            borderBottom: '1px solid #e0e0e0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <span style={{ fontSize: '20px' }}>ℹ️</span>
+            <span style={{ color: '#856404', fontSize: '14px', fontWeight: '500' }}>
+              Cuộc họp này đã bị hủy hoặc đã hoàn thành. Bạn chỉ có thể xem thông tin.
+            </span>
+          </div>
+        )}
+        
+        {/* Body - 2 columns */}
+        <div className="google-calendar-body">
+          {/* Main Content - Left */}
+          <div className="google-calendar-main">
+            <form onSubmit={handleSubmit}>
+              {/* Title - At the top */}
+              <div className="google-calendar-field" style={{ marginBottom: '24px' }}>
+              <input
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                placeholder="Thêm tiêu đề"
+                  className="google-calendar-input"
+                  style={{ 
+                    fontSize: '22px', 
+                    fontWeight: '400', 
+                    padding: '12px 0', 
+                    border: 'none', 
+                    borderBottom: '1px solid transparent',
+                    minHeight: 'auto'
+                  }}
+                disabled={!isEditable}
+                  onFocus={(e) => e.target.style.borderBottomColor = '#1a73e8'}
+                  onBlur={(e) => e.target.style.borderBottomColor = 'transparent'}
+              />
+                {errors.title && <span style={{ color: '#d93025', fontSize: '12px', marginTop: '4px', display: 'block' }}>{errors.title}</span>}
             </div>
-          )}
-          {/* Color Picker Button */}
-          <button
-            type="button"
-            className="edit-meeting-color-btn"
-            onClick={() => isEditable && setShowColorPicker(!showColorPicker)}
-            disabled={!isEditable}
-            title="Chọn màu"
-          >
-            <div 
-              className="edit-meeting-color-indicator"
-              style={{ backgroundColor: getMeetingColor() }}
-            ></div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
-          {showColorPicker && (
-            <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 1000, marginTop: '8px' }}>
-              <ColorPicker
-                selectedColor={selectedColor}
-                onColorSelect={(color) => {
-                  setSelectedColor(color);
-                  setFormData(prev => ({ ...prev, color: color }));
-                  setShowColorPicker(false);
+
+              {/* Chi tiết sự kiện heading */}
+              <div style={{ marginBottom: '16px', marginTop: '8px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '500', color: '#202124', margin: 0 }}>Chi tiết sự kiện</h3>
+          </div>
+
+              {/* Date & Time - Separate fields: Date, Start Time, End Time */}
+              <div className="google-calendar-field">
+                <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                  {/* Date Picker - Only date */}
+              <DateTimePicker
+                value={formData.startDateTime}
+                onChange={(date) => {
+                  // Update both start and end date, keeping the time
+                  const newStart = new Date(date);
+                  newStart.setHours(formData.startDateTime.getHours(), formData.startDateTime.getMinutes());
                   
-                  // ✅ Save to localStorage immediately (frontend-only)
-                  if (meeting?.id || meeting?.meetingId) {
-                    const meetingId = meeting.id || meeting.meetingId;
-                    saveMeetingColor(meetingId, color);
+                  const newEnd = new Date(date);
+                  newEnd.setHours(formData.endDateTime.getHours(), formData.endDateTime.getMinutes());
+                  
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    startDateTime: newStart,
+                    endDateTime: newEnd
+                  }));
+                }}
+                showTime={false}
+                showDate={true}
+                    placeholder="Chọn ngày"
+                    className="google-calendar-input"
+                displayFormat="date"
+                disabled={!isEditable}
+                    style={{ minWidth: '150px', flexShrink: 0 }}
+              />
+              
+                  {/* Start Time Picker */}
+              <DateTimePicker
+                value={formData.startDateTime}
+                onChange={(date) => {
+                  setFormData(prev => ({ ...prev, startDateTime: date }));
+                      // Automatically set end time 1 hour later if end time is before start
+                  if (date >= formData.endDateTime) {
+                    const endDate = new Date(date.getTime() + 60 * 60 * 1000);
+                    setFormData(prev => ({ ...prev, endDateTime: endDate }));
                   }
                 }}
-                onClose={() => setShowColorPicker(false)}
+                showTime={true}
+                    showDate={false}
+                mode="start"
+                    placeholder="9:00 AM"
+                    className="google-calendar-input"
+                displayFormat="time"
+                    disabled={!isEditable}
+                    style={{ minWidth: '100px', textAlign: 'center', flexShrink: 0 }}
               />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Date & Time Section */}
-      <div className="edit-meeting-datetime-section" ref={datePickerRef}>
-        {/* Start Date */}
-        <div style={{ position: 'relative', minWidth: '160px' }}>
-          <DateTimePicker
-            value={formData.startDateTime}
-            onChange={(date) => {
-              // ✅ When date picker changes, preserve time from current startDateTime
-              // Only update if date actually changed (compare dates, not time)
-              const newDate = new Date(date);
-              const currentDate = new Date(formData.startDateTime);
               
-              // Compare dates only (ignore time)
-              const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-              const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+                  <span style={{ color: '#5f6368', fontSize: '14px', flexShrink: 0 }}>tới</span>
               
-              if (newDateOnly.getTime() !== currentDateOnly.getTime()) {
-                const currentHours = formData.startDateTime.getHours();
-                const currentMinutes = formData.startDateTime.getMinutes();
-                newDate.setHours(currentHours, currentMinutes, 0, 0);
-                
-                setFormData(prev => ({ ...prev, startDateTime: newDate }));
-                setShowStartDatePicker(false);
-              }
-            }}
-            placeholder="Chọn ngày bắt đầu"
-            showTime={false}
-            showDate={true}
-            displayFormat="date"
-            disabled={!isEditable}
-            className="edit-meeting-date-picker"
-            isOpen={showStartDatePicker}
-            onOpen={() => {
-              setShowStartDatePicker(true);
-              setShowEndDatePicker(false);
-              setShowStartTimePicker(false);
-              setShowEndTimePicker(false);
-            }}
-            onClose={() => setShowStartDatePicker(false)}
-          />
-        </div>
-        
-        {/* Start Time */}
-        <div style={{ position: 'relative', minWidth: '140px' }}>
-          <DateTimePicker
-            value={formData.startDateTime}
-            onChange={(date) => {
-              // ✅ When time picker changes, preserve date from current startDateTime
-              // Only update if time actually changed
-              const newTime = new Date(date);
-              const currentTime = new Date(formData.startDateTime);
+                  {/* End Time Picker */}
+              <DateTimePicker
+                value={formData.endDateTime}
+                onChange={(date) => setFormData(prev => ({ ...prev, endDateTime: date }))}
+                showTime={true}
+                    showDate={false}
+                mode="end"
+                baseDate={formData.startDateTime}
+                    placeholder="10:00 AM"
+                    className="google-calendar-input"
+                displayFormat="time"
+                    disabled={!isEditable}
+                    style={{ minWidth: '100px', textAlign: 'center', flexShrink: 0 }}
+              />
               
-              if (newTime.getHours() !== currentTime.getHours() || 
-                  newTime.getMinutes() !== currentTime.getMinutes()) {
-                const newStart = new Date(formData.startDateTime);
-                newStart.setHours(newTime.getHours(), newTime.getMinutes(), 0, 0);
-                
-                setFormData(prev => {
-                  const updated = { ...prev, startDateTime: newStart };
-                  // Auto-adjust end time if start >= end
-                  if (newStart >= prev.endDateTime) {
-                    const endDate = new Date(newStart.getTime() + 60 * 60 * 1000);
-                    updated.endDateTime = endDate;
-                  }
-                  return updated;
-                });
-                setShowStartTimePicker(false);
-              }
-            }}
-            placeholder="Chọn giờ bắt đầu"
-            showTime={true}
-            showDate={false}
-            displayFormat="time"
-            disabled={!isEditable}
-            className="edit-meeting-time-picker"
-            isOpen={showStartTimePicker}
-            onOpen={() => {
-              setShowStartTimePicker(true);
-              setShowStartDatePicker(false);
-              setShowEndDatePicker(false);
-              setShowEndTimePicker(false);
-            }}
-            onClose={() => setShowStartTimePicker(false)}
-          />
-        </div>
-        
-        <span className="edit-meeting-time-separator">tới</span>
-        
-        {/* End Time */}
-        <div style={{ position: 'relative', minWidth: '140px' }}>
-          <DateTimePicker
-            value={formData.endDateTime}
-            onChange={(date) => {
-              // ✅ When time picker changes, preserve date from current endDateTime
-              // Only update if time actually changed
-              const newTime = new Date(date);
-              const currentTime = new Date(formData.endDateTime);
-              
-              if (newTime.getHours() !== currentTime.getHours() || 
-                  newTime.getMinutes() !== currentTime.getMinutes()) {
-                const newEnd = new Date(formData.endDateTime);
-                newEnd.setHours(newTime.getHours(), newTime.getMinutes(), 0, 0);
-                
-                setFormData(prev => ({ ...prev, endDateTime: newEnd }));
-                setShowEndTimePicker(false);
-              }
-            }}
-            placeholder="Chọn giờ kết thúc"
-            showTime={true}
-            showDate={false}
-            displayFormat="time"
-            disabled={!isEditable}
-            mode="end"
-            baseDate={formData.startDateTime}
-            className="edit-meeting-time-picker"
-            isOpen={showEndTimePicker}
-            onOpen={() => {
-              setShowEndTimePicker(true);
-              setShowStartDatePicker(false);
-              setShowEndDatePicker(false);
-              setShowStartTimePicker(false);
-            }}
-            onClose={() => setShowEndTimePicker(false)}
-          />
-        </div>
-        
-        {/* End Date */}
-        <div style={{ position: 'relative', minWidth: '160px' }}>
-          <DateTimePicker
-            value={formData.endDateTime}
-            onChange={(date) => {
-              // ✅ When date picker changes, preserve time from current endDateTime
-              // Only update if date actually changed (compare dates, not time)
-              const newDate = new Date(date);
-              const currentDate = new Date(formData.endDateTime);
-              
-              // Compare dates only (ignore time)
-              const newDateOnly = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
-              const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-              
-              if (newDateOnly.getTime() !== currentDateOnly.getTime()) {
-                const currentHours = formData.endDateTime.getHours();
-                const currentMinutes = formData.endDateTime.getMinutes();
-                newDate.setHours(currentHours, currentMinutes, 0, 0);
-                
-                setFormData(prev => ({ ...prev, endDateTime: newDate }));
-                setShowEndDatePicker(false);
-              }
-            }}
-            placeholder="Chọn ngày kết thúc"
-            showTime={false}
-            showDate={true}
-            displayFormat="date"
-            disabled={!isEditable}
-            className="edit-meeting-date-picker"
-            isOpen={showEndDatePicker}
-            onOpen={() => {
-              setShowEndDatePicker(true);
-              setShowStartDatePicker(false);
-              setShowStartTimePicker(false);
-              setShowEndTimePicker(false);
-            }}
-            onClose={() => setShowEndDatePicker(false)}
-          />
-        </div>
-        <label className="edit-meeting-allday-checkbox">
-          <input
-            type="checkbox"
-            checked={formData.isAllDay}
-            onChange={(e) => {
-              setFormData(prev => ({ ...prev, isAllDay: e.target.checked }));
-              if (e.target.checked) {
-                const startDate = new Date(formData.startDateTime);
-                startDate.setHours(0, 0, 0, 0);
-                const endDate = new Date(formData.endDateTime);
-                endDate.setHours(23, 59, 59, 999);
-                setFormData(prev => ({ 
-                  ...prev, 
-                  startDateTime: startDate,
-                  endDateTime: endDate
-                }));
-              }
-            }}
-            disabled={!isEditable}
-          />
-          <span>Cả ngày</span>
-        </label>
-      </div>
-
-      {/* Main Content - Two Columns */}
-      <div className="edit-meeting-content">
-        <form id="edit-meeting-form" onSubmit={handleSubmit}>
-          <div className="edit-meeting-two-columns">
-            {/* Left Column - Chi tiết lịch họp */}
-            <div className="edit-meeting-left-column">
-              <div className="edit-meeting-section-title">Chi tiết lịch họp</div>
-
-              {/* Phòng */}
-              <div className="edit-meeting-field">
-                <span className="edit-meeting-field-icon">🏢</span>
-                <select
-                  name="room"
-                  value={formData.room}
+              {/* All Day Checkbox - Inline */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px', cursor: isEditable ? 'pointer' : 'default', flexShrink: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={formData.isAllDay}
                   onChange={(e) => {
-                    handleChange(e);
-                    const selected = rooms.find(r => r.roomId === parseInt(e.target.value));
-                    setSelectedRoom(selected);
+                    setFormData(prev => ({ ...prev, isAllDay: e.target.checked }));
+                    if (e.target.checked) {
+                      const startDate = new Date(formData.startDateTime);
+                      startDate.setHours(0, 0, 0, 0);
+                      const endDate = new Date(formData.endDateTime);
+                      endDate.setHours(23, 59, 59, 999);
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        startDateTime: startDate,
+                        endDateTime: endDate
+                      }));
+                    }
                   }}
-                  className="edit-meeting-field-input"
-                  disabled={loadingRooms || !isEditable}
-                >
-                  <option value="">Chọn phòng</option>
-                  {rooms.map(room => (
-                    <option key={room.roomId} value={room.roomId}>
-                      {room.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  disabled={!isEditable}
+                  style={{ width: '18px', height: '18px', cursor: isEditable ? 'pointer' : 'default' }}
+                />
+                    <span style={{ fontSize: '14px', color: '#202124' }}>Cả ngày</span>
+              </label>
+            </div>
+          </div>
 
-              {/* Vị trí */}
-              <div className="edit-meeting-field">
-                <span className="edit-meeting-field-icon">📍</span>
-                <div className="edit-meeting-field-input" style={{ color: '#5f6368', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                  {selectedRoom && selectedRoom.location 
-                    ? selectedRoom.location
-                    : 'Chưa chọn phòng'
-                  }
+              {/* Room Selection */}
+              <div className="google-calendar-field">
+                <div className="google-calendar-field-label">
+                  <span className="google-calendar-field-icon">🏛️</span>
+              <select
+                name="room"
+                value={formData.room}
+                onChange={handleRoomChange}
+                    className="google-calendar-input"
+                disabled={loadingRooms || !isEditable}
+                    style={{ flex: 1 }}
+              >
+                    <option value="">Chọn phòng họp</option>
+                {/* ✅ Available rooms - normal styling */}
+                {availableRooms.length > 0 && (
+                  <optgroup label="✅ Phòng trống (có thể đặt)">
+                    {availableRooms.map(room => (
+                      <option
+                        key={room.roomId || room.id}
+                        value={normalizeRoomId(room)}
+                      >
+                        {room.name} - Sức chứa: {room.capacity || 10} người
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {/* ❌ Unavailable rooms - disabled */}
+                {unavailableRooms.length > 0 && (
+                  <optgroup label="❌ Phòng đã có lịch (không thể chọn)" disabled>
+                    {unavailableRooms.map(room => (
+                      <option
+                        key={room.roomId || room.id}
+                        value={normalizeRoomId(room)}
+                        disabled
+                        style={{ color: '#9e9e9e' }}
+                      >
+                        {room.name} - Sức chứa: {room.capacity || 10} người
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {/* Fallback to show all rooms if no data */}
+                {availableRooms.length === 0 && unavailableRooms.length === 0 && (
+                  <>
+                    {rooms.map(room => (
+                      <option
+                        key={room.roomId || room.id}
+                        value={normalizeRoomId(room)}
+                      >
+                        {room.name} - Sức chứa: {room.capacity || 10} người
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
                 </div>
               </div>
-              
-              {/* Thiết bị trong phòng */}
-              <div className="edit-meeting-field">
-                <span className="edit-meeting-field-icon">🔌</span>
-                <div className="edit-meeting-field-input" style={{ padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e0e0e0', minHeight: '60px' }}>
-                  {loadingRoomDevices ? (
-                    <span style={{ color: '#5f6368', fontSize: '14px' }}>Đang tải...</span>
-                  ) : roomDevices.length > 0 ? (
+
+              {/* Location */}
+              <div className="google-calendar-field">
+                <div className="google-calendar-field-label">
+                  <span className="google-calendar-field-icon">📍</span>
+                  <input
+                    type="text"
+                    placeholder="Thêm vị trí"
+                    className="google-calendar-input"
+                    value={formData.room ? rooms.find(r => r.roomId === parseInt(formData.room))?.location || '' : ''}
+                    readOnly
+                  />
+            </div>
+          </div>
+
+          {/* Room Devices Display */}
+          {formData.room && selectedRoomDevices.length > 0 && (
+                <div className="google-calendar-field">
+                  <div className="google-calendar-field-label">
+                    <span className="google-calendar-field-icon">🔧</span>
+                    <span style={{ fontWeight: '500', marginBottom: '8px' }}>Thiết bị trong phòng:</span>
+                  </div>
+                <div style={{ 
+                  padding: '12px', 
+                  backgroundColor: '#f8f9fa', 
+                  borderRadius: '8px',
+                    border: '1px solid #e9ecef',
+                    marginTop: '8px'
+                }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {roomDevices.map(device => (
-                        <span 
-                          key={device.deviceId} 
+                      {selectedRoomDevices.map(device => (
+                        <span
+                          key={device.deviceId}
                           style={{
                             padding: '6px 12px',
-                            backgroundColor: '#e3f2fd',
-                            color: '#1976d2',
-                            borderRadius: '16px',
+                            backgroundColor: '#e7f3ff',
+                            color: '#0056b3',
+                            borderRadius: '6px',
                             fontSize: '13px',
                             fontWeight: '500',
-                            border: '1px solid #90caf9'
+                            border: '1px solid #b3d9ff'
                           }}
                         >
-                          {device.deviceName} x{device.quantity}
+                            {device.deviceName || device.name} {(device.deviceType || device.type) ? `- ${device.deviceType || device.type}` : ''} (SL: {device.quantityAssigned || device.quantity || 1})
                         </span>
                       ))}
-                    </div>
-                  ) : selectedRoom ? (
-                    <span style={{ color: '#5f6368', fontSize: '14px' }}>Phòng này chưa có thiết bị</span>
-                  ) : (
-                    <span style={{ color: '#5f6368', fontSize: '14px' }}>Chưa chọn phòng</span>
-                  )}
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Thiết bị mượn */}
-              <div className="edit-meeting-field">
-                <span className="edit-meeting-field-icon">💻</span>
-                <div className="edit-meeting-device-section" style={{ padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e0e0e0', minHeight: '80px' }}>
-                  {formData.devices.length > 0 ? (
-                    <div className="edit-meeting-devices-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                      {formData.devices.map(device => {
-                        // ✅ Get device name from allDevices if not available
+              {/* Borrowed Devices Display & Management */}
+              <div className="google-calendar-field">
+                <div className="google-calendar-field-label">
+                  <span className="google-calendar-field-icon">💻</span>
+                  <span style={{ fontWeight: '500' }}>Thiết bị mượn:</span>
+                </div>
+
+                {/* Hiển thị thiết bị được chọn dạng tags */}
+                {formData.devices.length > 0 && (
+                  <div style={{
+                    marginTop: '12px',
+                    marginBottom: '16px',
+                    padding: '12px',
+                    backgroundColor: '#e8f5e9',
+                    borderRadius: '8px',
+                    border: '1px solid #4caf50'
+                  }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#2e7d32', marginBottom: '10px' }}>
+                      Thiết bị được chọn ({formData.devices.length}):
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {formData.devices.map((device, index) => {
                         const deviceInfo = allDevices.find(d => d.deviceId === device.deviceId);
-                        const deviceName = device.deviceName || device.name || deviceInfo?.name || `Device ${device.deviceId}`;
+                        const displayName = device.deviceName || deviceInfo?.name || `Device ${device.deviceId}`;
                         return (
-                          <span 
-                            key={device.deviceId} 
-                            className="edit-meeting-device-tag"
+                          <div
+                            key={device.deviceId || index}
                             style={{
-                              padding: '8px 14px',
-                              backgroundColor: '#fff3e0',
-                              color: '#e65100',
-                              borderRadius: '16px',
-                              fontSize: '13px',
-                              fontWeight: '500',
-                              border: '1px solid #ffcc80',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '4px'
+                              gap: '6px',
+                              padding: '6px 12px',
+                              backgroundColor: '#fff',
+                              border: '1px solid #4caf50',
+                              borderRadius: '20px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              color: '#2e7d32'
                             }}
                           >
-                            {deviceName} <span style={{ opacity: 0.7 }}>x{device.quantity || 1}</span>
-                          </span>
+                            <span>{displayName} (SL: {device.quantity})</span>
+                            {isEditable && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newDevices = formData.devices.filter((_, i) => i !== index);
+                                  setFormData(prev => ({ ...prev, devices: newDevices }));
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#2e7d32',
+                                  cursor: 'pointer',
+                                  fontSize: '16px',
+                                  padding: '0',
+                                  width: '16px',
+                                  height: '16px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: '50%',
+                                  transition: 'background-color 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(76, 175, 80, 0.1)'}
+                                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
-                  ) : (
-                    <span style={{ color: '#5f6368', fontSize: '14px', display: 'block', marginBottom: '12px' }}>Chưa có thiết bị</span>
-                  )}
+                  </div>
+                )}
+
+                {/* Search & Filter */}
+                {isEditable && (
+                  <div style={{ marginTop: '12px', marginBottom: '12px' }}>
+                    {/* Tìm kiếm */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        placeholder="🔍 Tìm kiếm thiết bị..."
+                        value={deviceSearch}
+                        onChange={(e) => setDeviceSearch(e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: '10px 12px',
+                          border: '1px solid #dadce0',
+                          borderRadius: '4px',
+                          fontSize: '14px',
+                          boxSizing: 'border-box',
+                          transition: 'border-color 0.2s'
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#1a73e8'}
+                        onBlur={(e) => e.target.style.borderColor = '#dadce0'}
+                      />
+                      
+                      {/* Nút gấp/mở filter */}
+                      <button
+                        type="button"
+                        onClick={() => setShowDeviceFilter(!showDeviceFilter)}
+                        style={{
+                          padding: '10px 16px',
+                          border: '1px solid #dadce0',
+                          borderRadius: '4px',
+                          background: showDeviceFilter ? '#e3f2fd' : 'white',
+                          color: showDeviceFilter ? '#1a73e8' : '#5f6368',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          transition: 'all 0.2s',
+                          minWidth: '100px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        {showDeviceFilter ? '▼ Ẩn lọc' : '▶ Lọc loại'}
+                      </button>
+                    </div>
+
+                    {/* Lọc loại thiết bị - Collapse/Expand */}
+                    {showDeviceFilter && (
+                      <div style={{
+                        padding: '12px',
+                        backgroundColor: '#f5f5f5',
+                        borderRadius: '4px',
+                        border: '1px solid #e0e0e0',
+                        marginBottom: '12px'
+                      }}>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#202124', marginBottom: '10px' }}>
+                          🏷️ Chọn loại thiết bị:
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => setDeviceTypeFilter('all')}
+                            style={{
+                              padding: '8px 14px',
+                              borderRadius: '16px',
+                              border: '1px solid #dadce0',
+                              background: deviceTypeFilter === 'all' ? '#1a73e8' : 'white',
+                              color: deviceTypeFilter === 'all' ? 'white' : '#5f6368',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              fontWeight: '500'
+                            }}
+                          >
+                            Tất cả
+                          </button>
+                          {[...new Set(allDevices.map(d => {
+                            const type = d.deviceType || d.type || 'Khác';
+                            // Dịch sang tiếng Việt
+                            const typeMap = {
+                              'MIC': 'Microphone',
+                              'CAM': 'Camera',
+                              'LAPTOP': 'Laptop',
+                              'BANG': 'Bảng',
+                              'MAN_HINH': 'Màn hình',
+                              'KHAC': 'Khác',
+                              'MAY_CHIEU': 'Máy chiếu'
+                            };
+                            return typeMap[type] || type;
+                          }))].map(type => (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => {
+                                // Map back to original type
+                                const typeMapReverse = {
+                                  'Microphone': 'MIC',
+                                  'Camera': 'CAM',
+                                  'Laptop': 'LAPTOP',
+                                  'Bảng': 'BANG',
+                                  'Màn hình': 'MAN_HINH',
+                                  'Khác': 'KHAC',
+                                  'Máy chiếu': 'MAY_CHIEU'
+                                };
+                                setDeviceTypeFilter(typeMapReverse[type] || type);
+                              }}
+                              style={{
+                                padding: '8px 14px',
+                                borderRadius: '16px',
+                                border: '1px solid #dadce0',
+                                background: (() => {
+                                  const typeMapReverse = {
+                                    'Microphone': 'MIC',
+                                    'Camera': 'CAM',
+                                    'Laptop': 'LAPTOP',
+                                    'Bảng': 'BANG',
+                                    'Màn hình': 'MAN_HINH',
+                                    'Khác': 'KHAC',
+                                    'Máy chiếu': 'MAY_CHIEU'
+                                  };
+                                  return deviceTypeFilter === (typeMapReverse[type] || type) ? '#1a73e8' : 'white';
+                                })(),
+                                color: (() => {
+                                  const typeMapReverse = {
+                                    'Microphone': 'MIC',
+                                    'Camera': 'CAM',
+                                    'Laptop': 'LAPTOP',
+                                    'Bảng': 'BANG',
+                                    'Màn hình': 'MAN_HINH',
+                                    'Khác': 'KHAC',
+                                    'Máy chiếu': 'MAY_CHIEU'
+                                  };
+                                  return deviceTypeFilter === (typeMapReverse[type] || type) ? 'white' : '#5f6368';
+                                })(),
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                fontWeight: '500'
+                              }}
+                            >
+                              {type}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Device Table */}
+                {isEditable && (
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '8px',
+                    border: '1px solid #e9ecef',
+                    overflow: 'hidden',
+                    marginBottom: '12px',
+                    maxHeight: '350px',
+                    overflowY: 'auto'
+                  }}>
+                    <table style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      fontSize: '13px'
+                    }}>
+                      <thead style={{ position: 'sticky', top: 0 }}>
+                        <tr style={{
+                          backgroundColor: '#e9ecef',
+                          borderBottom: '1px solid #dee2e6'
+                        }}>
+                          <th style={{ padding: '10px', textAlign: 'left', fontWeight: '600', color: '#202124' }}>Chọn</th>
+                          <th style={{ padding: '10px', textAlign: 'left', fontWeight: '600', color: '#202124' }}>Tên thiết bị</th>
+                          <th style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#202124' }}>Loại</th>
+                          <th style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#202124' }}>SL mượn</th>
+                          <th style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: '#202124' }}>Còn lại</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allDevices
+                          .filter(device => {
+                            // Filter by search
+                            const searchMatch = !deviceSearch || 
+                              device.name.toLowerCase().includes(deviceSearch.toLowerCase());
+                            // Filter by type
+                            const typeMatch = deviceTypeFilter === 'all' || 
+                              (device.deviceType || device.type || 'Khác') === deviceTypeFilter;
+                            return searchMatch && typeMatch;
+                          })
+                          .map((device, index) => {
+                            const selected = formData.devices.find(d => d.deviceId === device.deviceId);
+                            const typeMap = {
+                              'MIC': 'Microphone',
+                              'CAM': 'Camera',
+                              'LAPTOP': 'Laptop',
+                              'BANG': 'Bảng',
+                              'MAN_HINH': 'Màn hình',
+                              'KHAC': 'Khác',
+                              'MAY_CHIEU': 'Máy chiếu'
+                            };
+                            const deviceType = typeMap[device.deviceType || device.type] || (device.deviceType || device.type || 'Khác');
+                            
+                            return (
+                              <tr
+                                key={device.deviceId}
+                                style={{
+                                  borderBottom: '1px solid #e9ecef',
+                                  backgroundColor: selected ? '#fff3e0' : (index % 2 === 0 ? 'white' : '#f8f9fa'),
+                                  transition: 'background-color 0.2s',
+                                  cursor: 'pointer'
+                                }}
+                                onClick={() => {
+                                  // Click anywhere on row to toggle selection
+                                  if (selected) {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      devices: prev.devices.filter(d => d.deviceId !== device.deviceId)
+                                    }));
+                                  } else {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      devices: [...prev.devices, {
+                                        deviceId: device.deviceId,
+                                        quantity: 1,
+                                        deviceName: device.name
+                                      }]
+                                    }));
+                                  }
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!selected) e.currentTarget.style.backgroundColor = '#f0f0f0';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = selected ? '#fff3e0' : (index % 2 === 0 ? 'white' : '#f8f9fa');
+                                }}
+                              >
+                                <td style={{ padding: '10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!selected}
+                                    onChange={() => {}}
+                                    style={{ cursor: 'pointer' }}
+                                  />
+                                </td>
+                                <td style={{ padding: '10px', color: '#202124', fontWeight: '500' }}>
+                                  {device.name}
+                                </td>
+                                <td style={{ padding: '10px', textAlign: 'center' }}>
+                                  <span style={{
+                                    display: 'inline-block',
+                                    padding: '4px 8px',
+                                    backgroundColor: '#e7f3ff',
+                                    color: '#0056b3',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    fontWeight: '500'
+                                  }}>
+                                    {deviceType}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '10px', textAlign: 'center' }}>
+                                  {selected ? (
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max={device.available || 1}
+                                      value={selected.quantity}
+                                      onChange={(e) => {
+                                        const newQuantity = Math.min(parseInt(e.target.value) || 1, device.available || 1);
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          devices: prev.devices.map(d =>
+                                            d.deviceId === device.deviceId
+                                              ? { ...d, quantity: newQuantity }
+                                              : d
+                                          )
+                                        }));
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{
+                                        width: '50px',
+                                        padding: '4px 6px',
+                                        border: '1px solid #dadce0',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        textAlign: 'center',
+                                        fontWeight: '600',
+                                        color: '#202124'
+                                      }}
+                                    />
+                                  ) : (
+                                    <span style={{ color: '#5f6368' }}>-</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '10px', textAlign: 'center' }}>
+                                  <span style={{
+                                    display: 'inline-block',
+                                    padding: '4px 8px',
+                                    backgroundColor: device.available > 0 ? '#e8f5e9' : '#ffebee',
+                                    color: device.available > 0 ? '#2e7d32' : '#c62828',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    fontWeight: '600'
+                                  }}>
+                                    {device.available}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                    {allDevices.filter(device => {
+                      const searchMatch = !deviceSearch || 
+                        device.name.toLowerCase().includes(deviceSearch.toLowerCase());
+                      const typeMatch = deviceTypeFilter === 'all' || 
+                        (device.deviceType || device.type || 'Khác') === deviceTypeFilter;
+                      return searchMatch && typeMatch;
+                    }).length === 0 && (
+                      <div style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>
+                        Không tìm thấy thiết bị nào
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Reset button */}
+                {isEditable && formData.devices.length > 0 && (
                   <button
                     type="button"
-                    className="edit-meeting-device-btn"
-                    onClick={() => setShowDeviceModal(true)}
-                    disabled={!isEditable}
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, devices: [] }));
+                      setDeviceSearch('');
+                      setDeviceTypeFilter('all');
+                      setShowDeviceFilter(false);
+                    }}
                     style={{
-                      padding: '10px 20px',
-                      backgroundColor: isEditable ? '#1976d2' : '#e0e0e0',
-                      color: isEditable ? '#fff' : '#9e9e9e',
+                      background: '#f44336',
+                      color: 'white',
                       border: 'none',
-                      borderRadius: '8px',
-                      fontSize: '14px',
+                      padding: '8px 16px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
                       fontWeight: '500',
-                      cursor: isEditable ? 'pointer' : 'not-allowed',
-                      transition: 'background-color 0.2s',
-                      width: '100%'
+                      transition: 'background-color 0.2s'
                     }}
-                    onMouseEnter={(e) => {
-                      if (isEditable) e.target.style.backgroundColor = '#1565c0';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (isEditable) e.target.style.backgroundColor = '#1976d2';
-                    }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#da190b'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = '#f44336'}
                   >
-                    {formData.devices.length > 0 ? 'Chỉnh sửa thiết bị' : 'Chọn thiết bị mượn'}
+                    🔄 Đặt lại
                   </button>
+                )}
+          </div>
+
+              {/* Description */}
+              <div className="google-calendar-field">
+                <div className="google-calendar-field-label">
+                  <span className="google-calendar-field-icon">📝</span>
+                  <span style={{ fontWeight: '500' }}>Mô tả</span>
                 </div>
-              </div>
-
-              {/* Thông báo */}
-              <div className="edit-meeting-field">
-                <span className="edit-meeting-field-icon">🔔</span>
-                <div className="edit-meeting-field-input" style={{ color: '#5f6368' }}>
-                  Thông báo trước 30 phút
-                </div>
-              </div>
-
-              {/* Người tạo lịch */}
-              <div className="edit-meeting-field">
-                <span className="edit-meeting-field-icon">📅</span>
-                <span>{meeting?.organizer || 'Chưa có thông tin'}</span>
-              </div>
-
-              {/* Mô tả */}
-              <div className="edit-meeting-field">
-                <span className="edit-meeting-field-icon">📝</span>
                 <textarea
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
                   placeholder="Thêm nội dung mô tả"
-                  className="edit-meeting-description-textarea"
-                  rows="4"
+                  className="google-calendar-textarea"
                   disabled={!isEditable}
                 />
               </div>
+
+          {/* Error message */}
+          {errors.submit && (
+                <div style={{ color: '#d93025', fontSize: '14px', marginTop: '16px', padding: '12px', backgroundColor: '#fce8e6', borderRadius: '4px' }}>
+              {errors.submit}
             </div>
+          )}
+            </form>
+          </div>
 
-            {/* Right Column - Khách */}
-            <div className="edit-meeting-right-column">
-              <div className="edit-meeting-section-title">Khách</div>
+          {/* Sidebar - Right (Guests) - Google Calendar Style */}
+          <div className="google-calendar-sidebar">
+            <div className="google-calendar-guest-section">
+              <div className="google-calendar-guest-section-title">Khách</div>
+              
+              {/* Guest Input with Tags - Google Calendar Style */}
+              <div style={{ position: 'relative', marginBottom: '16px' }} ref={guestInputRef}>
+                {/* Guest Tags - Display above input like Google Calendar */}
+                {formData.guests.length > 0 && (
+                  <div className="google-calendar-guest-tags" style={{ marginBottom: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {formData.guests.map((guest, index) => (
+                      <div key={index} className="google-calendar-guest-tag" style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '6px',
+                        padding: '4px 8px',
+                        backgroundColor: '#e8f0fe',
+                        borderRadius: '16px',
+                        fontSize: '13px',
+                        color: '#1a73e8'
+                      }}>
+                        <span style={{ fontWeight: '500' }}>{guest.fullName ? guest.fullName : guest.email}</span>
+                        {isEditable && (
+                          <button
+                            type="button"
+                            className="google-calendar-guest-tag-remove"
+                            onClick={() => removeGuest(index)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#1a73e8',
+                              cursor: 'pointer',
+                              fontSize: '16px',
+                              padding: '0',
+                              width: '18px',
+                              height: '18px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '50%',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(26, 115, 232, 0.1)'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-              {/* Thêm khách */}
-              <div className="edit-meeting-field">
+                {/* Guest Input */}
                 <input
-                  type="text"
-                  name="guests"
-                  value={formData.guests}
-                  onChange={handleChange}
-                  placeholder="Thêm email khách (phân cách bằng dấu phẩy)"
-                  className="edit-meeting-field-input"
+                  type="email"
+                  value={guestInputValue}
+                  onChange={handleGuestChange}
+                  onKeyDown={handleGuestKeyDown}
+                  placeholder={formData.guests.length === 0 ? "Thêm khách" : "Thêm email khác..."}
+                  className="google-calendar-guest-input"
+                  autoComplete="off"
                   disabled={!isEditable}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #dadce0',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    transition: 'border-color 0.2s'
+                  }}
                 />
-                {formData.guests && (
-                  <div style={{ fontSize: '12px', color: '#5f6368', marginTop: '4px' }}>
-                    Email sẽ được gửi lời mời sau khi lưu
+
+                {/* Suggestions dropdown */}
+                {showSuggestions && guestSuggestions.length > 0 && (
+                  <div className="suggestions-dropdown" ref={suggestionsRef} style={{ 
+                    position: 'absolute', 
+                    zIndex: 1000, 
+                    backgroundColor: 'white', 
+                    border: '1px solid #dadce0', 
+                    borderRadius: '4px', 
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)', 
+                    maxHeight: '200px', 
+                    overflowY: 'auto', 
+                    width: '100%', 
+                    top: '100%', 
+                    marginTop: '4px'
+                  }}>
+                    {guestSuggestions.map(user => (
+                      <div
+                        key={user.id || user.email}
+                        className="suggestion-item"
+                        onClick={() => handleGuestSelect(user)}
+                        style={{ 
+                          padding: '10px 12px', 
+                          cursor: 'pointer', 
+                          borderBottom: '1px solid #f1f3f4',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                      >
+                        <div style={{ fontWeight: '500', color: '#202124' }}>{user.email}</div>
+                        {user.fullName && (
+                          <div style={{ fontSize: '12px', color: '#5f6368', marginTop: '2px' }}>{user.fullName}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Show option to add email if not found */}
+                {showSuggestions && guestInputValue.trim().length > 1 && guestSuggestions.length === 0 && isValidEmail(guestInputValue.trim()) && (
+                  <div className="suggestions-dropdown" style={{ 
+                    position: 'absolute', 
+                    zIndex: 1000, 
+                    backgroundColor: 'white', 
+                    border: '1px solid #dadce0', 
+                    borderRadius: '4px', 
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)', 
+                    width: '100%', 
+                    top: '100%', 
+                    marginTop: '4px'
+                  }}>
+                    <div
+                      className="suggestion-item no-results clickable"
+                      onClick={() => addGuest(guestInputValue.trim())}
+                      style={{ 
+                        padding: '10px 12px', 
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                    >
+                      <div style={{ fontWeight: '500', color: '#1a73e8' }}>Thêm "{guestInputValue.trim()}"</div>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        </form>
-      </div>
 
-      {/* Device Selector Modal */}
-      <DeviceSelectorModal
-        isOpen={showDeviceModal}
-        onClose={() => setShowDeviceModal(false)}
-        devices={allDevices}
-        selectedDevices={formData.devices}
-        onConfirm={(devices) => setFormData(prev => ({ ...prev, devices }))}
-      />
+              {/* Error message */}
+              {errors.guests && (
+                <div style={{ color: '#d93025', fontSize: '12px', marginTop: '8px', marginBottom: '16px' }}>
+                  {errors.guests}
+                </div>
+              )}
+
+              {/* Invitees List with Status */}
+              {loadingInvitees ? (
+                <div style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>Đang tải...</div>
+              ) : (
+                <>
+                  {invitees.length > 0 && (
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '16px 0' }}>
+                      {[
+                        { key: 'ACCEPTED', label: 'Đồng ý', color: '#1a73e8' },
+                        { key: 'PENDING', label: 'Đang chờ', color: '#f9ab00' },
+                        { key: 'DECLINED', label: 'Từ chối', color: '#d93025' }
+                      ].map(item => (
+                        <div
+                          key={item.key}
+                          style={{
+                            flex: '1 1 120px',
+                            minWidth: '140px',
+                            background: `${item.color}15`,
+                            border: `1px solid ${item.color}30`,
+                            borderRadius: '12px',
+                            padding: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px'
+                          }}
+                        >
+                          <span style={{ fontSize: '12px', color: item.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {item.label}
+                          </span>
+                          <span style={{ fontSize: '22px', fontWeight: '700', color: '#202124' }}>
+                            {inviteeSummary[item.key] || 0}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {invitees.length > 0 && (
+                    <div style={{ marginTop: '8px', marginBottom: '12px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '500', color: '#202124', marginBottom: '8px' }}>Lọc theo trạng thái:</div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {['all', 'PENDING', 'ACCEPTED', 'DECLINED'].map(status => (
+                          <button
+                            key={status}
+                            type="button"
+                            onClick={() => setInviteeFilter(status)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '16px',
+                              border: '1px solid #dadce0',
+                              background: inviteeFilter === status ? '#1a73e8' : 'white',
+                              color: inviteeFilter === status ? 'white' : '#5f6368',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            {status === 'all' ? 'Tất cả' : 
+                             status === 'PENDING' ? 'Đang chờ' :
+                             status === 'ACCEPTED' ? 'Đồng ý' : 'Từ chối'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {invitees.length > 0 && (
+                    <div style={{ marginTop: '16px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '500', color: '#202124', marginBottom: '12px' }}>
+                        Danh sách khách mời ({filteredInvitees.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                        {filteredInvitees.map(invitee => {
+                            const statusConfig = {
+                              'PENDING': { label: 'Đang chờ', color: '#ff9800', bg: '#fff3e0' },
+                              'ACCEPTED': { label: 'Đồng ý', color: '#4caf50', bg: '#e8f5e9' },
+                              'DECLINED': { label: 'Từ chối', color: '#f44336', bg: '#ffebee' },
+                              'CANCELLED': { label: 'Đã hủy', color: '#9e9e9e', bg: '#f5f5f5' }
+                            };
+                            const config = statusConfig[invitee.status] || statusConfig['PENDING'];
+                            
+                            return (
+                              <div
+                                key={invitee.inviteId || invitee.email}
+                                style={{
+                                  padding: '10px 12px',
+                                  backgroundColor: 'white',
+                                  borderRadius: '6px',
+                                  border: '1px solid #e0e0e0',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '12px'
+                                }}
+                              >
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: '14px', fontWeight: '500', color: '#202124' }}>
+                                    {invitee.email}
+                                  </div>
+                                </div>
+                                <div
+                    style={{ 
+                                    padding: '4px 10px',
+                                    borderRadius: '12px',
+                                    fontSize: '12px',
+                                    fontWeight: '500',
+                                    backgroundColor: config.bg,
+                                    color: config.color,
+                                    border: `1px solid ${config.color}`
+                                  }}
+                                >
+                                  {config.label}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {invitees.length === 0 && (
+                    <div style={{ padding: '16px', textAlign: 'center', color: '#5f6368', fontSize: '14px' }}>
+                      Chưa có khách mời
+                    </div>
+                )}
+              </>
+            )}
+          </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

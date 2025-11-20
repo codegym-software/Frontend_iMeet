@@ -1,63 +1,29 @@
 import apiClient from './apiClient';
 
 const meetingService = {
-  // Get all meetings
+  // Get all meetings (admin / legacy use)
   getAllMeetings: async () => {
     try {
-      const token = localStorage.getItem('token');
-      console.log('🔍 Fetching meetings with token');
-      
       const response = await apiClient.get('/api/meetings');
-      
-      // Backend returns ApiResponse {success, message, data}
-      // ✅ Backend now always returns 200 OK with ApiResponse in body
-      // Check if response indicates success
-      if (response.data && response.data.success === false) {
-        console.warn('⚠️ Backend returned error:', response.data.message);
-        return [];
-      }
-      
-      // Return data array, or empty array if no data
-      const meetings = response.data?.data || [];
-      console.log('✅ Meetings fetched:', meetings.length);
-      return meetings;
+      return response.data.data || [];
     } catch (error) {
-      // Handle all errors gracefully - don't throw, just warn and return empty
-      const status = error.response?.status || 'Network Error';
-      
-      // ✅ Try to parse error response from backend
-      let errorMessage = '';
-      let errorData = null;
-      if (error.response?.data) {
-        errorData = error.response.data;
-        // Backend might return error in ApiResponse format (even with 500 status)
-        if (errorData.success === false && errorData.message) {
-          // ✅ Backend returned ApiResponse format
-          errorMessage = errorData.message;
-          console.warn('⚠️ Backend returned error (ApiResponse format):', errorMessage);
-          return [];
-        } else if (errorData.message) {
-          errorMessage = errorData.message;
-        } else if (errorData.error) {
-          errorMessage = errorData.error;
-        } else if (typeof errorData === 'string') {
-          errorMessage = errorData;
-        }
-      }
-      
-      // Log error details for debugging
-      if (status === 500) {
-        console.warn(`⚠️ Meetings endpoint returned 500`);
-        if (errorMessage) {
-          console.warn(`Error message: ${errorMessage}`);
-        }
-        if (errorData) {
-          console.warn('Error response:', errorData);
-        }
-      } else {
-        console.warn(`⚠️ Could not fetch meetings. Status: ${status}. Error: ${errorMessage || error.message}`);
-      }
-      
+      console.warn('⚠️ Could not fetch meetings. Returning empty data.', error.response?.status || 'Network Error');
+      return [];
+    }
+  },
+
+  // Get meetings relevant to current user
+  getMeetingsForUser: async () => {
+    try {
+      console.log('🔗 Calling /api/meetings/my endpoint...');
+      const response = await apiClient.get('/api/meetings/my');
+      console.log('✅ /api/meetings/my response:', response.data);
+      const data = response.data.data || [];
+      console.log('📊 Meetings data received:', data);
+      return data;
+    } catch (error) {
+      console.warn('⚠️ Could not fetch meetings for current user. Returning empty data.', error.response?.status || 'Network Error');
+      console.error('Full error:', error);
       return [];
     }
   },

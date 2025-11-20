@@ -1,12 +1,11 @@
 // Room API service module
-import { API_BASE_URL } from '../../../../constants/api';
-const API_BASE_URL_WITH_API = `${API_BASE_URL}/api`;
+const API_BASE_URL = 'http://localhost:8081/api';
 
 export const roomAPI = {
   // Lấy tất cả phòng
   async getAllRooms() {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/rooms`, {
+      const response = await fetch(`${API_BASE_URL}/rooms`, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -27,7 +26,7 @@ export const roomAPI = {
   // Lấy phòng có sẵn (trả về tất cả phòng vì backend đã bỏ status)
   async getAvailableRooms() {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/rooms`, {
+      const response = await fetch(`${API_BASE_URL}/rooms`, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -48,7 +47,7 @@ export const roomAPI = {
   // Lấy phòng theo ID
   async getRoomById(roomId) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/rooms/${roomId}`, {
+      const response = await fetch(`${API_BASE_URL}/rooms/${roomId}`, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -69,7 +68,7 @@ export const roomAPI = {
   // Tìm kiếm phòng
   async searchRooms(searchQuery) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/rooms/search?search=${encodeURIComponent(searchQuery)}`, {
+      const response = await fetch(`${API_BASE_URL}/rooms/search?search=${encodeURIComponent(searchQuery)}`, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -87,10 +86,43 @@ export const roomAPI = {
     }
   },
 
+  // ✅ NEW: Lấy phòng trống theo khoảng thời gian (startTime, endTime)
+  async getAvailableRoomsInRange(startTime, endTime) {
+    try {
+      // Format datetime to ISO string for backend
+      const startDateTime = startTime instanceof Date ? startTime.toISOString() : new Date(startTime).toISOString();
+      const endDateTime = endTime instanceof Date ? endTime.toISOString() : new Date(endTime).toISOString();
+      
+      const params = new URLSearchParams({
+        startTime: startDateTime,
+        endTime: endDateTime
+      });
+      
+      console.log('📡 Fetching available rooms for range:', startDateTime, 'to', endDateTime);
+      
+      const response = await fetch(`${API_BASE_URL}/rooms/available-in-range?${params}`, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        console.warn('⚠️ Could not fetch available rooms in range. Status:', response.status);
+        return [];
+      }
+      const data = await response.json();
+      console.log('✅ Available rooms in range:', data.data || []);
+      return data.data || [];
+    } catch (error) {
+      console.warn('⚠️ Could not fetch available rooms in range. Returning empty data.', error);
+      return [];
+    }
+  },
+
   // Lấy thiết bị của phòng
   async getRoomDevices(roomId) {
     try {
-      const response = await fetch(`${API_BASE_URL_WITH_API}/room-devices/room/${roomId}`, {
+      const response = await fetch(`${API_BASE_URL}/room-devices/room/${roomId}`, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -101,9 +133,13 @@ export const roomAPI = {
         return [];
       }
       const data = await response.json();
+      if (!data.success) {
+        console.warn('⚠️ Backend error:', data.message);
+        return [];
+      }
       return data.data || [];
     } catch (error) {
-      console.warn('⚠️ Could not fetch room devices. Returning empty data.');
+      console.warn('⚠️ Could not fetch room devices. Returning empty data.', error);
       return [];
     }
   },

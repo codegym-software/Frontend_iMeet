@@ -10,6 +10,8 @@
   width: 100%;
   display: flex;
   align-items: center;
+  /* Unified clickable area - no separate buttons */
+  border-radius: 8px;
 }
 
 .date-time-input {
@@ -27,6 +29,9 @@
   outline: none;
   font-weight: 400;
   user-select: text; /* Allow text selection */
+  /* Ensure input and icon appear as single unified component */
+  position: relative;
+  z-index: 1;
 }
 
 .input-icons {
@@ -53,14 +58,18 @@
   justify-content: center;
   background: transparent;
   border-radius: 4px;
+  /* Make icon look like part of input, not separate button */
+  pointer-events: auto;
+  opacity: 0.7;
 }
 
 .calendar-icon:active {
-  background: #f1f3f4;
+  opacity: 1;
 }
 
 .calendar-icon:hover {
-  transform: scale(1.1);
+  opacity: 1;
+  transform: scale(1.05);
 }
 
 .dropdown-toggle-icon {

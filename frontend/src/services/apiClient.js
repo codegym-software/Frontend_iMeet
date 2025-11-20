@@ -1,34 +1,23 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../constants/api';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8081';
 
 // Create axios instance with default config
-// Luôn dùng absolute URL từ constants/api.js
-console.log('[API Client] Creating axios instance with baseURL:', API_BASE_URL);
-
 const apiClient = axios.create({
-  baseURL: API_BASE_URL, // Absolute URL: https://imeeet.onrender.com
+  baseURL: API_BASE_URL,
   withCredentials: true, // Important for sending session cookies
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json',
   },
-  // Thêm timeout để tránh chờ quá lâu
-  timeout: 30000,
 });
 
-// Add request interceptor to include auth token and log request
+// Add request interceptor to include auth token
 apiClient.interceptors.request.use(
   (config) => {
-    // Log full URL để debug
-    const fullUrl = (config.baseURL || '') + (config.url || '');
-    console.log('[API Client] Request URL:', config.method?.toUpperCase(), fullUrl);
-    
-    // Add auth token nếu có
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
   (error) => {
@@ -42,32 +31,27 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Check for authentication/session errors:
-    // 1. 401 Unauthorized
-    // 2. Network Error (CORS from redirect)
-    // 3. Failed to fetch (CORS error - session expired)
-    // 4. TypeError: Failed to fetch
-    const isAuthError = 
-      (error.response && error.response.status === 401) ||
-      error.message === 'Network Error' ||
-      error.message === 'Failed to fetch' ||
-      (error.name === 'TypeError' && error.message.includes('fetch'));
-    
-    if (isAuthError) {
-      console.warn('Session expired or authentication error, redirecting to login');
+    // Only redirect to login for actual 401 responses
+    if (error.response && error.response.status === 401) {
+      console.warn('🚨 Authentication failed (401), redirecting to login');
       
-      // Clear auth data immediately
+      // Clear auth data
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('oauth2User');
       
-      // Redirect to login only if not already on public pages
+      // Redirect to login
       const publicPaths = ['/login', '/', '/signup', '/forgot-password'];
       const currentPath = window.location.pathname;
       
       if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/reset-password')) {
         window.location.href = '/login';
       }
+    }
+    
+    // Log CORS and other errors for debugging but don't redirect
+    if (error.message === 'Network Error' || error.code === 'CORS') {
+      console.warn('⚠️ CORS or Network Error:', error.message);
     }
     
     return Promise.reject(error);

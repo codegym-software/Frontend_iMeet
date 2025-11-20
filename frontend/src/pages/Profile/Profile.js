@@ -4,10 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import authService from '../../services/authService';
 import { FaRegCalendarAlt, FaCog, FaEdit, FaCheck, FaTimes, FaCamera } from 'react-icons/fa';
 import ChangePassword from '../../Components/ChangePassword';
-import BackendLinks from '../../Components/common/BackendLinks';
 import './Profile.css';
 import calendarLogo from '../../assets/calendar-logo.png';
-import { API_BASE_URL } from '../../constants/api';
 
 export default function Profile({ onSave }) {
   const history = useHistory();
@@ -188,7 +186,7 @@ export default function Profile({ onSave }) {
         imageSrc = avatarUrl;
       } else {
         // Fallback cho uploaded file (nếu có)
-        imageSrc = `${API_BASE_URL}${avatarUrl}`;
+        imageSrc = `http://localhost:8081${avatarUrl}`;
       }
       
       return (
@@ -481,10 +479,6 @@ export default function Profile({ onSave }) {
             }}
             style={{ display: 'none' }}
           />
-        </div>
-        {/* Show backend links near avatar (display only) */}
-        <div className="profile-backend-links">
-          <BackendLinks />
         </div>
         <div className="profile-fields">
           {/* Account Type Display - Only for OAuth2 accounts */}

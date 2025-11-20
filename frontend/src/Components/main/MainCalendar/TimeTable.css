@@ -222,19 +222,22 @@
 }
 
 .event-title {
-  font-weight: 500;
-  line-height: 1.3;
-  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  font-size: 14px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .event-title-inline {
-  font-weight: 500;
-  line-height: 1.2;
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 1px 0; /* ✅ Compact padding for short events */
+  font-weight: 600;
+  line-height: 1.4;
+  font-size: 13px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  padding: 2px 0;
 }
 
 .event-calendar {
@@ -920,130 +923,7 @@
   font-weight: inherit;
 }
 
-/* Event Tooltip Styles - Google Calendar Design */
-.event-tooltip.google-style {
-  position: fixed;
-  z-index: 10000;
-  background: white;
-  border: none;
-  border-radius: 8px;
-  padding: 0;
-  width: 320px;
-  max-height: 500px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.08);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  transition: all 0.2s ease;
-  pointer-events: auto;
-}
-
-/* Header with action icons */
-.tooltip-header-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #e8eaed;
-}
-
-.tooltip-header-icon-btn {
-  background: none;
-  border: none;
-  padding: 6px;
-  cursor: pointer;
-  border-radius: 4px;
-  color: #5f6368;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  transition: background-color 0.2s;
-}
-
-.tooltip-header-icon-btn svg {
-  width: 18px;
-  height: 18px;
-  stroke: #5f6368;
-}
-
-.tooltip-header-icon-btn:hover {
-  background-color: #f1f3f4;
-}
-
-.tooltip-header-icon-btn:hover svg {
-  stroke: #202124;
-}
-
-.tooltip-header-icon-btn:active {
-  background-color: #e8eaed;
-}
-
-/* Event title with color indicator */
-.tooltip-event-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 16px 8px 16px;
-}
-
-.tooltip-color-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.tooltip-event-title {
-  font-size: 18px;
-  font-weight: 500;
-  color: #202124;
-  line-height: 1.4;
-  flex: 1;
-}
-
-/* Date and time */
-.tooltip-date-time {
-  padding: 0 16px 12px 16px;
-  font-size: 13px;
-  color: #5f6368;
-  line-height: 1.5;
-}
-
-/* Info rows */
-.tooltip-info-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px 16px;
-  font-size: 14px;
-  color: #202124;
-  line-height: 1.5;
-}
-
-.tooltip-icon {
-  flex-shrink: 0;
-  width: 20px;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tooltip-devices {
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.tooltip-device-item {
-  display: inline;
-}
-
-/* Event Tooltip Styles - Modern Design (keep for backward compatibility) */
+/* Event Tooltip Styles - Modern Design */
 .event-tooltip {
   position: fixed;
   z-index: 10000;
@@ -1149,16 +1029,6 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-/* Context Menu Styles */
-.event-context-menu {
-  position: fixed;
-  z-index: 10001;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e8eaed;
 }
 
 .attendee {

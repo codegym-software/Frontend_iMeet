@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './DateTimePicker.css';
 import MiniCalendar from '../main/MiniCalendar';
 import MeetingCalendar from './MeetingCalendar';
 
+// DateTimePicker component with useMemo for performance optimization
 const DateTimePicker = ({ 
   value, 
   onChange, 
@@ -20,25 +21,9 @@ const DateTimePicker = ({
   // disablePastDates: prevent selecting past dates (for creating new meetings)
   disablePastDates = false,
   // showCalendarHeader: show month/year header with navigation buttons
-  showCalendarHeader = false,
-  // ✅ Controlled open state from parent
-  isOpen: controlledIsOpen,
-  onOpen,
-  onClose
+  showCalendarHeader = false
 }) => {
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
-  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-  const setIsOpen = (open) => {
-    if (controlledIsOpen === undefined) {
-      setInternalIsOpen(open);
-    }
-    if (open && onOpen) {
-      onOpen();
-    }
-    if (!open && onClose) {
-      onClose();
-    }
-  };
+  const [isOpen, setIsOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState({ hour: 9, minute: 0 });
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -49,108 +34,101 @@ const DateTimePicker = ({
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   
-  // ✅ All useRef hooks must be declared together at the top level
   const pickerRef = useRef(null);
   const inputRef = useRef(null);
   const timeListRef = useRef(null);
-  const prevValueTimestampRef = useRef(null); // ✅ Track previous value timestamp to prevent infinite loop
-  const prevFormattedRef = useRef(''); // ✅ Track previous formatted value to prevent unnecessary updates
 
-  // Parse initial value
+  // Parse initial value - use value timestamp to prevent infinite loops
+  const valueTimestamp = value instanceof Date && !isNaN(value.getTime()) ? value.getTime() : null;
+  const prevValueTimestampRef = useRef(null);
+  
   useEffect(() => {
-    // ✅ Calculate current value timestamp
-    const currentValueTimestamp = value ? new Date(value).getTime() : null;
-    
-    // ✅ Only update if value actually changed (compare timestamps)
-    if (currentValueTimestamp !== prevValueTimestampRef.current) {
-      prevValueTimestampRef.current = currentValueTimestamp;
-      
-      if (value) {
-        const date = new Date(value);
-        if (!isNaN(date.getTime())) {
-          setSelectedDate(date);
-          setSelectedTime({
-            hour: date.getHours(),
-            minute: date.getMinutes()
-          });
-          setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-        }
-      } else {
-        // Set default to today only if no date is selected
-        // Use functional update to get current selectedDate
-        setSelectedDate(prev => {
-          if (!prev) {
-            const today = new Date();
-            setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
-            return today;
-          }
-          return prev;
+    // Only update if value timestamp actually changed
+    if (valueTimestamp && valueTimestamp !== prevValueTimestampRef.current) {
+      prevValueTimestampRef.current = valueTimestamp;
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        setSelectedDate(date);
+        setSelectedTime({
+          hour: date.getHours(),
+          minute: date.getMinutes()
         });
+        setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1));
       }
+    } else if (!valueTimestamp && !selectedDate) {
+      // Set default to today only if no date is selected
+      const today = new Date();
+      setSelectedDate(today);
+      setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     }
-  }, [value]); // ✅ Only depend on value prop to avoid infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valueTimestamp]); // Only depend on timestamp, not the Date object
+
+  // Update input value when selected time changes (but not when user is typing)
+  // Use useMemo to prevent infinite loops
+  const selectedTimeHour = selectedTime?.hour ?? 0;
+  const selectedTimeMinute = selectedTime?.minute ?? 0;
+  const selectedDateTimestamp = selectedDate instanceof Date && !isNaN(selectedDate.getTime()) 
+    ? selectedDate.getTime() 
+    : null;
   
-  // ✅ Update input value separately to avoid infinite loop
-  // Use timestamp instead of Date object to prevent reference changes
-  const selectedDateTimestamp = useMemo(() => {
-    return selectedDate ? selectedDate.getTime() : null;
-  }, [selectedDate ? selectedDate.getTime() : null]);
+  const displayValue = useMemo(() => {
+    if (!selectedDateTimestamp) return '';
+    
+    // Create date from timestamp to avoid using selectedDate object directly
+    const date = new Date(selectedDateTimestamp);
+    
+    // Use displayFormat to control what to show
+    if (displayFormat === 'time') {
+      const hour12 = selectedTimeHour % 12 || 12;
+      const period = selectedTimeHour >= 12 ? 'PM' : 'AM';
+      return `${hour12}:${selectedTimeMinute.toString().padStart(2, '0')} ${period}`;
+    }
+    
+    if (displayFormat === 'date') {
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const year = date.getFullYear();
+      return `${month}/${day}/${year}`;
+    }
+    
+    // displayFormat === 'datetime'
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const year = date.getFullYear();
+    const dateStr = `${month}/${day}/${year}`;
+    
+    if (showTime) {
+      const hour12 = selectedTimeHour % 12 || 12;
+      const period = selectedTimeHour >= 12 ? 'PM' : 'AM';
+      const timeStr = `${hour12}:${selectedTimeMinute.toString().padStart(2, '0')} ${period}`;
+      return `${dateStr} ${timeStr}`;
+    }
+    
+    return dateStr;
+  }, [selectedDateTimestamp, selectedTimeHour, selectedTimeMinute, displayFormat, showTime]);
   
+  const prevDisplayValueRef = useRef('');
   useEffect(() => {
-    if (!isTyping && selectedDate) {
-      let formatted = '';
-      
-      // Calculate formatted value directly (don't use formatDisplayValue function)
-      if (displayFormat === 'time') {
-        const hour12 = selectedTime.hour % 12 || 12;
-        const period = selectedTime.hour >= 12 ? 'PM' : 'AM';
-        formatted = `${hour12}:${selectedTime.minute.toString().padStart(2, '0')} ${period}`;
-      } else if (displayFormat === 'date') {
-        const month = selectedDate.getMonth() + 1;
-        const day = selectedDate.getDate();
-        const year = selectedDate.getFullYear();
-        formatted = `${month}/${day}/${year}`;
-      } else {
-        // datetime
-        const month = selectedDate.getMonth() + 1;
-        const day = selectedDate.getDate();
-        const year = selectedDate.getFullYear();
-        const dateStr = `${month}/${day}/${year}`;
-        
-        if (showTime) {
-          const hour12 = selectedTime.hour % 12 || 12;
-          const period = selectedTime.hour >= 12 ? 'PM' : 'AM';
-          const timeStr = `${hour12}:${selectedTime.minute.toString().padStart(2, '0')} ${period}`;
-          formatted = `${dateStr} ${timeStr}`;
-        } else {
-          formatted = dateStr;
-        }
-      }
-      
-      // ✅ Only update if value actually changed
-      if (prevFormattedRef.current !== formatted) {
-        prevFormattedRef.current = formatted;
-        setInputValue(formatted);
-      }
+    if (!isTyping && displayValue && displayValue !== prevDisplayValueRef.current) {
+      prevDisplayValueRef.current = displayValue;
+      setInputValue(displayValue);
     }
-  }, [selectedDateTimestamp, selectedTime.hour, selectedTime.minute, isTyping, displayFormat, showTime]);
+  }, [displayValue, isTyping]);
 
   // Close picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (pickerRef.current && !pickerRef.current.contains(event.target)) {
         setIsOpen(false);
-        setIsTyping(false);
       }
     };
-    
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [isOpen]);
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Auto-scroll to selected time when time tab is active
   useEffect(() => {
@@ -172,8 +150,7 @@ const DateTimePicker = ({
   }, [activeTab, selectedTime.hour, selectedTime.minute]);
 
   // Format display value - Enhanced Google Calendar style
-  // ✅ Memoize to prevent infinite loops
-  const formatDisplayValue = useCallback(() => {
+  const formatDisplayValue = () => {
     if (!selectedDate) return '';
     
     // Use displayFormat to control what to show
@@ -207,7 +184,7 @@ const DateTimePicker = ({
     }
     
     return dateStr;
-  }, [selectedDate, selectedTime.hour, selectedTime.minute, displayFormat, showTime]);
+  };
 
   // Handle date selection
   const handleDateSelect = (date) => {
@@ -578,42 +555,27 @@ const DateTimePicker = ({
     return months[monthName.toLowerCase()] || 0;
   };
 
-  // Handle input focus - open picker immediately
+  // Handle input focus - allow editing
   const handleInputFocus = (e) => {
-    if (!disabled) {
-      // ✅ Open picker immediately on focus
-      if (controlledIsOpen === undefined) {
-        setInternalIsOpen(true);
-      } else if (onOpen) {
-        onOpen();
-      }
-      setIsTyping(false);
-      // Select all text for easy editing
-      setTimeout(() => e.target.select(), 0);
+    // Don't auto-open dropdown on focus, let user type
+    setIsTyping(true);
+    if (displayFormat === 'time') {
+      // For time-only input, select all text for easy editing
+      e.target.select();
     }
   };
 
-  // Handle input click - open picker immediately
+  // Handle input click - ONLY for manual input, don't open dropdown
   const handleInputClick = (e) => {
+    // Allow clicking input to focus and type
+    // Dropdown only opens via icon click or arrow key
     e.stopPropagation();
-    if (!disabled) {
-      // ✅ Open picker immediately when clicking input
-      if (controlledIsOpen === undefined) {
-        setInternalIsOpen(true);
-      } else if (onOpen) {
-        onOpen();
-      }
-      setIsTyping(false);
-      // Select text for easy editing
-      setTimeout(() => e.target.select(), 0);
-    }
   };
 
   // Handle icon click to toggle dropdown
   const handleIconClick = (e) => {
     e.stopPropagation();
     if (!disabled) {
-      // ✅ Toggle picker via setIsOpen (which handles controlled state)
       setIsOpen(!isOpen);
       // Stop typing mode when opening dropdown
       if (!isOpen) {
@@ -628,13 +590,35 @@ const DateTimePicker = ({
     setInputValue(e.target.value);
   };
 
+  // Handle wrapper click - unified click handler for the entire input area
+  const handleWrapperClick = (e) => {
+    e.stopPropagation();
+    if (disabled) return;
+    // If clicking on the icon area, don't trigger input click
+    if (e.target.closest('.input-icons')) {
+      handleIconClick(e);
+    } else {
+      // Clicking on input area - open picker
+      handleInputClick(e);
+    }
+  };
+
   return (
     <div className={`date-time-picker ${className}`} ref={pickerRef}>
-      <div className="date-time-input-wrapper" onClick={(e) => e.stopPropagation()}>
+      <div 
+        className="date-time-input-wrapper" 
+        onClick={handleWrapperClick}
+        style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
+      >
         <input
           type="text"
           className={`date-time-input ${isOpen ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
-          onClick={handleInputClick}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!disabled) {
+              handleInputClick(e);
+            }
+          }}
           onFocus={handleInputFocus}
           onChange={handleInputChange}
           onBlur={handleManualInputBlur}
@@ -660,8 +644,9 @@ const DateTimePicker = ({
           disabled={disabled}
           ref={inputRef}
           readOnly={false} // Allow manual input for all formats
+          style={{ cursor: disabled ? 'not-allowed' : 'text' }}
         />
-        <div className="input-icons">
+        <div className="input-icons" onClick={(e) => e.stopPropagation()}>
           {(displayFormat === 'date' || displayFormat === 'datetime') && (
             <span 
               className="calendar-icon" 

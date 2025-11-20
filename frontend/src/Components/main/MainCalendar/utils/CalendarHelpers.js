@@ -2,21 +2,26 @@
 export const CalendarHelpers = {
   getStartDateForView(date, view) {
     const d = new Date(date);
+    // ✅ Normalize to local timezone to avoid timezone issues
+    d.setHours(0, 0, 0, 0);
+    
     switch (view) {
       case 'day':
-        d.setHours(0, 0, 0, 0);
         return d;
       case 'week':
-        d.setDate(d.getDate() - d.getDay());
-        d.setHours(0, 0, 0, 0);
+        // Get start of week (Sunday = 0)
+        const dayOfWeek = d.getDay();
+        d.setDate(d.getDate() - dayOfWeek);
         return d;
       case 'month':
+        // ✅ FIX: Return start of calendar grid (Sunday of week containing 1st of month)
+        // This matches MonthView which shows 42 days starting from this date
         d.setDate(1);
-        d.setHours(0, 0, 0, 0);
+        const firstDayOfMonth = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        d.setDate(d.getDate() - firstDayOfMonth); // Go back to Sunday
         return d;
       case 'year':
         d.setMonth(0, 1);
-        d.setHours(0, 0, 0, 0);
         return d;
       default:
         return d;
@@ -25,26 +30,27 @@ export const CalendarHelpers = {
 
   getEndDateForView(date, view) {
     const d = new Date(date);
+    // ✅ Normalize to local timezone to avoid timezone issues
+    d.setHours(23, 59, 59, 999);
+    
     switch (view) {
       case 'day':
-        // ✅ Set to end of day + 1 hour to include events ending at 10PM (22:00) or later
-        d.setHours(23, 59, 59, 999);
-        // Add 1 hour buffer to ensure events ending at 10PM+ are included
-        d.setTime(d.getTime() + 60 * 60 * 1000);
         return d;
       case 'week':
-        d.setDate(d.getDate() + (6 - d.getDay()));
-        d.setHours(23, 59, 59, 999);
-        // Add 1 hour buffer
-        d.setTime(d.getTime() + 60 * 60 * 1000);
+        // Get end of week (Saturday)
+        const dayOfWeek = d.getDay();
+        d.setDate(d.getDate() + (6 - dayOfWeek));
         return d;
       case 'month':
-        d.setMonth(d.getMonth() + 1, 0);
-        d.setHours(23, 59, 59, 999);
+        // ✅ FIX: Return end of calendar grid (42 days from start, which is Saturday of week containing last day)
+        // This matches MonthView which shows 42 days
+        d.setMonth(d.getMonth() + 1, 0); // Last day of current month
+        const lastDayOfMonth = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const daysToAdd = 6 - lastDayOfMonth; // Days to add to reach Saturday (end of week)
+        d.setDate(d.getDate() + daysToAdd); // Go forward to Saturday
         return d;
       case 'year':
-        d.setMonth(11, 31);
-        d.setHours(23, 59, 59, 999);
+        d.setMonth(11, 31); // December 31
         return d;
       default:
         return d;
@@ -120,7 +126,6 @@ export const CalendarHelpers = {
   /**
    * Kiểm tra xem event có thuộc ngày cụ thể không
    * Xử lý cả single-day và multi-day events
-   * ✅ FIX: Improved timezone handling for events at 9PM-10PM
    * @param {Object} event - Event object với start và end properties
    * @param {Date} date - Ngày cần check
    * @returns {boolean}
@@ -128,13 +133,12 @@ export const CalendarHelpers = {
   isEventOnDate(event, date) {
     if (!event || !event.start || !date) return false;
     
-    // Normalize dates to midnight for comparison (local time, no timezone conversion)
+    // Normalize dates to midnight for comparison
     const dateStart = new Date(date);
     dateStart.setHours(0, 0, 0, 0);
     const dateEnd = new Date(date);
     dateEnd.setHours(23, 59, 59, 999);
     
-    // ✅ Parse event dates correctly - use local timezone
     const eventStart = new Date(event.start);
     const eventEnd = new Date(event.end);
     
@@ -143,8 +147,6 @@ export const CalendarHelpers = {
     // - Event starts on this date, OR
     // - Event ends on this date, OR
     // - Event spans across this date (starts before and ends after)
-    const overlaps = eventStart <= dateEnd && eventEnd >= dateStart;
-    
-    return overlaps;
+    return eventStart <= dateEnd && eventEnd >= dateStart;
   }
 };

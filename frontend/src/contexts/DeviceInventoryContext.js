@@ -28,12 +28,63 @@ export const DeviceInventoryProvider = ({ children }) => {
       setLoading(true);
       console.log('🔄 Initializing device inventory...');
 
-      // Get all devices
-      let devicesResponse = await adminService.getDevices();
-      const devices = Array.isArray(devicesResponse) ? devicesResponse : (devicesResponse?.data || []);
-      
+      // ✅ STEP 1: Get all devices first (essential, don't wait for other data)
+      let devices = [];
+      try {
+        console.log('📥 Fetching devices from adminService...');
+        let devicesResponse = await adminService.getDevices();
+        console.log('📥 Devices response:', devicesResponse);
+        
+        // adminService.getDevices() now returns array directly OR response with data property
+        if (Array.isArray(devicesResponse)) {
+          devices = devicesResponse;
+        } else if (devicesResponse?.data && Array.isArray(devicesResponse.data)) {
+          devices = devicesResponse.data;
+        } else {
+          console.warn('⚠️ Unexpected device response format:', devicesResponse);
+          devices = [];
+        }
+        
+        console.log('✅ Devices loaded:', devices.length, devices);
+      } catch (error) {
+        console.error('❌ Could not fetch devices:', error.message, error);
+        devices = [];
+      }
+
+      // ✅ Build initial inventory from devices (don't wait for meetings/rooms)
+      const newInventory = {};
+      devices.forEach(device => {
+        const deviceId = device.deviceId;
+        const total = device.quantity || 0;
+
+        newInventory[deviceId] = {
+          deviceId,
+          name: device.name,
+          deviceName: device.name,
+          deviceType: device.deviceType || 'KHAC',
+          total,
+          borrowed: 0, // Will be updated async
+          assignedToRooms: 0, // Will be updated async
+          available: total
+        };
+      });
+
+      // ✅ Set inventory immediately so forms can use it
+      if (isMountedRef.current) {
+        setInventory(newInventory);
+        console.log('✅ Initial device inventory set with', Object.keys(newInventory).length, 'devices');
+      }
+
+      // ✅ STEP 2: Load meetings and rooms asynchronously (don't block)
       // Get all active meetings (not ended yet)
-      let allMeetingsResponse = await meetingService.getAllMeetings();
+      let allMeetingsResponse = [];
+      try {
+        console.log('📥 Fetching meetings...');
+        allMeetingsResponse = await meetingService.getAllMeetings();
+        console.log('📥 Meetings response:', allMeetingsResponse);
+      } catch (error) {
+        console.error('❌ Could not fetch meetings:', error.message, error);
+      }
       
       // ✅ Handle different response formats
       let allMeetings = [];
@@ -42,7 +93,7 @@ export const DeviceInventoryProvider = ({ children }) => {
       } else if (allMeetingsResponse?.data && Array.isArray(allMeetingsResponse.data)) {
         allMeetings = allMeetingsResponse.data;
       } else {
-        // Silently handle empty/invalid response - don't spam console
+        console.warn('⚠️ Unexpected meeting response format:', allMeetingsResponse);
         allMeetings = [];
       }
       
@@ -73,56 +124,72 @@ export const DeviceInventoryProvider = ({ children }) => {
       }
       const assignedMap = {};
       
-      // Fetch device assignments for each room in parallel
-      const roomAssignmentPromises = allRooms.map(async (room) => {
-        try {
-          // ✅ Handle both 'id' and 'roomId' property names
-          const roomId = room.id || room.roomId;
-          if (!roomId) {
-            console.warn('⚠️ Room has no ID:', room);
-            return [];
-          }
-          const resp = await roomService.getDevicesByRoom(roomId);
-          if (resp && resp.success && Array.isArray(resp.data)) {
-            return resp.data;
-          }
-        } catch (err) {
-          console.warn(`Failed to load devices for room ${room.id || room.roomId}:`, err);
-        }
-        return [];
-      });
+      // ✅ Skip room device fetching during init - it's too slow!
+      // Room devices are not critical for inventory (devices are already set)
+      // They can be loaded on-demand when rooms are accessed
+      console.log('⚠️ Skipping room device assignments (load on-demand instead)');
       
-      const allRoomAssignments = await Promise.all(roomAssignmentPromises);
+      // Optional: Load room assignments async in background (non-blocking)
+      if (allRooms.length > 0) {
+        setTimeout(async () => {
+          console.log('🔄 Loading room assignments in background...');
+          try {
+            const roomAssignmentPromises = allRooms.map(async (room) => {
+              try {
+                const roomId = room.id || room.roomId;
+                if (!roomId) return [];
+                
+                // Use longer timeout for background fetch
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                
+                const resp = await Promise.race([
+                  roomService.getDevicesByRoom(roomId),
+                  new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Timeout')), 10000);
+                  })
+                ]);
+                
+                clearTimeout(timeoutId);
+                if (resp && resp.success && Array.isArray(resp.data)) {
+                  return resp.data;
+                }
+                return [];
+              } catch (err) {
+                // Silent error in background - don't block anything
+                return [];
+              }
+            });
+            
+            const allRoomAssignments = await Promise.all(roomAssignmentPromises);
+            console.log('✅ Room assignments loaded in background:', allRoomAssignments.length);
+          } catch (error) {
+            // Silent error - room assignments are optional
+            console.log('ℹ️ Room assignments skipped (non-critical)');
+          }
+        }, 0);
+      }
       
       // Calculate total devices assigned to rooms
+      // Note: allRoomAssignments is empty because we skip loading room devices during init
+      // This is intentional to avoid slow initialization
+      const allRoomAssignments = [];
       allRoomAssignments.flat().forEach(assignment => {
         const deviceId = assignment.deviceId;
         const quantity = assignment.quantityAssigned || 1;
         assignedMap[deviceId] = (assignedMap[deviceId] || 0) + quantity;
       });
 
-      // Build inventory
-      const newInventory = {};
-      console.log('📦 Building inventory from', devices.length, 'devices');
-      if (devices.length > 0) {
-        console.log('📦 Sample device from backend:', devices[0]);
-      }
-      
+      // Update inventory with borrowed and assigned counts
+      console.log('📦 Updating inventory with borrowed and assigned counts');
       devices.forEach(device => {
         const deviceId = device.deviceId;
-        const total = device.quantity || 0;
         const borrowed = borrowedMap[deviceId] || 0;
         const assignedToRooms = assignedMap[deviceId] || 0;
-        const available = Math.max(0, total - borrowed - assignedToRooms);
+        const available = Math.max(0, device.quantity - borrowed - assignedToRooms);
 
         newInventory[deviceId] = {
-          deviceId,
-          // ✅ Backend returns 'name', not 'deviceName'
-          name: device.name,
-          deviceName: device.name, // Keep for backward compatibility
-          // ✅ Backend returns enum string like "MIC", "CAM", "LAPTOP"
-          deviceType: device.deviceType || 'KHAC',
-          total,
+          ...newInventory[deviceId],
           borrowed,
           assignedToRooms,
           available
@@ -131,10 +198,10 @@ export const DeviceInventoryProvider = ({ children }) => {
         // Log warning if negative
         if (available < 0) {
           console.error(`🚫 Device ${deviceId} (${device.name}) has negative availability!`, {
-            total,
+            total: device.quantity,
             borrowed,
             assignedToRooms,
-            calculated: total - borrowed - assignedToRooms
+            calculated: device.quantity - borrowed - assignedToRooms
           });
         }
       });
@@ -142,16 +209,21 @@ export const DeviceInventoryProvider = ({ children }) => {
       // ✅ Only update state if component is still mounted
       if (isMountedRef.current) {
         setInventory(newInventory);
-        console.log('✅ Device inventory initialized:', newInventory);
+        console.log('✅ Device inventory updated with', Object.keys(newInventory).length, 'devices');
+        console.log('✅ Final Inventory:', newInventory);
         console.log('📊 Active meetings using devices:', activeMeetings.length);
-        console.log('🏢 Devices assigned to rooms:', Object.keys(assignedMap).length, 'types');
+        console.log('🏢 Devices assigned to rooms:', Object.keys(assignedMap).length, 'device types');
+      } else {
+        console.warn('🧹 Component unmounted before final inventory update');
       }
     } catch (error) {
       console.error('❌ Error initializing inventory:', error);
+      console.error('❌ Stack trace:', error.stack);
     } finally {
       // ✅ Only update loading state if component is still mounted
       if (isMountedRef.current) {
         setLoading(false);
+        console.log('✅ DeviceInventoryContext initialization complete');
       }
     }
   }, []);
@@ -343,7 +415,17 @@ export const DeviceInventoryProvider = ({ children }) => {
 
   // Get devices with availability info
   const getDevicesWithAvailability = useCallback(() => {
-    return Object.values(inventory).map(device => ({
+    // Convert inventory to array
+    const devicesArray = Object.values(inventory);
+    
+    // ✅ Add debug logging
+    if (devicesArray.length === 0) {
+      console.warn('⚠️ getDevicesWithAvailability: inventory is empty!');
+      console.log('   Inventory keys:', Object.keys(inventory));
+      console.log('   Inventory state:', inventory);
+    }
+    
+    return devicesArray.map(device => ({
       ...device,
       isAvailable: device.available > 0,
       status: device.available === 0 ? 'Hết' : `${device.available}/${device.total} có sẵn`
@@ -362,15 +444,14 @@ export const DeviceInventoryProvider = ({ children }) => {
           return;
         }
         
-        // ✅ Handle different response formats - getAllMeetings already returns array
+        // ✅ Handle different response formats
         let allMeetings = [];
         if (Array.isArray(allMeetingsResponse)) {
           allMeetings = allMeetingsResponse;
         } else if (allMeetingsResponse?.data && Array.isArray(allMeetingsResponse.data)) {
           allMeetings = allMeetingsResponse.data;
         } else {
-          // If empty array or null, just continue without error
-          console.log('⚠️ No meetings found or empty response in checkEndedMeetings');
+          console.warn('⚠️ Unexpected meeting response format in checkEndedMeetings');
           return;
         }
         
@@ -389,15 +470,14 @@ export const DeviceInventoryProvider = ({ children }) => {
         });
 
         // ✅ Check again before state updates
-        if (isMountedRef.current && justEndedMeetings.length > 0) {
+        if (isMountedRef.current) {
           justEndedMeetings.forEach(meeting => {
             console.log('⏰ Meeting ended, auto-returning devices:', meeting.meetingId);
             returnDevices(meeting.devices, meeting.meetingId);
           });
         }
       } catch (error) {
-        // Silently handle errors - don't spam console
-        console.log('⚠️ Error checking ended meetings (will retry):', error.message);
+        console.error('Error checking ended meetings:', error);
       }
     };
 

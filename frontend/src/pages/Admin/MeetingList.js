@@ -26,13 +26,11 @@ const MeetingList = () => {
   const itemsPerPage = 10;
 
   const statusConfig = {
-    booked: { label: 'Đã đặt', color: '#1976d2', bgColor: '#e3f2fd' }, // Đã đặt (tự động duyệt)
-    in_progress: { label: 'Đang diễn ra', color: '#2e7d32', bgColor: '#c8e6c9' },
-    completed: { label: 'Đã kết thúc', color: '#616161', bgColor: '#e0e0e0' },
+    pending: { label: 'Chờ duyệt', color: '#856404', bgColor: '#fff3cd' },
+    booked: { label: 'Chờ duyệt', color: '#856404', bgColor: '#fff3cd' }, // Backward compatibility
+    confirmed: { label: 'Đã xác nhận', color: '#28a745', bgColor: '#d4edda' },
     cancelled: { label: 'Đã hủy', color: '#dc3545', bgColor: '#f8d7da' },
-    // ✅ Backward compatibility - normalize deprecated statuses
-    pending: { label: 'Đã đặt', color: '#1976d2', bgColor: '#e3f2fd' }, // Map to BOOKED
-    confirmed: { label: 'Đã đặt', color: '#1976d2', bgColor: '#e3f2fd' } // Map to BOOKED
+    rejected: { label: 'Từ chối', color: '#721c24', bgColor: '#f8d7da' }
   };
 
   // Sync with preloaded data
@@ -120,14 +118,12 @@ const MeetingList = () => {
   const statusFilteredMeetings = filterStatus === 'all' 
     ? allMeetings 
     : allMeetings.filter(meeting => {
-        let meetingStatus = meeting.bookingStatus?.toLowerCase();
+        const meetingStatus = meeting.bookingStatus?.toLowerCase();
         const targetStatus = filterStatus.toLowerCase();
-        
-        // ✅ Normalize deprecated statuses to BOOKED
-        if (meetingStatus === 'pending' || meetingStatus === 'confirmed') {
-          meetingStatus = 'booked';
+        // Map BOOKED to PENDING for filtering
+        if (targetStatus === 'pending' && (meetingStatus === 'pending' || meetingStatus === 'booked')) {
+          return true;
         }
-        
         return meetingStatus === targetStatus;
       });
 
@@ -187,11 +183,9 @@ const MeetingList = () => {
         <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', marginBottom: '8px' }}>
           📅 Meeting List
         </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <p style={{ fontSize: '14px', color: '#7f8c8d', margin: 0 }}>
-            Quản lý và theo dõi các cuộc họp
-          </p>
-        </div>
+        <p style={{ fontSize: '14px', color: '#7f8c8d', margin: 0 }}>
+          Quản lý và theo dõi các cuộc họp
+        </p>
       </div>
 
       {/* Confirm Modal */}

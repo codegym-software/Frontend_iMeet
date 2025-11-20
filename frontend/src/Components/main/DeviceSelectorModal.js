@@ -1,15 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import './DeviceSelectorModal.css';
 import { useDeviceInventory } from '../../contexts/DeviceInventoryContext';
+import adminService from '../../services/adminService';
 
 const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConfirm }) => {
   const [tempSelectedDevices, setTempSelectedDevices] = useState([]);
   const [expandedTypes, setExpandedTypes] = useState({});
-  const [searchQuery, setSearchQuery] = useState(''); // ✅ Search state
-  const [selectedFilterType, setSelectedFilterType] = useState('all'); // ✅ Filter by type state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('all'); // 'all' or device type name
+  const [fallbackDevices, setFallbackDevices] = useState([]); // Fallback if devices is empty
+  const [loadingFallback, setLoadingFallback] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false); // State for filter dropdown
   
   // ✅ Get real-time inventory
   const { inventory } = useDeviceInventory();
+
+  // ✅ Load fallback devices if none provided
+  useEffect(() => {
+    if (isOpen && (!devices || devices.length === 0)) {
+      console.warn('⚠️ DeviceSelectorModal: devices prop is empty, fetching fallback...');
+      
+      const loadFallbackDevices = async () => {
+        try {
+          setLoadingFallback(true);
+          console.log('📥 Calling adminService.getDevices() for fallback...');
+          const devicesData = await adminService.getDevices();
+          console.log('📥 Fallback response:', devicesData);
+          
+          // Handle both array and object responses
+          let devicesList = [];
+          if (Array.isArray(devicesData)) {
+            devicesList = devicesData;
+          } else if (devicesData?.data && Array.isArray(devicesData.data)) {
+            devicesList = devicesData.data;
+          }
+          
+          console.log('✅ Fallback devices loaded:', devicesList.length, devicesList);
+          setFallbackDevices(devicesList);
+        } catch (error) {
+          console.error('❌ Failed to load fallback devices:', error);
+          setFallbackDevices([]);
+        } finally {
+          setLoadingFallback(false);
+        }
+      };
+      
+      loadFallbackDevices();
+    } else {
+      setFallbackDevices([]);
+    }
+  }, [isOpen, devices]);
+
+  // ✅ Use fallback devices if provided devices is empty
+  const displayDevices = (devices && devices.length > 0) ? devices : fallbackDevices;
+  
+  // Khởi tạo tempSelectedDevices khi modal mở
+  useEffect(() => {
+    if (isOpen) {
+      setTempSelectedDevices([...selectedDevices]);
+      
+      // Mở tất cả accordion
+      const devicesByType = groupDevicesByType(displayDevices);
+      const allExpanded = {};
+      Object.keys(devicesByType).forEach(type => {
+        allExpanded[type] = true;
+      });
+      setExpandedTypes(allExpanded);
+      
+      // Reset search and filter
+      setSearchQuery('');
+      setFilterType('all');
+      setIsFilterOpen(false);
+    }
+  }, [isOpen, selectedDevices, displayDevices]);
 
   // ✅ Map backend enum to Vietnamese display names
   const normalizeDeviceType = (type) => {
@@ -37,20 +100,16 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
     return mapping[typeUpper] || type;
   };
 
-  // ✅ Filter devices by search query and type filter
-  const filteredDevices = devices.filter(device => {
-    const deviceName = (device.name || device.deviceName || '').toLowerCase();
-    const searchMatch = searchQuery === '' || deviceName.includes(searchQuery.toLowerCase());
-    
-    const rawType = device.deviceType || device.deviceTypeName || 'Khác';
-    const normalizedType = normalizeDeviceType(rawType);
-    const typeMatch = selectedFilterType === 'all' || normalizedType === selectedFilterType;
-    
-    return searchMatch && typeMatch;
-  });
-
   // Nhóm thiết bị theo loại
   const groupDevicesByType = (deviceList) => {
+    // Log để debug (chỉ log sample, không log từng device)
+    if (deviceList.length > 0) {
+      const sampleDevice = deviceList[0];
+      const rawType = sampleDevice?.deviceType || sampleDevice?.deviceTypeName || 'Unknown';
+      console.log('📦 Grouping', deviceList.length, 'devices');
+      console.log('📦 Sample mapping:', rawType, '→', normalizeDeviceType(rawType));
+    }
+    
     const grouped = deviceList.reduce((acc, device) => {
       const rawType = device.deviceType || device.deviceTypeName || 'Khác';
       const normalizedType = normalizeDeviceType(rawType);
@@ -62,43 +121,71 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
       return acc;
     }, {});
     
+    console.log('📦 Result groups:', Object.keys(grouped));
     return grouped;
   };
 
-  const devicesByType = groupDevicesByType(filteredDevices);
-  
-  // ✅ Get all unique device types for filter
-  const allDeviceTypes = React.useMemo(() => {
+  // Get all device types for filter
+  const getAllDeviceTypes = () => {
     const types = new Set();
     devices.forEach(device => {
       const rawType = device.deviceType || device.deviceTypeName || 'Khác';
-      types.add(normalizeDeviceType(rawType));
+      const normalizedType = normalizeDeviceType(rawType);
+      types.add(normalizedType);
     });
-    return ['all', ...Array.from(types).sort()];
-  }, [devices]);
+    return Array.from(types).sort();
+  };
 
-  // Khởi tạo tempSelectedDevices khi modal mở
-  useEffect(() => {
-    if (isOpen) {
-      setTempSelectedDevices([...selectedDevices]);
-      // ✅ Reset search and filter when modal opens
-      setSearchQuery('');
-      setSelectedFilterType('all');
-      
-      // Mở tất cả accordion
-      const devicesByTypeForExpansion = groupDevicesByType(devices);
-      const allExpanded = {};
-      Object.keys(devicesByTypeForExpansion).forEach(type => {
-        allExpanded[type] = true;
+  // Filter devices based on search and filter
+  const filterDevices = (deviceList) => {
+    let filtered = deviceList;
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(device => {
+        const name = (device.name || device.deviceName || '').toLowerCase();
+        const description = (device.description || '').toLowerCase();
+        const type = normalizeDeviceType(device.deviceType || device.deviceTypeName || '').toLowerCase();
+        return name.includes(query) || description.includes(query) || type.includes(query);
       });
-      setExpandedTypes(allExpanded);
     }
-  }, [isOpen, selectedDevices, devices]);
+    
+    // Filter by device type
+    if (filterType !== 'all') {
+      filtered = filtered.filter(device => {
+        const rawType = device.deviceType || device.deviceTypeName || 'Khác';
+        const normalizedType = normalizeDeviceType(rawType);
+        return normalizedType === filterType;
+      });
+    }
+    
+    return filtered;
+  };
+
+  // Get filtered devices - use displayDevices (which includes fallback)
+  const filteredDevices = filterDevices(displayDevices);
+  const devicesByType = groupDevicesByType(filteredDevices);
   
   // Log grouped result
   if (isOpen && Object.keys(devicesByType).length > 0) {
     console.log('📦 Devices grouped by type:', Object.keys(devicesByType), devicesByType);
   }
+
+  // Reset function
+  const handleReset = () => {
+    setTempSelectedDevices([...selectedDevices]);
+    setSearchQuery('');
+    setFilterType('all');
+    
+    // Mở tất cả accordion
+    const devicesByType = groupDevicesByType(devices);
+    const allExpanded = {};
+    Object.keys(devicesByType).forEach(type => {
+      allExpanded[type] = true;
+    });
+    setExpandedTypes(allExpanded);
+  };
 
   // Toggle accordion
   const toggleType = (type) => {
@@ -192,13 +279,6 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
     onClose();
   };
 
-  // ✅ Reset all selections
-  const handleReset = () => {
-    setTempSelectedDevices([]);
-    setSearchQuery('');
-    setSelectedFilterType('all');
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -212,35 +292,185 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
           <button className="device-modal-close" onClick={handleCancel}>×</button>
         </div>
 
-        {/* ✅ Search and Filter Bar */}
-        <div className="device-modal-toolbar">
-          <div className="device-search-container">
+        {/* Search and Filter Bar - Sticky at top, on same line */}
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          padding: '10px 16px',
+          borderBottom: '1px solid #e0e0e0',
+          backgroundColor: '#ffffff',
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+        }}>
+          {/* Search Input */}
+          <div style={{ flex: 1, minWidth: '150px' }}>
             <input
               type="text"
-              className="device-search-input"
-              placeholder="🔍 Tìm kiếm thiết bị..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="tìm kiếm"
+              style={{
+                width: '100%',
+                padding: '6px 12px',
+                border: '1px solid #dadce0',
+                borderRadius: '4px',
+                fontSize: '13px',
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#1a73e8'}
+              onBlur={(e) => e.target.style.borderColor = '#dadce0'}
             />
           </div>
-          <div className="device-filter-container">
-            <select
-              className="device-filter-select"
-              value={selectedFilterType}
-              onChange={(e) => setSelectedFilterType(e.target.value)}
+
+          {/* Filter Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '4px',
+                border: '1px solid #1a73e8',
+                background: '#1a73e8',
+                color: 'white',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
             >
-              <option value="all">Tất cả loại</option>
-              {allDeviceTypes.slice(1).map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
+              {filterType === 'all' ? 'tất cả' : filterType}
+              <span style={{ fontSize: '11px' }}>{isFilterOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {/* Dropdown Menu */}
+            {isFilterOpen && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '4px',
+                backgroundColor: 'white',
+                border: '1px solid #dadce0',
+                borderRadius: '4px',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                minWidth: '150px',
+                zIndex: 1000
+              }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterType('all');
+                    setIsFilterOpen(false);
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '10px 16px',
+                    border: 'none',
+                    background: filterType === 'all' ? '#e8f0fe' : 'transparent',
+                    color: filterType === 'all' ? '#1a73e8' : '#202124',
+                    fontSize: '13px',
+                    fontWeight: filterType === 'all' ? '600' : '500',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                    borderBottom: '1px solid #e0e0e0'
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = filterType === 'all' ? '#e8f0fe' : 'transparent'}
+                >
+                  tất cả
+                </button>
+
+                {['Micro', 'Camera', 'Laptop', 'Màn hình', 'Máy chiếu', 'Khác'].map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setFilterType(type);
+                      setIsFilterOpen(false);
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '10px 16px',
+                      border: 'none',
+                      background: filterType === type ? '#e8f0fe' : 'transparent',
+                      color: filterType === type ? '#1a73e8' : '#202124',
+                      fontSize: '13px',
+                      fontWeight: filterType === type ? '600' : '500',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                      borderBottom: '1px solid #e0e0e0'
+                    }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = filterType === type ? '#e8f0fe' : 'transparent'}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="device-modal-body">
-          {filteredDevices.length === 0 ? (
+          {displayDevices.length === 0 ? (
             <div className="device-modal-empty">
-              <p>{searchQuery || selectedFilterType !== 'all' ? 'Không tìm thấy thiết bị phù hợp' : 'Không có thiết bị nào khả dụng'}</p>
+              {loadingFallback ? (
+                <p>Đang tải thiết bị...</p>
+              ) : (
+                <>
+                  <p>Không có thiết bị nào khả dụng</p>
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    style={{
+                      marginTop: '12px',
+                      padding: '8px 16px',
+                      background: '#1a73e8',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    🔄 Tải lại trang
+                  </button>
+                </>
+              )}
+            </div>
+          ) : filteredDevices.length === 0 ? (
+            <div className="device-modal-empty">
+              <p>Không tìm thấy thiết bị nào phù hợp với bộ lọc</p>
+              <button
+                type="button"
+                onClick={handleReset}
+                style={{
+                  marginTop: '12px',
+                  padding: '8px 16px',
+                  background: '#1a73e8',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Đặt lại bộ lọc
+              </button>
             </div>
           ) : (
             <div className="device-types-accordion">
@@ -255,7 +485,6 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                       <span className="device-type-name" style={{ display: 'inline-block', minWidth: '100px' }}>
                         {type}
                       </span>
-                      <span className="device-type-count">({typeDevices.length})</span>
                     </div>
                     <span className="device-type-arrow">
                       {expandedTypes[type] ? '▼' : '▶'}
@@ -277,22 +506,25 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
 
                         // ✅ Backend returns 'name' field (tên từ database)
                         const deviceDisplayName = device.name || device.deviceName || 'Thiết bị';
+                        if (!device.name) {
+                          console.warn('⚠️ Device missing name from backend:', device);
+                        }
                         
                         return (
                           <div 
                             key={device.deviceId} 
                             className={`device-card ${isSelected ? 'selected' : ''} ${isOutOfStock ? 'unavailable' : ''}`}
                             onClick={(e) => {
-                              // Click vào card (ngoài buttons) để toggle
+                              // Click vào card để toggle chọn/bỏ chọn
                               if (e.target.closest('.quantity-btn') || e.target.closest('.quantity-input')) {
                                 return; // Ignore if clicking on quantity controls
                               }
                               if (!isOutOfStock) {
                                 if (isSelected) {
-                                  // ✅ Nếu đã chọn, click lại sẽ bỏ chọn (set quantity = 0)
+                                  // ✅ Nếu đã chọn → bỏ chọn (toggle OFF)
                                   handleQuantityChange(device.deviceId, 0);
                                 } else {
-                                  // Chưa chọn, chọn 1
+                                  // ✅ Chưa chọn → chọn 1 (toggle ON)
                                   handleQuantityChange(device.deviceId, 1);
                                 }
                               }
@@ -325,44 +557,56 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
                               </div>
                             )}
 
-                            {/* Quantity Controls - Always show */}
+                            {/* Quantity Controls - Show when selected */}
                             <div className="device-card-footer">
                               {!isOutOfStock ? (
                                 <>
-                                  <div className="device-card-quantity">
-                                    <button
-                                      type="button"
-                                      className="quantity-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleQuantityChange(device.deviceId, selectedQty - 1);
-                                      }}
-                                      disabled={selectedQty === 0}
-                                    >
-                                      −
-                                    </button>
-                                    <input
-                                      type="number"
-                                      className="quantity-input"
-                                      value={selectedQty}
-                                      onChange={(e) => handleQuantityChange(device.deviceId, e.target.value)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      min="0"
-                                      max={available}
-                                      placeholder="0"
-                                    />
-                                    <button
-                                      type="button"
-                                      className="quantity-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleQuantityChange(device.deviceId, selectedQty + 1);
-                                      }}
-                                      disabled={selectedQty >= available}
-                                    >
-                                      +
-                                    </button>
-                                  </div>
+                                  {isSelected ? (
+                                    // ✅ Show quantity controls when selected
+                                    <div className="device-card-quantity">
+                                      <button
+                                        type="button"
+                                        className="quantity-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleQuantityChange(device.deviceId, selectedQty - 1);
+                                        }}
+                                        disabled={selectedQty === 0}
+                                      >
+                                        −
+                                      </button>
+                                      <input
+                                        type="number"
+                                        className="quantity-input"
+                                        value={selectedQty}
+                                        onChange={(e) => handleQuantityChange(device.deviceId, e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        min="0"
+                                        max={available}
+                                        placeholder="0"
+                                      />
+                                      <button
+                                        type="button"
+                                        className="quantity-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleQuantityChange(device.deviceId, selectedQty + 1);
+                                        }}
+                                        disabled={selectedQty >= available}
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    // ✅ Show placeholder when not selected
+                                    <div style={{ 
+                                      color: '#999', 
+                                      fontSize: '13px',
+                                      fontStyle: 'italic'
+                                    }}>
+                                      Click để chọn
+                                    </div>
+                                  )}
                                 </>
                               ) : (
                                 <div className="out-of-stock-message">
@@ -403,13 +647,34 @@ const DeviceSelectorModal = ({ isOpen, onClose, devices, selectedDevices, onConf
           )}
         </div>
 
-        <div className="device-modal-footer">
-          <div className="device-modal-footer-left">
-            <button type="button" className="device-modal-btn-reset" onClick={handleReset} title="Đặt lại tất cả">
-              🔄 Đặt lại
-            </button>
-          </div>
-          <div className="device-modal-footer-right">
+        <div className="device-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button 
+            type="button" 
+            className="device-modal-btn-reset"
+            onClick={handleReset}
+            style={{
+              padding: '8px 16px',
+              background: '#f8f9fa',
+              border: '1px solid #dadce0',
+              borderRadius: '6px',
+              fontSize: '14px',
+              cursor: 'pointer',
+              color: '#5f6368',
+              transition: 'all 0.2s',
+              fontWeight: '500'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = '#e8eaed';
+              e.target.style.borderColor = '#dadce0';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = '#f8f9fa';
+              e.target.style.borderColor = '#dadce0';
+            }}
+          >
+            🔄 Đặt lại
+          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button type="button" className="device-modal-btn-cancel" onClick={handleCancel}>
               Hủy
             </button>

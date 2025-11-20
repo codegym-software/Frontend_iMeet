@@ -7,16 +7,14 @@ import { MdSettings } from 'react-icons/md';
 import { IoSunny, IoMoon } from 'react-icons/io5';
 import { FaPlus } from 'react-icons/fa';
 import calendarLogo from '../../assets/calendar-logo.png';
-import MeetingForm from './MeetingForm'; // Import MeetingForm
-import BackendLinks from '../common/BackendLinks';
-import { API_BASE_URL } from '../../constants/api';
+// MeetingForm will be rendered in Home component instead
 
-const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, theme, toggleTheme, onCreateEvent, onMeetingCreated }) => {
+const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, theme, toggleTheme, onCreateEvent, onMeetingCreated, onOpenMeetingForm }) => {
   const { logout, user } = useAuth();
   const history = useHistory();
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [showMeetingForm, setShowMeetingForm] = useState(false); // Thay thế create dropdown
+  // Removed showMeetingForm state - form will be managed in Home component
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
@@ -90,7 +88,7 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, 
         imageSrc = avatarUrl;
       } else {
         // Fallback cho uploaded file (nếu có)
-        imageSrc = `${API_BASE_URL}${avatarUrl}`;
+        imageSrc = `http://localhost:8081${avatarUrl}`;
       }
 
       return (
@@ -193,26 +191,12 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, 
 
   // Xử lý Create button - mở form trực tiếp
   const handleCreateClick = () => {
-    setShowMeetingForm(true);
-  };
-
-  const handleMeetingFormClose = () => {
-    setShowMeetingForm(false);
-  };
-
-  const handleMeetingFormSubmit = (meetingData) => {
-    setShowMeetingForm(false);
-    
-    // Gọi callback để refresh meetings
-    if (onMeetingCreated) {
-      onMeetingCreated();
-    }
-    
-    // Legacy callback
-    if (onCreateEvent) {
-      onCreateEvent('Event', selectedDate, meetingData);
+    if (onOpenMeetingForm) {
+      onOpenMeetingForm();
     }
   };
+
+  // Removed handleMeetingFormClose and handleMeetingFormSubmit - handled in Home component
 
   return (
     <div className="top-bar">
@@ -386,21 +370,10 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, 
               )}
             </div>
           </div>
-          {/* Display backend links (view only) */}
-          <div className="backend-links-topbar" style={{marginLeft: '12px'}}>
-            <BackendLinks />
-          </div>
         </div>
       </div>
 
-      {/* Render Meeting Form Modal */}
-      {showMeetingForm && (
-        <MeetingForm
-          selectedDate={selectedDate}
-          onClose={handleMeetingFormClose}
-          onSubmit={handleMeetingFormSubmit}
-        />
-      )}
+      {/* Meeting Form is now rendered in Home component */}
     </div>
   );
 };

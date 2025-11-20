@@ -10,6 +10,7 @@ import ForgotPasswordPage from '../pages/ForgotPassword';
 import HomePage from '../pages/Home';
 import ProfilePage from '../pages/Profile';
 import OAuth2CallbackPage from '../pages/OAuth2Callback';
+import InvitationResponsePage from '../pages/InvitationResponse/InvitationResponse';
 
 // Layouts
 import AdminLayout from '../layouts/AdminLayout';
@@ -23,6 +24,7 @@ const AppRoutes = () => {
       <Route exact path="/login" component={LoginPage} />
       <Route exact path="/forgot-password" component={ForgotPasswordPage} />
       <Route exact path="/oauth2/callback" component={OAuth2CallbackPage} />
+      <Route exact path="/invitation-response" component={InvitationResponsePage} />
       
       {/* Admin Routes - chỉ admin mới truy cập được */}
       <RoleBasedRoute path="/admin" adminOnly={true}>

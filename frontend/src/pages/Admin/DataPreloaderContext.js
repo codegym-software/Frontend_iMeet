@@ -132,18 +132,13 @@ export const DataPreloaderProvider = ({ children }) => {
     try {
       if (isMounted.current) setDevicesLoading(true);
       const list = await adminService.getDevices();
-      // adminService.getDevices() already returns empty array on error, so we can safely use it
       const normalized = Array.isArray(list) ? list.map(d => normalizeDevice(d, deviceTypes)).filter(Boolean) : [];
-      if (isMounted.current) {
-        setDevices(normalized);
-        console.log(`✅ Devices loaded: ${normalized.length}`);
-      }
+      if (isMounted.current) setDevices(normalized);
       return normalized;
     } catch (error) {
-      console.warn('⚠️ Error loading devices, using empty array:', error.message);
-      // Don't throw - just return empty array so other data can still load
+      console.error('Error loading devices:', error);
       if (isMounted.current) setDevices([]);
-      return [];
+      throw error;
     } finally {
       if (isMounted.current) setDevicesLoading(false);
     }
@@ -164,46 +159,32 @@ export const DataPreloaderProvider = ({ children }) => {
             const roomId = r.id || r.roomId;
             return roomService.getDevicesByRoom(roomId);
           });
-          const deviceResponses = await Promise.allSettled(devicePromises);
+          const deviceResponses = await Promise.all(devicePromises);
           const enriched = roomsList.map((r, idx) => {
             const resp = deviceResponses[idx];
-            if (resp.status === 'fulfilled' && resp.value && resp.value.success && Array.isArray(resp.value.data)) {
-              const ids = resp.value.data.map(x => Number(x.deviceId));
-              return { ...r, selectedDevices: ids };
-            }
-            return { ...r, selectedDevices: [] };
+            const ids = (resp && resp.success && Array.isArray(resp.data)) 
+              ? resp.data.map(x => Number(x.deviceId)) 
+              : [];
+            return { ...r, selectedDevices: ids };
           });
           console.log('Rooms enriched with devices:', enriched);
-          if (isMounted.current) {
-            setRooms(enriched);
-            console.log(`✅ Rooms loaded: ${enriched.length}`);
-          }
+          if (isMounted.current) setRooms(enriched);
           return enriched;
         } catch (enrichErr) {
           console.warn('Failed to enrich rooms with devices:', enrichErr);
           // Still set rooms with empty selectedDevices array
           const roomsWithEmptyDevices = roomsList.map(r => ({ ...r, selectedDevices: [] }));
-          if (isMounted.current) {
-            setRooms(roomsWithEmptyDevices);
-            console.log(`✅ Rooms loaded: ${roomsWithEmptyDevices.length} (without device enrichment)`);
-          }
+          if (isMounted.current) setRooms(roomsWithEmptyDevices);
           return roomsWithEmptyDevices;
         }
       } else {
-        if (isMounted.current) {
-          setRooms([]);
-          console.log('✅ Rooms loaded: 0');
-        }
+        if (isMounted.current) setRooms([]);
         return [];
       }
     } catch (error) {
-      console.warn('⚠️ Error loading rooms, using empty array:', error.message);
-      // Don't throw - just return empty array so other data can still load
-      if (isMounted.current) {
-        setRooms([]);
-        console.log('✅ Rooms loaded: 0 (error fallback)');
-      }
-      return [];
+      console.error('Error loading rooms:', error);
+      if (isMounted.current) setRooms([]);
+      throw error;
     } finally {
       if (isMounted.current) setRoomsLoading(false);
     }
@@ -213,34 +194,35 @@ export const DataPreloaderProvider = ({ children }) => {
   const loadMeetings = useCallback(async (isMounted = { current: true }) => {
     try {
       if (isMounted.current) setMeetingsLoading(true);
-      // meetingService.getAllMeetings() returns array directly, not {success, data}
       const response = await meetingService.getAllMeetings();
       
-      // Response is already an array (or empty array on error)
-      const meetingsData = Array.isArray(response) 
-        ? response.map(meeting => {
-            // ✅ Normalize deprecated statuses to BOOKED
-            let status = meeting.bookingStatus?.toLowerCase() || 'booked';
-            if (status === 'pending' || status === 'confirmed') {
-              status = 'booked';
-            }
-            return {
-              ...meeting,
-              bookingStatus: status
-            };
-          })
-        : [];
-        
-      if (isMounted.current) {
-        setMeetings(meetingsData);
-        console.log(`✅ Meetings loaded: ${meetingsData.length}`);
+      let meetingsData = [];
+      if (Array.isArray(response)) {
+        meetingsData = response;
+      } else if (Array.isArray(response?.data)) {
+        meetingsData = response.data;
+      } else if (response?.success && Array.isArray(response?.data)) {
+        meetingsData = response.data;
+      } else {
+        console.warn('⚠️ Unexpected meetings response format:', response);
+        meetingsData = [];
       }
-      return meetingsData;
+
+      const normalizedMeetings = meetingsData.map(meeting => ({
+          ...meeting,
+          bookingStatus: meeting.bookingStatus?.toLowerCase() || 'booked'
+        }));
+
+        if (isMounted.current) {
+        setMeetings(normalizedMeetings);
+        console.log('Meetings Result:', normalizedMeetings);
+        }
+
+      return normalizedMeetings;
     } catch (error) {
-      console.warn('⚠️ Error loading meetings, using empty array:', error.message);
-      // Don't throw - just return empty array so other data can still load
+      console.error('Error loading meetings:', error);
       if (isMounted.current) setMeetings([]);
-      return [];
+      throw error;
     } finally {
       if (isMounted.current) setMeetingsLoading(false);
     }
@@ -442,40 +424,48 @@ export const DataPreloaderProvider = ({ children }) => {
       
       try {
         // Load all data in parallel with isMounted check
-        // ✅ Use Promise.allSettled instead of Promise.all to handle partial failures
-        const results = await Promise.allSettled([
-          loadUsers(0, 1000, 'createdAt', 'desc', '', isMountedRef),
-          loadUserStats(isMountedRef),
-          loadDevices([], isMountedRef),
-          loadRooms(isMountedRef),
-          loadMeetings(isMountedRef)
+        const [
+          usersResponse,
+          statsResponse,
+          devicesResponse,
+          roomsResponse,
+          meetingsResponse
+        ] = await Promise.all([
+          loadUsers(0, 1000, 'createdAt', 'desc', '', isMountedRef).catch(err => {
+            console.warn('❌ Failed to load users:', err.message);
+            return null;
+          }),
+          loadUserStats(isMountedRef).catch(err => {
+            console.warn('❌ Failed to load user stats:', err.message);
+            return null;
+          }),
+          loadDevices([], isMountedRef).catch(err => {
+            console.warn('❌ Failed to load devices:', err.message);
+            return null;
+          }),
+          loadRooms(isMountedRef).catch(err => {
+            console.warn('❌ Failed to load rooms:', err.message);
+            return null;
+          }),
+          loadMeetings(isMountedRef).catch(err => {
+            console.warn('❌ Failed to load meetings:', err.message);
+            return null;
+          })
         ]);
         
-        // ✅ Log results for debugging
-        console.log('📊 Data loading results:', {
-          users: results[0].status,
-          stats: results[1].status,
-          devices: results[2].status,
-          rooms: results[3].status,
-          meetings: results[4].status
-        });
-        
         // ✅ Load room-device mappings after rooms are loaded
-        const roomsResult = results[3];
-        if (isMountedRef.current && roomsResult.status === 'fulfilled' && roomsResult.value && roomsResult.value.length > 0) {
-          await loadRoomDeviceMappings(roomsResult.value, isMountedRef);
+        if (isMountedRef.current && roomsResponse && roomsResponse.length > 0) {
+          await loadRoomDeviceMappings(roomsResponse, isMountedRef).catch(err => {
+            console.warn('❌ Failed to load room-device mappings:', err.message);
+          });
         }
         
         if (isMountedRef.current) {
-          setIsDataLoaded(true); // ✅ Mark as loaded even if some failed
+          setIsDataLoaded(true); // ✅ Mark as loaded
           console.log('✅ Initial data loaded and cached!');
         }
       } catch (error) {
-        console.error('Error preloading data:', error);
-        // ✅ Still mark as loaded so UI can render with partial data
-        if (isMountedRef.current) {
-          setIsDataLoaded(true);
-        }
+        console.error('❌ Error preloading data:', error);
       } finally {
         if (isMountedRef.current) setIsPreloading(false);
       }
@@ -486,13 +476,10 @@ export const DataPreloaderProvider = ({ children }) => {
     return () => {
       isMountedRef.current = false;
     };
-  }, [isDataLoaded, loadUsers, loadUserStats, loadDevices, loadRooms, loadMeetings, loadRoomDeviceMappings]);
+  }, [isDataLoaded]); // ✅ ONLY depend on isDataLoaded to prevent infinite loops
 
   const value = {
-    // Data loaded flag
     isDataLoaded,
-    
-    // Users
     users,
     userStats,
     usersTotalPages,
@@ -503,40 +490,30 @@ export const DataPreloaderProvider = ({ children }) => {
     loadUserStats,
     setUsers,
     setUserStats,
-    
-    // Devices
     devices,
     devicesLoading,
     loadDevices,
     setDevices,
-    
-    // Rooms
     rooms,
     roomsLoading,
     loadRooms,
     setRooms,
-    
-    // Meetings
     meetings,
     meetingsLoading,
     loadMeetings,
     setMeetings,
-    
-    // ✅ Room-Device Mappings
     roomDeviceMappings,
     mappingsLoading,
     loadRoomDeviceMappings,
-    updateSingleRoomMappings, // ✅ Optimistic update for single room
-    removeRoomMappings, // ✅ Remove mappings when deleting room
-    
-    // Global
+    updateSingleRoomMappings,
+    removeRoomMappings,
     isPreloading
   };
 
-  return (
-    <DataPreloaderContext.Provider value={value}>
-      {children}
-    </DataPreloaderContext.Provider>
+  return React.createElement(
+    DataPreloaderContext.Provider,
+    { value },
+    children
   );
 };
 

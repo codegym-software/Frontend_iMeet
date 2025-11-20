@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { CalendarHelpers } from '../utils/CalendarHelpers';
 
 const DayView = React.memo(({
@@ -8,15 +8,23 @@ const DayView = React.memo(({
   onDateSelect,
   handleEventClick,
   handleEventDoubleClick,
-  handleEventContextMenu,
+  handleEventMouseEnter,
+  handleEventMouseLeave,
   handleTimeSlotClick,
-  formatTime
+  formatTime,
+  onSelectionComplete,
+  lockedSelection,
+  onLockSelection
 }) => {
   const today = new Date();
   const isToday = CalendarHelpers.isSameDate(selectedDate, today);
   const currentHour = currentTime.getHours();
   const currentMinute = currentTime.getMinutes();
   const timeSlotsRef = useRef(null);
+  
+  // ✅ NEW: State for drag-to-create selection
+  const [selectionStart, setSelectionStart] = useState(null);
+  const [selectionEnd, setSelectionEnd] = useState(null);
 
   // ✅ FIX: Filter events cho đúng ngày được select (fix lỗi timezone)
   const dayEvents = useMemo(() => 
@@ -135,39 +143,44 @@ const DayView = React.memo(({
 
       return (
         <div
-          key={event.id}
+          key={`event-${event.id}-timed-${event.start.getTime()}`}
           className={`calendar-event timed-event`}
           style={{
             top: `${top}px`,
             height: `${height}px`,
             left: `calc(${EVENT_AREA_LEFT}px + (100% - ${EVENT_AREA_LEFT + EVENT_AREA_RIGHT}px) * ${eventLayout.left / 100})`,
             width: `calc((100% - ${EVENT_AREA_LEFT + EVENT_AREA_RIGHT}px) * ${eventLayout.width / 100})`,
-            backgroundColor: event.color,
-            borderLeft: `3px solid ${event.color}`
+            backgroundColor: event.color || '#1a73e8',
+            borderLeft: `3px solid ${event.color || '#1a73e8'}`
           }}
           onClick={(e) => handleEventClick(event, e)}
-          onDoubleClick={(e) => handleEventDoubleClick && handleEventDoubleClick(event)}
-          onContextMenu={(e) => handleEventContextMenu && handleEventContextMenu(event, e)}
+          onDoubleClick={(e) => handleEventDoubleClick && handleEventDoubleClick(event, e)}
+          onMouseEnter={(e) => handleEventMouseEnter(event, e)}
+          onMouseLeave={handleEventMouseLeave}
         >
           <div className="event-content">
             {duration < 30 ? (
               // Very short meeting (< 30 min): compact single line
-              <div className="event-title-inline" style={{ fontSize: '11px', lineHeight: '1.2' }}>
-                {event.title} ({formatTime(event.start)} - {formatTime(event.end)})
+              <div className="event-title-inline" style={{ fontSize: '12px', lineHeight: '1.3', fontWeight: '600' }}>
+                {event.title}
               </div>
             ) : duration < 60 ? (
-              // Short meeting (30-60 min): single line with full info
-              <div className="event-title-inline">
-                {event.title}
-                {' '}({formatTime(event.start)} - {formatTime(event.end)})
-              </div>
-            ) : (
-              // Long meeting (> 60 min): multi-line format
+              // Short meeting (30-60 min): show title + time
               <>
-                <div className="event-title">
+                <div className="event-title" style={{ fontSize: '13px', fontWeight: '600' }}>
                   {event.title}
                 </div>
-                <div className="event-time">
+                <div className="event-time" style={{ fontSize: '11px' }}>
+                  {formatTime(event.start)} - {formatTime(event.end)}
+                </div>
+              </>
+            ) : (
+              // Long meeting (> 60 min): multi-line format with larger text
+              <>
+                <div className="event-title" style={{ fontSize: '14px', fontWeight: '600' }}>
+                  {event.title}
+                </div>
+                <div className="event-time" style={{ fontSize: '12px' }}>
                   {formatTime(event.start)} - {formatTime(event.end)}
                 </div>
               </>
@@ -176,7 +189,7 @@ const DayView = React.memo(({
         </div>
       );
     });
-  }, [timedEvents, handleEventClick, handleEventDoubleClick, formatTime]);
+  }, [timedEvents, handleEventClick, handleEventMouseEnter, handleEventMouseLeave, formatTime]);
 
   // Scroll to current time
   useEffect(() => {
@@ -186,6 +199,107 @@ const DayView = React.memo(({
       timeSlotsRef.current.scrollTop = Math.max(0, scrollPosition);
     }
   }, [currentTime]);
+
+  // ✅ NEW: Helper to convert pixel Y position to Date
+  const pixelToTime = (pixelY, container) => {
+    if (!container) return null;
+    
+    const GMT_OFFSET = 48; // Header height
+    const PIXELS_PER_HOUR = 60;
+    
+    // Calculate minutes from top (accounting for GMT header)
+    const relativeY = Math.max(0, pixelY - GMT_OFFSET);
+    const totalMinutes = Math.round(relativeY); // Round to nearest minute
+    
+    // Calculate hour and minute
+    const hour = Math.floor(totalMinutes / PIXELS_PER_HOUR);
+    const minute = totalMinutes % PIXELS_PER_HOUR;
+    
+    // Validate hour (0-23)
+    if (hour < 0 || hour > 23) return null;
+    
+    // Create date with selected time
+    const date = new Date(selectedDate);
+    date.setHours(hour, minute, 0, 0);
+    return date;
+  };
+
+  // ✅ NEW: Handle mouse down on time slot
+  const handleSlotMouseDown = (e) => {
+    if (!timeSlotsRef.current) return;
+    if (e.target.closest('.calendar-event')) {
+      return;
+    }
+    if (onLockSelection) {
+      onLockSelection(null);
+    }
+    
+    // Get position relative to the scrollable container
+    const container = timeSlotsRef.current;
+    const rect = container.getBoundingClientRect();
+    const pixelY = e.clientY - rect.top + container.scrollTop;
+    
+    const startTime = pixelToTime(pixelY, container);
+    if (!startTime) return;
+    
+    setSelectionStart(startTime);
+    setSelectionEnd(startTime);
+  };
+
+  // ✅ NEW: Handle mouse move during drag
+  const handleSlotMouseMove = (e) => {
+    if (!selectionStart || !timeSlotsRef.current) return;
+    
+    // Get position relative to the scrollable container
+    const container = timeSlotsRef.current;
+    const rect = container.getBoundingClientRect();
+    const pixelY = e.clientY - rect.top + container.scrollTop;
+    
+    const endTime = pixelToTime(pixelY, container);
+    if (endTime) {
+      setSelectionEnd(endTime);
+    }
+  };
+
+  // ✅ NEW: Handle mouse up (selection complete)
+  const handleSlotMouseUp = () => {
+    if (selectionStart && selectionEnd) {
+      const start = new Date(Math.min(selectionStart.getTime(), selectionEnd.getTime()));
+      const end = new Date(Math.max(selectionStart.getTime(), selectionEnd.getTime()));
+      
+      // Ensure at least 15 minutes duration
+      if (end.getTime() - start.getTime() < 15 * 60 * 1000) {
+        end.setTime(start.getTime() + 15 * 60 * 1000);
+      }
+      
+      if (onLockSelection) {
+        onLockSelection({ start, end });
+      }
+
+      if (onSelectionComplete) {
+        onSelectionComplete({ start, end });
+      }
+    }
+    
+    setSelectionStart(null);
+    setSelectionEnd(null);
+  };
+
+  // ✅ NEW: Add mouse event listeners for drag-to-select
+  useEffect(() => {
+    const timeSlots = timeSlotsRef.current;
+    if (!timeSlots) return;
+
+    timeSlots.addEventListener('mousedown', handleSlotMouseDown);
+    document.addEventListener('mousemove', handleSlotMouseMove);
+    document.addEventListener('mouseup', handleSlotMouseUp);
+
+    return () => {
+      timeSlots.removeEventListener('mousedown', handleSlotMouseDown);
+      document.removeEventListener('mousemove', handleSlotMouseMove);
+      document.removeEventListener('mouseup', handleSlotMouseUp);
+    };
+  }, [selectionStart, selectionEnd]);
 
   return (
     <div className="time-table day-view">
@@ -208,17 +322,17 @@ const DayView = React.memo(({
         <div className="all-day-section">
           <div className="all-day-label">All day</div>
           <div className="all-day-events">
-            {allDayEvents.map(event => (
+            {allDayEvents.map((event, index) => (
               <div
-                key={event.id}
+                key={`event-${event.id}-all-day-${index}-${event.start.getTime()}`}
                 className={`calendar-event all-day-event`}
                 style={{
                   backgroundColor: event.color,
                   borderLeft: `3px solid ${event.color}`
                 }}
                 onClick={(e) => handleEventClick(event, e)}
-                onDoubleClick={(e) => handleEventDoubleClick && handleEventDoubleClick(event)}
-                onContextMenu={(e) => handleEventContextMenu && handleEventContextMenu(event, e)}
+                onMouseEnter={(e) => handleEventMouseEnter(event, e)}
+                onMouseLeave={handleEventMouseLeave}
               >
                 <div className="event-title">
                   {event.title}
@@ -268,6 +382,81 @@ const DayView = React.memo(({
               </div>
             </div>
           ))}
+
+          {/* ✅ NEW: Selection indicator (highlight during drag) */}
+          {selectionStart && selectionEnd && (
+            <div
+              className="time-slot-selection"
+              style={{
+                top: `${48 + Math.min(selectionStart.getHours() * 60 + selectionStart.getMinutes(), selectionEnd.getHours() * 60 + selectionEnd.getMinutes())}px`,
+                height: `${Math.max(Math.abs((selectionEnd.getTime() - selectionStart.getTime()) / (1000 * 60)), 12)}px`,
+                left: '84px',
+                right: '12px',
+                backgroundColor: 'rgba(66, 133, 244, 0.2)',
+                border: '2px solid #4285f4',
+                borderRadius: '4px',
+                pointerEvents: 'none',
+                zIndex: 3,
+                position: 'absolute'
+              }}
+            >
+              <div className="selection-time-info" style={{
+                position: 'absolute',
+                top: '4px',
+                left: '6px',
+                fontSize: '11px',
+                fontWeight: '600',
+                color: '#4285f4',
+                backgroundColor: 'white',
+                padding: '2px 4px',
+                borderRadius: '2px'
+              }}>
+                {formatTime(selectionStart <= selectionEnd ? selectionStart : selectionEnd)} - {formatTime(selectionEnd >= selectionStart ? selectionEnd : selectionStart)}
+              </div>
+            </div>
+          )}
+
+          {/* Locked selection (after mouse up) */}
+          {!selectionStart && !selectionEnd && lockedSelection && CalendarHelpers.isEventOnDate(
+            {
+              start: lockedSelection.start,
+              end: lockedSelection.end
+            },
+            selectedDate
+          ) && (
+            <div
+              className="time-slot-selection"
+              style={{
+                top: `${48 + (lockedSelection.start.getHours() * 60 + lockedSelection.start.getMinutes())}px`,
+                height: `${Math.max(
+                  (lockedSelection.end.getTime() - lockedSelection.start.getTime()) / (1000 * 60),
+                  12
+                )}px`,
+                left: '84px',
+                right: '12px',
+                backgroundColor: 'rgba(66, 133, 244, 0.2)',
+                border: '2px solid #4285f4',
+                borderRadius: '4px',
+                pointerEvents: 'none',
+                zIndex: 3,
+                position: 'absolute'
+              }}
+            >
+              <div className="selection-time-info" style={{
+                position: 'absolute',
+                top: '4px',
+                left: '6px',
+                fontSize: '11px',
+                fontWeight: '600',
+                color: '#4285f4',
+                backgroundColor: 'white',
+                padding: '2px 4px',
+                borderRadius: '2px'
+              }}>
+                {formatTime(lockedSelection.start)} - {formatTime(lockedSelection.end)}
+              </div>
+            </div>
+          )}
 
           {/* Render timed events */}
           {renderTimedEvents}

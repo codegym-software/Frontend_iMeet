@@ -52,15 +52,6 @@ const RoomSelector = ({ selectedRoomId, onRoomSelect }) => {
       console.log('📍 Loaded rooms:', normalizedRooms.length);
       
       setRooms(normalizedRooms);
-      
-      // Auto select first room if none selected
-      if (normalizedRooms.length > 0 && !selectedRoomId) {
-        const firstRoom = normalizedRooms[0];
-        if (firstRoom.id) {
-          console.log('✅ Auto-selecting first room:', firstRoom.name, '(ID:', firstRoom.id, ')');
-          onRoomSelect(firstRoom.id);
-        }
-      }
     } catch (error) {
       console.error('Error loading rooms:', error);
     } finally {

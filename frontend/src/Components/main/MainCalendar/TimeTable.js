@@ -5,9 +5,7 @@ import { CalendarHelpers } from './utils/CalendarHelpers';
 import EditMeetingForm from '../EditMeetingForm';
 import ConfirmDialog from '../../common/ConfirmDialog';
 import Toast from '../../common/Toast';
-import ColorPicker from '../../common/ColorPicker';
-import { saveMeetingColor, getMeetingColor, getMeetingColors, removeMeetingColor } from '../../../utils/meetingColorStorage';
-import { useMeetings } from '../../../contexts/MeetingContext'; // ✅ Import để lấy meetings từ cache
+import { useMeetings } from '../../../contexts/MeetingContext';
 
 // Import các components đã tách
 import DayView from './views/DayView';
@@ -16,14 +14,11 @@ import MonthView from './views/MonthView';
 import YearView from './views/YearView';
 import ScheduleView from './ScheduleView';
 
-const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMeetingUpdated }) => {
+const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMeetingUpdated, onSelectionComplete, activeSelection, onSelectionRangeChange }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
-  // ✅ Get meetings from context for optimistic updates
-  const { meetings: cachedMeetings } = useMeetings();
 
   // States cho event management
   const [hoveredEvent, setHoveredEvent] = useState(null);
@@ -40,25 +35,39 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   // States cho confirm dialog và toast
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, meetingId: null });
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
+
+  const { meetings, isDataLoaded, fetchMeetings } = useMeetings();
   
-  // States cho context menu và color picker
-  const [contextMenu, setContextMenu] = useState({ isOpen: false, event: null, position: { x: 0, y: 0 } });
-  const contextMenuRef = useRef(null);
+  // ✅ Log meetings from context whenever they change
+  useEffect(() => {
+    console.log('📦 TimeTable: Meetings from context changed', {
+      meetingsLength: meetings?.length || 0,
+      isDataLoaded,
+      meetingsType: typeof meetings,
+      isArray: Array.isArray(meetings),
+      sampleMeeting: meetings?.[0] ? {
+        id: meetings[0].meetingId || meetings[0].id,
+        title: meetings[0].title,
+        startTime: meetings[0].startTime,
+        endTime: meetings[0].endTime
+      } : null
+    });
+  }, [meetings, isDataLoaded]);
 
   // Custom functions cho event management
-  // ✅ Removed hover handlers - tooltip only shows on click now
-  
-  // Empty handlers for backward compatibility (WeekView still uses them)
-  const handleEventMouseEnter = useCallback(() => {
-    // No-op - tooltip only shows on click now
+  const handleEventMouseEnter = useCallback((event, mouseEvent) => {
+    setHoveredEvent(event);
+    setTooltipPosition({
+      x: mouseEvent.clientX,
+      y: mouseEvent.clientY
+    });
   }, []);
-  
+
   const handleEventMouseLeave = useCallback(() => {
-    // No-op - tooltip only shows on click now
+    setHoveredEvent(null);
   }, []);
 
   const handleEventClick = useCallback((event, mouseEvent) => {
-    // Left click - show tooltip (not hover)
     setHoveredEvent(event);
 
     if (mouseEvent) {
@@ -69,60 +78,48 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     }
   }, []);
 
-  // Handle edit meeting
-  const handleEditMeeting = useCallback((event) => {
-    setEditingMeeting(event);
-    setShowEditForm(true);
-    setHoveredEvent(null); // Close tooltip when opening edit form
-  }, []);
-
-  // Handle double click - open edit form
-  const handleEventDoubleClick = useCallback((event) => {
-    handleEditMeeting(event);
-  }, [handleEditMeeting]);
-
-  // Handle right-click on event - show color picker
-  const handleEventContextMenu = useCallback((event, mouseEvent) => {
-    if (mouseEvent) {
-      mouseEvent.preventDefault();
-      mouseEvent.stopPropagation();
-      
-      // ✅ Check if meeting has ended - don't show context menu
-      const meetingEndTime = new Date(event.end);
-      const now = new Date();
-      
-      if (meetingEndTime < now) {
-        setToast({
-          isOpen: true,
-          message: 'Không thể thay đổi cuộc họp đã kết thúc!',
-          type: 'error'
-        });
-        return;
-      }
-      
-      setContextMenu({
-        isOpen: true,
-        event: event,
-        position: {
-          x: mouseEvent.clientX,
-          y: mouseEvent.clientY
-        }
-      });
-    }
-  }, []);
-
   const handleClickOutside = useCallback((event) => {
     if (tooltipRef.current && !tooltipRef.current.contains(event.target)) {
       setHoveredEvent(null);
-    }
-    if (contextMenuRef.current && !contextMenuRef.current.contains(event.target)) {
-      setContextMenu({ isOpen: false, event: null, position: { x: 0, y: 0 } });
     }
   }, []);
 
   const resetEventStates = useCallback(() => {
     setHoveredEvent(null);
   }, []);
+
+  // Handle edit meeting
+  const handleEditMeeting = useCallback((event) => {
+    if (!event?.canEdit) {
+      setToast({
+        isOpen: true,
+        message: 'Bạn không có quyền chỉnh sửa cuộc họp này.',
+        type: 'info'
+      });
+      return;
+    }
+    console.log('Edit meeting:', event);
+    setEditingMeeting(event);
+    setShowEditForm(true);
+    resetEventStates();
+  }, [resetEventStates]);
+
+  // Handle double click on event to open edit form
+  const handleEventDoubleClick = useCallback((event, mouseEvent) => {
+    if (!event?.canEdit) {
+      setToast({
+        isOpen: true,
+        message: 'Bạn chỉ có quyền xem cuộc họp này.',
+        type: 'info'
+      });
+      return;
+    }
+    console.log('Double click on event:', event);
+    if (mouseEvent) {
+      mouseEvent.stopPropagation();
+    }
+    handleEditMeeting(event);
+  }, [handleEditMeeting]);
 
   // Handle delete meeting from tooltip
   const handleDeleteMeeting = useCallback((meetingId) => {
@@ -141,7 +138,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     setConfirmDialog({ isOpen: false, meetingId: null });
     
     try {
-      await calendarAPI.deleteMeeting(meetingId);
+      const { message } = await calendarAPI.deleteMeeting(meetingId);
       
       // ✅ Only update state if component is still mounted
       if (!isMountedRef.current) {
@@ -152,17 +149,15 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
       // Remove from local state
       setEvents(prevEvents => prevEvents.filter(e => e.id !== meetingId));
       
-      // ✅ Remove color from localStorage when meeting is deleted
-      removeMeetingColor(meetingId);
-      
       // Reset tooltip states
       resetEventStates();
       
+      console.log('Meeting deleted successfully');
       
       // Show success toast
       setToast({
         isOpen: true,
-        message: 'Xóa cuộc họp thành công!',
+        message: message || 'Xóa cuộc họp thành công!',
         type: 'success'
       });
       
@@ -185,47 +180,6 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     }
   }, [confirmDialog.meetingId, resetEventStates, onMeetingUpdated]);
   
-  // Handle change meeting color - Frontend only (no API call)
-  const handleChangeColor = useCallback((color) => {
-    if (!contextMenu.event) return;
-    
-    // ✅ Check if meeting has ended - don't allow color change
-    const meetingEndTime = new Date(contextMenu.event.end);
-    const now = new Date();
-    
-    if (meetingEndTime < now) {
-      setToast({
-        isOpen: true,
-        message: 'Không thể đổi màu cuộc họp đã kết thúc!',
-        type: 'error'
-      });
-      setContextMenu({ isOpen: false, event: null, position: { x: 0, y: 0 } });
-      return;
-    }
-    
-    const meetingId = contextMenu.event.id;
-    
-    // ✅ Update UI immediately
-    setEvents(prevEvents => 
-      prevEvents.map(e => 
-        e.id === meetingId ? { ...e, color: color } : e
-      )
-    );
-    
-    // ✅ Save to localStorage
-    saveMeetingColor(meetingId, color);
-    
-    // Close context menu immediately
-    setContextMenu({ isOpen: false, event: null, position: { x: 0, y: 0 } });
-    
-    // Show success toast
-    setToast({
-      isOpen: true,
-      message: 'Đã đổi màu thành công!',
-      type: 'success'
-    });
-  }, [contextMenu]);
-
   // Handle delete meeting from edit form (kept for compatibility)
   const handleDeleteMeetingFromForm = useCallback((meetingId) => {
     // Remove from local state
@@ -234,6 +188,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     // Reset tooltip states
     resetEventStates();
     
+    console.log('Meeting deleted, triggering calendar refresh');
     
     // Trigger parent refresh
     if (onMeetingUpdated) {
@@ -243,29 +198,17 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   
   // Handle update meeting from edit form
   const handleUpdateMeeting = useCallback((updatedMeeting, message) => {
+    console.log('Meeting updated, triggering calendar refresh', updatedMeeting);
     
-    // ✅ Update local state immediately for instant UI feedback
-    if (updatedMeeting) {
-      setEvents(prevEvents => {
-        const updated = prevEvents.map(e => 
-          e.id === updatedMeeting.meetingId || e.id === updatedMeeting.id
-            ? {
-                ...e,
-                title: updatedMeeting.title || e.title,
-                start: updatedMeeting.start ? new Date(updatedMeeting.start) : e.start,
-                end: updatedMeeting.end ? new Date(updatedMeeting.end) : e.end,
-                color: updatedMeeting.color || e.color,
-                description: updatedMeeting.description || e.description,
-                meetingRoom: updatedMeeting.roomName || e.meetingRoom,
-                roomLocation: updatedMeeting.roomLocation || e.roomLocation,
-                roomId: updatedMeeting.roomId || e.roomId,
-                deviceIds: updatedMeeting.deviceIds || e.deviceIds,
-                devices: updatedMeeting.devices || e.devices
-              }
-            : e
-        );
-        return updated;
+    // Validate updatedMeeting
+    if (!updatedMeeting) {
+      console.error('❌ Updated meeting is null or undefined');
+      setToast({
+        isOpen: true,
+        message: 'Lỗi: Không nhận được dữ liệu meeting sau khi cập nhật',
+        type: 'error'
       });
+      return;
     }
     
     // Show success toast
@@ -277,9 +220,9 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
       });
     }
     
-    // Trigger parent refresh để reload từ API
+    // Trigger parent refresh - pass updatedMeeting to avoid "Failed to create meeting" error
     if (onMeetingUpdated) {
-      onMeetingUpdated();
+      onMeetingUpdated(updatedMeeting, message);
     }
   }, [onMeetingUpdated]);
 
@@ -297,9 +240,269 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   // ✅ Cleanup on unmount
   useEffect(() => {
     return () => {
+      console.log('🧹 TimeTable unmounting, canceling state updates');
       isMountedRef.current = false;
     };
   }, []);
+
+  // Ensure meeting data is cached (fetch once or on refresh trigger)
+  useEffect(() => {
+    let cancelled = false;
+    
+    const ensureMeetings = async () => {
+      try {
+        console.log('🔄 TimeTable: ensureMeetings called', {
+          refreshTrigger,
+          isDataLoaded,
+          meetingsLength: meetings?.length || 0
+        });
+
+        setError(null);
+        
+        if (refreshTrigger > 0) {
+          console.log('🔄 TimeTable: Force refresh triggered');
+          setLoading(true);
+          const fetchedMeetings = await fetchMeetings(true);
+          if (!cancelled) {
+            console.log('✅ TimeTable: Meetings fetched after refresh:', fetchedMeetings?.length || 0);
+          }
+        } else if (!isDataLoaded) {
+          console.log('🔄 TimeTable: Data not loaded, fetching...');
+          setLoading(true);
+          const fetchedMeetings = await fetchMeetings(false);
+          if (!cancelled) {
+            console.log('✅ TimeTable: Meetings fetched:', fetchedMeetings?.length || 0);
+          }
+        } else {
+          console.log('✅ TimeTable: Data already loaded, skipping fetch', {
+            meetingsCount: meetings?.length || 0
+          });
+        }
+      } catch (fetchError) {
+        console.error('❌ TimeTable: Error loading meetings:', fetchError);
+        if (!cancelled) {
+          setError('Không thể tải danh sách cuộc họp');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    ensureMeetings();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchMeetings, isDataLoaded, refreshTrigger]); // ✅ FIX: Remove meetings?.length to avoid re-render loop
+
+  // Transform cached meetings into events for the current view
+  useEffect(() => {
+    console.log('🔄 TimeTable: useEffect triggered for transform', {
+      meetingsLength: meetings?.length || 0,
+      meetingsIsArray: Array.isArray(meetings),
+      meetingsType: typeof meetings,
+      selectedDate: selectedDate?.toISOString(),
+      viewType,
+      isDataLoaded
+    });
+
+    // ✅ CRITICAL: Check if meetings is empty or undefined
+    if (!meetings || meetings.length === 0) {
+      console.warn('⚠️ TimeTable: No meetings available!', {
+        meetings,
+        isDataLoaded,
+        meetingsType: typeof meetings
+      });
+      setEvents([]);
+      return;
+    }
+
+    const startRange = CalendarHelpers.getStartDateForView(selectedDate, viewType);
+    const endRange = CalendarHelpers.getEndDateForView(selectedDate, viewType);
+
+    if (!startRange || !endRange) {
+      console.log('⚠️ TimeTable: Invalid date range', { startRange, endRange });
+      setEvents([]);
+      return;
+    }
+
+    console.log('📅 TimeTable: Transforming meetings', {
+      meetingsCount: meetings?.length || 0,
+      viewType,
+      selectedDate: selectedDate?.toISOString(),
+      startRange: startRange.toISOString(),
+      endRange: endRange.toISOString()
+    });
+
+    // ✅ Log first meeting structure to debug
+    if (meetings.length > 0) {
+      const firstMeeting = meetings[0];
+      console.log('🔍 TimeTable: First meeting structure:', {
+        meetingId: firstMeeting.meetingId || firstMeeting.id,
+        title: firstMeeting.title,
+        startTime: firstMeeting.startTime,
+        endTime: firstMeeting.endTime,
+        start: firstMeeting.start,
+        end: firstMeeting.end,
+        bookingStatus: firstMeeting.bookingStatus,
+        allKeys: Object.keys(firstMeeting)
+      });
+    }
+
+    // ✅ Remove duplicates by meetingId/id before filtering
+    const uniqueMeetings = (meetings || []).reduce((acc, meeting) => {
+      const meetingId = meeting.meetingId || meeting.id;
+      if (!meetingId) return acc;
+      
+      // Check if this meeting ID already exists
+      const exists = acc.find(m => (m.meetingId || m.id) === meetingId);
+      if (!exists) {
+        acc.push(meeting);
+      } else {
+        console.log('⚠️ Duplicate meeting found:', meeting.title, 'ID:', meetingId);
+      }
+      return acc;
+    }, []);
+
+    console.log('📊 Unique meetings after deduplication:', {
+      original: meetings?.length || 0,
+      unique: uniqueMeetings.length
+    });
+
+    const now = currentTime || new Date();
+
+    const transformedEvents = uniqueMeetings
+      .filter((meeting) => {
+        const status = meeting.bookingStatus?.toUpperCase();
+        if (status === 'CANCELLED') {
+          console.log('❌ Filtered out CANCELLED meeting:', meeting.title);
+          return false;
+        }
+
+        const rawStart = meeting.startTime || meeting.start;
+        const rawEnd = meeting.endTime || meeting.end;
+        if (!rawStart || !rawEnd) {
+          console.log('❌ Filtered out meeting (no dates):', meeting.title, { rawStart, rawEnd });
+          return false;
+        }
+
+        const start = new Date(rawStart);
+        const end = new Date(rawEnd);
+
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+          console.log('❌ Filtered out meeting (invalid dates):', meeting.title, { rawStart, rawEnd, start, end });
+          return false;
+        }
+
+        // ✅ FIX: Use getTime() for reliable numeric comparison
+        // Check if meeting overlaps with view range
+        // Meeting overlaps if: meeting.end >= view.start AND meeting.start <= view.end
+        const startTime = start.getTime();
+        const endTime = end.getTime();
+        const startRangeTime = startRange.getTime();
+        const endRangeTime = endRange.getTime();
+        
+        const overlaps = endTime >= startRangeTime && startTime <= endRangeTime;
+        
+        if (!overlaps) {
+          console.log('❌ Filtered out meeting (out of range):', meeting.title, {
+            meetingStart: start.toISOString(),
+            meetingEnd: end.toISOString(),
+            viewStart: startRange.toISOString(),
+            viewEnd: endRange.toISOString(),
+            meetingStartTime: startTime,
+            meetingEndTime: endTime,
+            viewStartTime: startRangeTime,
+            viewEndTime: endRangeTime,
+            check1: endTime >= startRangeTime,
+            check2: startTime <= endRangeTime
+          });
+        } else {
+          console.log('✅ Meeting in range:', meeting.title, {
+            meetingStart: start.toISOString(),
+            meetingEnd: end.toISOString(),
+            viewStart: startRange.toISOString(),
+            viewEnd: endRange.toISOString()
+          });
+        }
+
+        return overlaps;
+      })
+      .map((meeting) => {
+        const rawStart = meeting.startTime || meeting.start;
+        const rawEnd = meeting.endTime || meeting.end;
+        const start = new Date(rawStart);
+        const end = new Date(rawEnd);
+        const canEdit = meeting.canEdit !== undefined ? meeting.canEdit : true;
+        // Real-time status override (except CANCELLED)
+        const computeEffectiveStatus = (bookingStatus, startDate, endDate, nowDate) => {
+          const s = bookingStatus?.toUpperCase();
+          if (s === 'CANCELLED') return 'CANCELLED';
+          const n = nowDate.getTime();
+          const st = startDate.getTime();
+          const et = endDate.getTime();
+          if (n < st) return 'BOOKED';
+          if (n >= st && n <= et) return 'IN_PROGRESS';
+          return 'COMPLETED';
+        };
+        const effectiveStatus = computeEffectiveStatus(meeting.bookingStatus, start, end, now);
+        return {
+          id: meeting.meetingId || meeting.id,
+          title: meeting.title,
+          start,
+          end,
+          color: getStatusColor(effectiveStatus),
+          calendar: 'Meeting',
+          organizer: meeting.userName || meeting.organizer || 'Unknown',
+          attendees: meeting.participants || meeting.attendees || [],
+          description: meeting.description || '',
+          meetingRoom: meeting.roomName || meeting.room || 'N/A',
+          roomLocation: meeting.roomLocation || meeting.location || '',
+          building: meeting.building || 'N/A',
+          floor: meeting.floor || 'N/A',
+          bookingStatus: effectiveStatus,
+          allDay: meeting.isAllDay || meeting.allDay || false,
+          roomId: meeting.roomId,
+          deviceIds: meeting.deviceIds || [],
+          devices: meeting.devices || [],
+          canEdit,
+          meetingRole: meeting.meetingRole || (canEdit ? 'owner' : 'guest'),
+          readOnly: !canEdit,
+          opacity: 1
+        };
+      })
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    console.log('✅ TimeTable: Transformed events', {
+      totalMeetings: meetings?.length || 0,
+      uniqueMeetings: uniqueMeetings.length,
+      transformedCount: transformedEvents.length,
+      events: transformedEvents.map(e => ({ 
+        id: e.id,
+        title: e.title, 
+        start: e.start.toISOString(), 
+        end: e.end.toISOString(),
+        allDay: e.allDay
+      }))
+    });
+
+    // ✅ Log before setting events
+    console.log('📤 TimeTable: Setting events state', {
+      eventsCount: transformedEvents.length,
+      willRender: transformedEvents.length > 0
+    });
+
+    setEvents(transformedEvents);
+    
+    // ✅ Log after setting (in next render cycle)
+    setTimeout(() => {
+      console.log('✅ TimeTable: Events state updated', {
+        eventsLength: transformedEvents.length
+      });
+    }, 0);
+  }, [meetings, selectedDate, viewType, currentTime]);
 
   // Helper function to get color based on status
   const getStatusColor = (status) => {
@@ -307,225 +510,23 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     const normalizedStatus = status === 'CONFIRMED' ? 'BOOKED' : status;
     
     const colorMap = {
-      'PENDING': '#f9ab00',  // Đang xử lý
-      'BOOKED': '#4285f4',  // Đã đặt (confirmed by admin)
-      'IN_PROGRESS': '#34a853',  // Đang diễn ra
-      'COMPLETED': '#9aa0a6',  // Đã kết thúc
+      'PENDING': '#f9ab00',   // Đang xử lý
+      'BOOKED': '#4285f4',    // Đã đặt - màu xanh cũ (mặc định)
+      'CONFIRMED': '#4285f4', // ⚠️ DEPRECATED - Map to BOOKED (xanh cũ)
+      'IN_PROGRESS': '#f9ab00', // Đang diễn ra - màu vàng
+      'COMPLETED': '#5f6368', // Đã hoàn thành - màu xám
       'CANCELLED': '#ea4335'  // Đã hủy
     };
-    
-    return colorMap[normalizedStatus] || '#4285f4'; // Default to blue
+    return colorMap[normalizedStatus] || '#5f6368';
   };
 
-  // ✅ Optimistic update: Add newly created meetings from cache to events immediately
-  useEffect(() => {
-    if (!cachedMeetings || cachedMeetings.length === 0) return;
-    
-    // Tính toán date range hiện tại
-    const currentStartDate = CalendarHelpers.getStartDateForView(selectedDate, viewType);
-    const currentEndDate = CalendarHelpers.getEndDateForView(selectedDate, viewType);
-    
-    // Filter meetings trong date range hiện tại
-    const meetingsInRange = cachedMeetings.filter(meeting => {
-      if (!meeting.startTime || !meeting.endTime) return false;
-      const meetingStart = new Date(meeting.startTime);
-      const meetingEnd = new Date(meeting.endTime);
-      return meetingStart <= currentEndDate && meetingEnd >= currentStartDate;
-    });
-    
-    // Transform meetings to events format
-    const storedColors = getMeetingColors();
-    const newEvents = meetingsInRange
-      .filter(meeting => {
-        const status = meeting.bookingStatus?.toUpperCase();
-        return status !== 'CANCELLED';
-      })
-      .map(meeting => {
-        const color = storedColors[meeting.meetingId] || meeting.color || getStatusColor(meeting.bookingStatus);
-        return {
-          id: meeting.meetingId,
-          title: meeting.title,
-          start: new Date(meeting.startTime),
-          end: new Date(meeting.endTime),
-          color: color,
-          calendar: 'Meeting',
-          organizer: meeting.userName || 'Unknown',
-          attendees: meeting.participants || [],
-          description: meeting.description || '',
-          meetingRoom: meeting.roomName || 'N/A',
-          roomLocation: meeting.roomLocation || '',
-          building: meeting.building || 'N/A',
-          floor: meeting.floor || 'N/A',
-          bookingStatus: meeting.bookingStatus,
-          allDay: meeting.isAllDay || false,
-          roomId: meeting.roomId,
-          deviceIds: meeting.deviceIds || [],
-          devices: meeting.devices || [],
-          opacity: 1
-        };
-      });
-    
-    // Merge với existing events
-    if (newEvents.length > 0) {
-      setEvents(prevEvents => {
-        const eventMap = new Map(prevEvents.map(e => [e.id, e]));
-        newEvents.forEach(event => {
-          eventMap.set(event.id, event);
-        });
-        return Array.from(eventMap.values());
-      });
-    }
-  }, [cachedMeetings, selectedDate, viewType]);
-
-  // Load meetings từ API
-  useEffect(() => {
-    let isCancelled = false;
-    
-    const loadMeetings = async () => {
-      if (isCancelled) return;
-      
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Lấy current user ID
-        const currentUser = JSON.parse(localStorage.getItem('user') || localStorage.getItem('oauth2User') || '{}');
-        const currentUserId = currentUser.userId || currentUser.id;
-        
-        // Tính toán khoảng thời gian dựa trên viewType
-        const startDate = CalendarHelpers.getStartDateForView(selectedDate, viewType);
-        const endDate = CalendarHelpers.getEndDateForView(selectedDate, viewType);
-        
-        // ✅ Force fresh fetch by adding timestamp to bypass cache
-        const cacheBuster = refreshTrigger > 0 ? `&_t=${Date.now()}` : '';
-        
-        // ✅ Gọi API với userId parameter và cacheBuster - backend sẽ filter
-        const meetingsData = await calendarAPI.getMeetingsByDateRange(startDate, endDate, currentUserId, cacheBuster);
-        
-        // ✅ Check if request was cancelled before updating state
-        if (isCancelled || !isMountedRef.current) {
-          return;
-        }
-        
-        if (!currentUserId) {
-          console.error('⚠️ No user ID found in localStorage. Please login again.');
-        }
-        
-        // Filter out cancelled meetings and transform API data to event format
-        const storedColors = getMeetingColors(); // ✅ Load colors from localStorage
-        
-        const transformedEvents = meetingsData
-          .filter(meeting => {
-            const status = meeting.bookingStatus?.toUpperCase();
-            // Exclude cancelled meetings from calendar
-            return status !== 'CANCELLED';
-          })
-          .map(meeting => {
-            // ✅ Priority: localStorage > API color > status color
-            const color = storedColors[meeting.meetingId] || meeting.color || getStatusColor(meeting.bookingStatus);
-            
-            // ✅ Parse dates correctly - handle timezone issues
-            const startDate = new Date(meeting.startTime);
-            const endDate = new Date(meeting.endTime);
-            
-            return {
-              id: meeting.meetingId,
-              title: meeting.title,
-              start: startDate,
-              end: endDate,
-              color: color,
-              calendar: 'Meeting',
-              organizer: meeting.userName || 'Unknown',
-              attendees: meeting.participants || [],
-              description: meeting.description || '',
-              meetingRoom: meeting.roomName || 'N/A',
-              roomLocation: meeting.roomLocation || '',
-              building: meeting.building || 'N/A',
-              floor: meeting.floor || 'N/A',
-              bookingStatus: meeting.bookingStatus,
-              allDay: meeting.isAllDay || false,
-              // Add IDs for edit form
-              roomId: meeting.roomId,
-              deviceIds: meeting.deviceIds || [],
-              devices: meeting.devices || [],
-              // ✅ Always full opacity - no more pending state
-              opacity: 1
-            };
-          });
-        
-        // ✅ Final check before updating state
-        if (isCancelled || !isMountedRef.current) {
-          return;
-        }
-        
-        // ✅ MERGE với existing events thay vì replace hoàn toàn để tránh mất events
-        // Điều này đảm bảo optimistic updates không bị overwrite
-        setEvents(prevEvents => {
-          // Tính toán date range hiện tại
-          const currentStartDate = CalendarHelpers.getStartDateForView(selectedDate, viewType);
-          const currentEndDate = CalendarHelpers.getEndDateForView(selectedDate, viewType);
-          
-          // Filter existing events: giữ lại events ngoài date range hiện tại
-          const eventsOutsideRange = prevEvents.filter(event => {
-            const eventStart = new Date(event.start);
-            const eventEnd = new Date(event.end);
-            // Giữ lại events không overlap với date range hiện tại
-            return eventEnd < currentStartDate || eventStart > currentEndDate;
-          });
-          
-          // Merge transformed events (trong date range) với events ngoài date range
-          const allEvents = [...eventsOutsideRange, ...transformedEvents];
-          
-          // Remove duplicates bằng cách tạo Map
-          const eventMap = new Map();
-          allEvents.forEach(event => {
-            eventMap.set(event.id, event);
-          });
-          
-          return Array.from(eventMap.values());
-        });
-      } catch (error) {
-        console.error('❌ Error loading meetings:', error);
-        // ✅ Only update error state if component is still mounted and request not cancelled
-        // ⚠️ Don't clear events on error - keep existing events to prevent flicker
-        if (isMountedRef.current && !isCancelled) {
-          setError('Không thể tải danh sách cuộc họp');
-          // Don't setEvents([]) here - keep existing events
-        }
-      } finally {
-        // ✅ Only update loading state if component is still mounted and request not cancelled
-        if (isMountedRef.current && !isCancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    // ✅ Small delay to ensure API has processed the new meeting
-    // Increase delay to 1200ms for better reliability with backend processing
-    const timeoutId = setTimeout(() => {
-      loadMeetings();
-    }, refreshTrigger > 0 ? 1200 : 0); // Add delay when refreshTrigger changes (new meeting created)
-    
-    // ✅ Cleanup function to cancel ongoing request
-    return () => {
-      isCancelled = true;
-      clearTimeout(timeoutId);
-    };
-  }, [selectedDate, viewType, refreshTrigger]);
-
-  // Đóng tooltip và context menu khi click outside
+  // Đóng tooltip khi click outside
   useEffect(() => {
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('contextmenu', (e) => {
-      // Close context menu if clicking outside
-      if (contextMenu.isOpen && contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
-        setContextMenu({ isOpen: false, event: null, position: { x: 0, y: 0 } });
-      }
-    });
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [handleClickOutside, contextMenu.isOpen]);
+  }, [handleClickOutside]);
 
   // Đóng tooltip khi scroll
   useEffect(() => {
@@ -557,14 +558,12 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   }, []);
 
   const formatDateFull = useCallback((date) => {
-    const days = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
-    const months = ['tháng 1', 'tháng 2', 'tháng 3', 'tháng 4', 'tháng 5', 'tháng 6', 
-                    'tháng 7', 'tháng 8', 'tháng 9', 'tháng 10', 'tháng 11', 'tháng 12'];
-    const dayName = days[date.getDay()];
-    const day = date.getDate();
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    return `${dayName}, ${day} ${month}, ${year}`;
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   }, []);
 
   // Tính toán vị trí thông minh để tránh bị che
@@ -590,18 +589,17 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     return { x: adjustedX, y: adjustedY };
   }, []);
 
-  // Tooltip component - Google Calendar style
+  // Tooltip component
   const EventTooltip = () => {
     const eventToShow = hoveredEvent;
     if (!eventToShow) return null;
 
     const adjustedPos = getAdjustedPosition(tooltipPosition.x, tooltipPosition.y);
-    const canEdit = ['BOOKED', 'IN_PROGRESS'].includes(eventToShow.bookingStatus?.toUpperCase());
 
     return (
       <div
         ref={tooltipRef}
-        className="event-tooltip google-style"
+        className="event-tooltip"
         style={{
           left: `${adjustedPos.x}px`,
           top: `${adjustedPos.y}px`
@@ -609,123 +607,172 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         onMouseEnter={() => setHoveredEvent(eventToShow)}
         onMouseLeave={() => setHoveredEvent(null)}
       >
-        {/* Header with action icons */}
-        <div className="tooltip-header-actions">
-          {canEdit && (
-            <button 
-              className="tooltip-header-icon-btn tooltip-icon-edit"
-              onClick={() => handleEditMeeting(eventToShow)}
-              title="Sửa"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          )}
-          <button 
-            className="tooltip-header-icon-btn tooltip-icon-delete"
-            onClick={() => handleDeleteMeeting(eventToShow.id)}
-            title="Xóa"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              <line x1="10" y1="11" x2="10" y2="17"></line>
-              <line x1="14" y1="11" x2="14" y2="17"></line>
-            </svg>
-          </button>
-          <button 
-            className="tooltip-header-icon-btn tooltip-icon-more"
-            title="Thêm tùy chọn"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="1"></circle>
-              <circle cx="12" cy="5" r="1"></circle>
-              <circle cx="12" cy="19" r="1"></circle>
-            </svg>
-          </button>
-          <button 
-            className="tooltip-header-icon-btn tooltip-icon-close"
-            onClick={() => setHoveredEvent(null)}
-            title="Đóng"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-
-        {/* Event title with color indicator */}
-        <div className="tooltip-event-header">
-          <div 
-            className="tooltip-color-indicator"
-            style={{ backgroundColor: eventToShow.color }}
-          ></div>
-          <div className="tooltip-event-title">{eventToShow.title}</div>
-        </div>
-
-        {/* Date and time */}
-        <div className="tooltip-date-time">
-          {formatDateFull(eventToShow.start)} - {formatTime(eventToShow.start)} – {formatTime(eventToShow.end)}
-        </div>
-
-        {/* Room name */}
-        {eventToShow.meetingRoom && eventToShow.meetingRoom !== 'N/A' && (
-          <div className="tooltip-info-row">
-            <span className="tooltip-icon">🏢</span>
-            <span>{eventToShow.meetingRoom}</span>
+        <div className="tooltip-header" style={{ backgroundColor: eventToShow.color }}>
+          <div className="tooltip-title">{eventToShow.title}</div>
+          <div className="tooltip-meta">
+            <span className="tooltip-calendar">{eventToShow.calendar}</span>
           </div>
-        )}
+        </div>
 
-        {/* Room location */}
-        {(eventToShow.roomLocation && eventToShow.roomLocation !== 'N/A' && eventToShow.roomLocation.trim() !== '') || 
-         (eventToShow.building && eventToShow.building !== 'N/A') ? (
-          <div className="tooltip-info-row">
-            <span className="tooltip-icon">📍</span>
-            <span>
-              {eventToShow.roomLocation && eventToShow.roomLocation !== 'N/A' && eventToShow.roomLocation.trim() !== '' 
-                ? eventToShow.roomLocation 
-                : `${eventToShow.building}${eventToShow.floor && eventToShow.floor !== 'N/A' ? ` - Tầng ${eventToShow.floor}` : ''}`
-              }
-            </span>
-          </div>
-        ) : null}
-
-        {/* Borrowed devices */}
-        {eventToShow.devices && eventToShow.devices.length > 0 && (
-          <div className="tooltip-info-row">
-            <span className="tooltip-icon">💻</span>
-            <div className="tooltip-devices">
-              {eventToShow.devices.map((device, index) => (
-                <span key={index} className="tooltip-device-item">
-                  {device.deviceName || device.name} x{device.quantity}
-                  {index < eventToShow.devices.length - 1 && ', '}
-                </span>
-              ))}
+        <div className="tooltip-body">
+          {/* 1. Ngày/tháng/năm */}
+          <div className="tooltip-section">
+            <div className="tooltip-time">
+              <strong>📅 {formatDateFull(eventToShow.start)}</strong>
             </div>
           </div>
+
+          {/* 2. Start time - End time */}
+          <div className="tooltip-section">
+            <div className="tooltip-time">
+              <strong>🕐 {formatTime(eventToShow.start)} - {formatTime(eventToShow.end)}</strong>
+            </div>
+          </div>
+
+          {/* 3. Phòng họp */}
+          {eventToShow.meetingRoom && eventToShow.meetingRoom !== 'N/A' && (
+            <div className="tooltip-section">
+              <div className="tooltip-info compact">
+                <span className="tooltip-label">🚪</span>
+                <span>{eventToShow.meetingRoom}</span>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Vị trí phòng */}
+          <div className="tooltip-section">
+            <div className="tooltip-info compact">
+              <span className="tooltip-label">📍</span>
+              <span>
+                {eventToShow.roomLocation && eventToShow.roomLocation !== 'N/A' && eventToShow.roomLocation.trim() !== '' 
+                  ? eventToShow.roomLocation 
+                  : (eventToShow.building && eventToShow.building !== 'N/A' && eventToShow.building.trim() !== '' 
+                      ? `${eventToShow.building}${eventToShow.floor && eventToShow.floor !== 'N/A' ? ` - Tầng ${eventToShow.floor}` : ''}`
+                      : 'Chưa có thông tin vị trí'
+                    )
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* 5. Người chủ trì (người tạo lịch) */}
+          <div className="tooltip-section">
+            <div className="tooltip-info compact">
+              <span className="tooltip-label">👤</span>
+              <span>{eventToShow.organizer}</span>
+            </div>
+          </div>
+
+          {/* 6. Số người tham gia */}
+          <div className="tooltip-section">
+            <div className="tooltip-info compact">
+              <span className="tooltip-label">👥</span>
+              <span>{eventToShow.attendees.length} người tham gia</span>
+            </div>
+          </div>
+
+          {/* 7. Thiết bị mượn */}
+          {eventToShow.devices && eventToShow.devices.length > 0 && (
+            <div className="tooltip-section">
+              <div className="tooltip-info">
+                <span className="tooltip-label">💻 Thiết bị mượn:</span>
+                <div className="devices-list">
+                  {eventToShow.devices.map((device, index) => (
+                    <span key={index} className="device-item">
+                      • {device.deviceName} ({device.deviceType}) x{device.quantity}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 8. Mô tả (nếu có) */}
+          {eventToShow.description && (
+            <div className="tooltip-section">
+              <div className="tooltip-info">
+                <span className="tooltip-label">📝</span>
+                <span>{eventToShow.description.length > 100
+                  ? `${eventToShow.description.substring(0, 100)}...`
+                  : eventToShow.description}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Notice for read-only meetings */}
+        {(!eventToShow.canEdit || eventToShow.meetingRole === 'guest') && (
+          <div className="edit-disabled-notice">
+            <span>ℹ️ Bạn chỉ có thể xem cuộc họp này.</span>
+          </div>
         )}
 
-        {/* Creator/Organizer */}
-        <div className="tooltip-info-row">
-          <span className="tooltip-icon">📅</span>
-          <span>{eventToShow.organizer || 'Chưa có thông tin'}</span>
+        <div className="tooltip-footer">
+          {/* Chỉ hiển thị nút Edit nếu status hợp lệ và user có quyền */}
+          {eventToShow.canEdit && ['BOOKED', 'IN_PROGRESS'].includes(eventToShow.bookingStatus?.toUpperCase()) ? (
+            <>
+              <button 
+                className="tooltip-action-btn" 
+                onClick={() => handleEditMeeting(eventToShow)}
+              >
+                ✏️ Edit
+              </button>
+              <button 
+                className="tooltip-action-btn" 
+                onClick={() => handleDeleteMeeting(eventToShow.id)}
+              >
+                🗑️ Delete
+              </button>
+            </>
+          ) : eventToShow.canEdit ? (
+            <button 
+              className="tooltip-action-btn"
+              onClick={() => handleDeleteMeeting(eventToShow.id)}
+              style={{ width: '100%' }}
+            >
+              🗑️ Delete
+            </button>
+          ) : null}
         </div>
       </div>
     );
   };
 
   // Render view với useMemo
+  // Render view với useMemo
   const renderTimeTable = useMemo(() => {
-    const commonProps = {
-      selectedDate,
+    console.log('🎨 TimeTable: Rendering view', {
+      viewType,
+      eventsCount: events?.length || 0,
+      selectedDate: selectedDate?.toISOString(),
+      eventsSample: events?.slice(0, 2).map(e => ({
+        id: e.id,
+        title: e.title,
+        start: e.start?.toISOString()
+      }))
+    });
+
+    const weekViewProps = {
+      selectedDate: selectedDate,
       events,
       onDateSelect,
       handleEventClick,
       handleEventDoubleClick,
-      handleEventContextMenu,
+      handleEventMouseEnter,
+      handleEventMouseLeave,
+      formatTime,
+      currentTime,
+      onSelectionComplete,
+      lockedSelection: activeSelection,
+      onLockSelection: onSelectionRangeChange
+    };
+
+    const monthViewProps = {
+      selectedDate: selectedDate,
+      events,
+      onDateSelect,
+      handleEventClick,
+      handleEventDoubleClick,
       handleEventMouseEnter,
       handleEventMouseLeave,
       formatTime
@@ -735,20 +782,25 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
       case 'day':
         return (
           <DayView
-            {...commonProps}
+            selectedDate={selectedDate}
+            events={events}
+            onDateSelect={onDateSelect}
+            handleEventClick={handleEventClick}
+            handleEventDoubleClick={handleEventDoubleClick}
+            handleEventMouseEnter={handleEventMouseEnter}
+            handleEventMouseLeave={handleEventMouseLeave}
+            formatTime={formatTime}
             currentTime={currentTime}
             handleTimeSlotClick={handleTimeSlotClick}
+            onSelectionComplete={onSelectionComplete}
+            lockedSelection={activeSelection}
+            onLockSelection={onSelectionRangeChange}
           />
         );
       case 'week':
-        return (
-          <WeekView
-            {...commonProps}
-            currentTime={currentTime} // <-- THÊM DÒNG NÀY
-          />
-        );
+        return <WeekView {...weekViewProps} />;
       case 'month':
-        return <MonthView {...commonProps} />;
+        return <MonthView {...monthViewProps} />;
       case 'year':
         return <YearView selectedDate={selectedDate} onDateSelect={onDateSelect} />;
       case 'schedule':
@@ -764,10 +816,12 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     onDateSelect,
     handleEventClick,
     handleEventDoubleClick,
-    handleEventContextMenu,
     handleEventMouseEnter,
     handleEventMouseLeave,
     handleTimeSlotClick,
+    onSelectionComplete,
+    onSelectionRangeChange,
+    activeSelection,
     formatTime,
     onMeetingUpdated,
     refreshTrigger
@@ -801,27 +855,6 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         cancelText="Hủy"
       />
       
-      {/* Context Menu with Color Picker */}
-      {contextMenu.isOpen && contextMenu.event && (
-        <div
-          ref={contextMenuRef}
-          className="event-context-menu"
-          style={{
-            position: 'fixed',
-            left: `${contextMenu.position.x}px`,
-            top: `${contextMenu.position.y}px`,
-            zIndex: 10001
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ColorPicker
-            selectedColor={contextMenu.event.color}
-            onColorSelect={handleChangeColor}
-            onClose={() => setContextMenu({ isOpen: false, event: null, position: { x: 0, y: 0 } })}
-          />
-        </div>
-      )}
-
       {/* Toast Notification */}
       <Toast
         isOpen={toast.isOpen}

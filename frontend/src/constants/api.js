@@ -1,13 +1,5 @@
 // API Configuration
-// Sử dụng absolute URL trực tiếp - backend đã được cấu hình CORS
-// Nếu gặp lỗi CORS, hãy đảm bảo backend cho phép origin từ frontend
-const backendUrl = process.env.REACT_APP_API_BASE_URL || 'https://imeeet.onrender.com';
-
-// Luôn dùng absolute URL - backend cần được cấu hình CORS đúng
-export const API_BASE_URL = backendUrl;
-
-// Debug: Log API_BASE_URL để kiểm tra
-console.log('[API Config] API_BASE_URL:', API_BASE_URL);
+export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8081';
 
 // API Endpoints
 export const API_ENDPOINTS = {

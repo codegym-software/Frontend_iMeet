@@ -88,7 +88,7 @@
 .date-navigation {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
   margin-left: 16px;
   margin-right: 0; /* Reset negative margin */
 }

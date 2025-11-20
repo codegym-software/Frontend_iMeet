@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../constants/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8081';
 
 class AdminService {
   // Lấy token từ localStorage
@@ -314,7 +314,9 @@ class AdminService {
   // Lấy danh sách thiết bị (admin) - TẤT CẢ không phân trang
   async getDevices() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/devices/all`, {
+      // ✅ Use /filter endpoint which returns List<DeviceResponse> instead of Page
+      // Default to no filters to get all devices
+      const response = await fetch(`${API_BASE_URL}/api/devices/filter`, {
         method: 'GET',
         headers: this.getHeaders()
       });
@@ -323,15 +325,23 @@ class AdminService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Backend wraps responses with ApiResponse<List<DeviceResponse>> { success, message, data }
+      // Backend returns ApiResponse<List<DeviceResponse>> { success, message, data: [...] }
       const json = await response.json();
-      // json.data should be an array of all devices
+      console.log('📥 getDevices response from /filter:', json);
+      
       if (!json) return [];
+      
+      // Extract devices from response data
       const payload = json.data;
-      if (!payload) return [];
-      // Return the array directly
-      if (Array.isArray(payload)) return payload;
-      // Otherwise, return empty array as fallback
+      
+      if (Array.isArray(payload)) {
+        return payload;
+      } else if (payload && typeof payload === 'object') {
+        if (payload.content && Array.isArray(payload.content)) {
+          return payload.content; // Page object format fallback
+        }
+      }
+      
       return [];
     } catch (error) {
       console.warn('⚠️ Could not fetch devices:', error.message);

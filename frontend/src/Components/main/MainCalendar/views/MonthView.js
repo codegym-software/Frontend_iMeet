@@ -7,7 +7,8 @@ const MonthView = React.memo(({
   onDateSelect,
   handleEventClick,
   handleEventDoubleClick,
-  handleEventContextMenu,
+  handleEventMouseEnter,
+  handleEventMouseLeave,
   formatTime
 }) => {
   const { calendarGrid } = useMemo(() => {
@@ -83,14 +84,9 @@ const MonthView = React.memo(({
                       className="month-event-indicator"
                       style={{ backgroundColor: event.color }}
                       onClick={(e) => handleEventClick(event, e)}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        handleEventDoubleClick && handleEventDoubleClick(event);
-                      }}
-                      onContextMenu={(e) => {
-                        e.stopPropagation();
-                        handleEventContextMenu && handleEventContextMenu(event, e);
-                      }}
+                      onDoubleClick={(e) => handleEventDoubleClick && handleEventDoubleClick(event, e)}
+                      onMouseEnter={(e) => handleEventMouseEnter(event, e)}
+                      onMouseLeave={handleEventMouseLeave}
                     >
                       <span className="event-time">
                         {event.allDay ? 'All day' : formatTime(event.start)}
