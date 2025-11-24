@@ -256,13 +256,15 @@ export const calendarAPI = {
   // Lấy danh sách invitees của meeting
   async getMeetingInvitees(meetingId) {
     try {
+      console.log('📧 Fetching invitees for meeting:', meetingId);
       const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/invitees`, {
         credentials: 'include',
         headers: getHeaders(),
       });
       
+      // Nếu meeting không tồn tại (404), trả về empty array
       if (response.status === 404) {
-        console.warn('⚠️ No invitees found for meeting:', meetingId);
+        console.warn('⚠️ Meeting not found or no invitees for meeting:', meetingId);
         return [];
       }
       
@@ -273,14 +275,22 @@ export const calendarAPI = {
       
       const data = await response.json();
       
+      // Nếu backend trả về error (meeting không tồn tại), trả về empty array
       if (data.success === false) {
         console.warn('⚠️ Backend error:', data.message);
+        // Nếu là lỗi "không tìm thấy meeting", trả về empty array
+        if (data.message && data.message.includes('Không tìm thấy cuộc họp')) {
+          return [];
+        }
         return [];
       }
       
-      return data.data || [];
+      // Trả về danh sách invitees (có thể rỗng)
+      const invitees = data.data || [];
+      console.log('✅ Loaded invitees:', invitees.length, 'items');
+      return invitees;
     } catch (error) {
-      console.warn('⚠️ Could not fetch invitees. Returning empty array.');
+      console.warn('⚠️ Could not fetch invitees. Returning empty array.', error);
       return [];
     }
   },

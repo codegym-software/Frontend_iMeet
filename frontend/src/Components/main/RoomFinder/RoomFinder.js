@@ -46,7 +46,7 @@ const createDefaultCriteria = (baseDate = new Date()) => {
   };
 };
 
-const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, children }) => {
+const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails }) => {
   const [criteria, setCriteria] = useState(() => createDefaultCriteria(initialDate || new Date()));
   const [rooms, setRooms] = useState([]);
   const [allRooms, setAllRooms] = useState([]);
@@ -237,43 +237,31 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, chil
     }
   }, [onViewDetails]);
 
-  const filtersNode = (
-    <RoomSearchForm
-      criteria={criteria}
-      onChange={updateCriteria}
-      onToggleDeviceType={toggleDeviceType}
-      onSubmit={fetchRooms}
-      onClear={clearFilters}
-      deviceTypeOptions={DEVICE_TYPE_OPTIONS}
-      loading={loading}
-      formError={formError}
-    />
-  );
-
-  const resultsNode = (
-    <RoomResultsList
-      rooms={rooms}
-      loading={loading}
-      error={apiError}
-      hasSearched={hasSearched}
-      searchRange={searchRange}
-      onRetry={fetchRooms}
-      onBookRoom={handleBookRoom}
-      onViewDetails={handleViewDetail}
-    />
-  );
-
-  if (typeof children === 'function') {
-    return children({ filtersNode, resultsNode });
-  }
-
   return (
     <div className="roomfinder">
       <div className="roomfinder__column roomfinder__column--form">
-        {filtersNode}
+        <RoomSearchForm
+          criteria={criteria}
+          onChange={updateCriteria}
+          onToggleDeviceType={toggleDeviceType}
+          onSubmit={fetchRooms}
+          onClear={clearFilters}
+          deviceTypeOptions={DEVICE_TYPE_OPTIONS}
+          loading={loading}
+          formError={formError}
+        />
       </div>
       <div className="roomfinder__column roomfinder__column--results">
-        {resultsNode}
+        <RoomResultsList
+          rooms={rooms}
+          loading={loading}
+          error={apiError}
+          hasSearched={hasSearched}
+          searchRange={searchRange}
+          onRetry={fetchRooms}
+          onBookRoom={handleBookRoom}
+          onViewDetails={handleViewDetail}
+        />
       </div>
     </div>
   );

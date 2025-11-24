@@ -16,6 +16,8 @@ import RoomDetailModal from './RoomDetailModal';
 import Toast from '../../Components/common/Toast';
 import EditMeetingForm from '../../Components/main/EditMeetingForm';
 import MeetingForm from '../../Components/main/MeetingForm';
+import MeetingReminderNotification from '../../Components/common/MeetingReminderNotification';
+import { useMeetingReminders } from '../../hooks/useMeetingReminders';
 import { calendarAPI } from '../../Components/main/MainCalendar/utils/CalendarAPI';
 
 const MainContent = () => {
@@ -38,6 +40,9 @@ const MainContent = () => {
   const { addMeeting, fetchMeetings } = useMeetings(); // Get optimistic update function and fetch
   const [preselectedRoomId, setPreselectedRoomId] = useState(null);
   const [roomDetail, setRoomDetail] = useState(null);
+  
+  // Meeting reminders - kiểm tra meetings sắp bắt đầu trong 15 phút
+  const { upcomingReminders, clearReminder } = useMeetingReminders();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -254,25 +259,6 @@ const MainContent = () => {
     }
   }, []);
 
-  const renderViewModeSwitcher = () => (
-    <div className="view-mode-switcher">
-      <button 
-        className={`view-mode-btn ${viewMode === 'calendar' ? 'active' : ''}`}
-        onClick={() => setViewMode('calendar')}
-        title="Xem theo lịch cá nhân"
-      >
-        📅 Lịch
-      </button>
-      <button 
-        className={`view-mode-btn ${viewMode === 'room' ? 'active' : ''}`}
-        onClick={() => setViewMode('room')}
-        title="Xem theo phòng họp"
-      >
-        🏢 Phòng
-      </button>
-    </div>
-  );
-
   return (
     <div className="main">
       <TopBar 
@@ -294,10 +280,26 @@ const MainContent = () => {
       
       <div className="main-content">
         <div className="container">
-          {viewMode === 'calendar' ? (
-            <>
-              <div className="left-panel">
-                {renderViewModeSwitcher()}
+          <div className="left-panel">
+            <div className="view-mode-switcher">
+              <button 
+                className={`view-mode-btn ${viewMode === 'calendar' ? 'active' : ''}`}
+                onClick={() => setViewMode('calendar')}
+                title="Xem theo lịch cá nhân"
+              >
+                📅 Lịch
+              </button>
+              <button 
+                className={`view-mode-btn ${viewMode === 'room' ? 'active' : ''}`}
+                onClick={() => setViewMode('room')}
+                title="Xem theo phòng họp"
+              >
+                🏢 Phòng
+              </button>
+            </div>
+
+            {viewMode === 'calendar' ? (
+              <>
                 <div className="calendar-container">
                   <div className="calendar-header">
                     <button 
@@ -330,43 +332,42 @@ const MainContent = () => {
                 </div>
 
                 <UpcomingMeetings onMeetingDoubleClick={handleUpcomingMeetingDoubleClick} />
-              </div>
-              
-              <div className="right-panel">
-                <TimeTable 
-                  selectedDate={selectedDate} 
-                  viewType={viewType}
-                  refreshTrigger={refreshTrigger}
-                  onDateSelect={handleSelectDay}
-                  onMeetingUpdated={handleMeetingCreated}
-                  onSelectionComplete={handleQuickCreateRange}
-                  activeSelection={quickCreateRange}
-                  onSelectionRangeChange={handleSelectionRangeChange}
-                />
-              </div>
-            </>
-          ) : (
-            <RoomFinder
-              initialDate={selectedDate}
-              onDateChange={handleDateChange}
-              onBookRoom={handleBookRoom}
-              onViewDetails={handleOpenRoomDetail}
-            >
-              {({ filtersNode, resultsNode }) => (
-                <>
-                  <div className="left-panel left-panel--room">
-                    {renderViewModeSwitcher()}
-                    <div className="room-filter-panel">
-                      {filtersNode}
-                    </div>
+              </>
+            ) : (
+              <div className="room-mode-note">
+                <div className="room-mode-note__icon">💡</div>
+                <div>
+                  <div className="room-mode-note__title">Chọn tiêu chí bên phải</div>
+                  <div className="room-mode-note__text">
+                    Nhập ngày, giờ, số người và loại thiết bị để lọc phòng trống. 
+                    Bạn có thể xóa bộ lọc để xem lại toàn bộ phòng.
                   </div>
-                  <div className="right-panel right-panel--room">
-                    {resultsNode}
-                  </div>
-                </>
-              )}
-            </RoomFinder>
-          )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="right-panel">
+            {viewMode === 'calendar' ? (
+              <TimeTable 
+                selectedDate={selectedDate} 
+                viewType={viewType}
+                refreshTrigger={refreshTrigger}
+                onDateSelect={handleSelectDay}
+                onMeetingUpdated={handleMeetingCreated}
+                onSelectionComplete={handleQuickCreateRange}
+                activeSelection={quickCreateRange}
+                onSelectionRangeChange={handleSelectionRangeChange}
+              />
+            ) : (
+              <RoomFinder
+                initialDate={selectedDate}
+                onDateChange={handleDateChange}
+                onBookRoom={handleBookRoom}
+                onViewDetails={handleOpenRoomDetail}
+              />
+            )}
+          </div>
         </div>
       </div>
       
@@ -377,6 +378,41 @@ const MainContent = () => {
         type={toast.type}
         onClose={() => setToast({ ...toast, isOpen: false })}
       />
+
+      {/* Meeting Reminder Notifications */}
+      {upcomingReminders.map((reminder, index) => {
+        const meetingId = reminder.meetingId || reminder.id || reminder._id;
+        return (
+          <div
+            key={meetingId || index}
+            style={{
+              position: 'fixed',
+              top: `${20 + index * 320}px`,
+              right: '20px',
+              zIndex: 10002 + index
+            }}
+          >
+            <MeetingReminderNotification
+              reminder={reminder}
+              onClose={() => clearReminder(meetingId)}
+              onView={() => {
+                // Mở form chỉnh sửa meeting
+                setEditingMeeting(reminder);
+                setShowEditForm(true);
+                // Chuyển sang ngày của meeting
+                const startTime = reminder.startTime || reminder.start;
+                if (startTime) {
+                  const dateObj = new Date(startTime);
+                  setSelectedDate(dateObj);
+                  setViewType('day');
+                }
+                // Đóng notification
+                clearReminder(meetingId);
+              }}
+            />
+          </div>
+        );
+      })}
 
       {/* Create Meeting Form */}
       {showMeetingForm && (

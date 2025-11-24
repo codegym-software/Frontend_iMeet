@@ -3,13 +3,25 @@ import { useHistory } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import authService from '../../services/authService';
 import { FaRegCalendarAlt, FaCog, FaEdit, FaCheck, FaTimes, FaCamera } from 'react-icons/fa';
+import { SiGooglecalendar } from 'react-icons/si';
 import ChangePassword from '../../Components/ChangePassword';
+import { useGoogleCalendar } from '../../hooks/useGoogleCalendar';
 import './Profile.css';
 import calendarLogo from '../../assets/calendar-logo.png';
 
 export default function Profile({ onSave }) {
   const history = useHistory();
   const { user, updateUser } = useAuth();
+  
+  // Google Calendar connection
+  const { 
+    isConnected, 
+    connectedEmail, 
+    loading: googleCalendarLoading, 
+    error: googleCalendarError,
+    connect: connectGoogleCalendar,
+    disconnect: disconnectGoogleCalendar
+  } = useGoogleCalendar();
   
   // Simplified state management
   const [name, setName] = useState('');
@@ -225,6 +237,40 @@ export default function Profile({ onSave }) {
 
   const handleBackFromChangePassword = () => {
     setShowChangePassword(false);
+  };
+
+  const handleConnectGoogleCalendar = async () => {
+    try {
+      await connectGoogleCalendar();
+      // Nếu thành công, window.location.href sẽ được gọi trong service
+      // để chuyển hướng đến Google OAuth
+    } catch (error) {
+      setMessage(error.message || 'Không thể kết nối Google Calendar');
+      timeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setMessage('');
+        }
+      }, 3000);
+    }
+  };
+
+  const handleDisconnectGoogleCalendar = async () => {
+    try {
+      const message = await disconnectGoogleCalendar();
+      setMessage(message || 'Đã ngắt kết nối Google Calendar thành công');
+      timeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setMessage('');
+        }
+      }, 3000);
+    } catch (error) {
+      setMessage(error.message || 'Không thể ngắt kết nối Google Calendar');
+      timeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setMessage('');
+        }
+      }, 3000);
+    }
   };
 
   // Name edit handlers
@@ -559,6 +605,82 @@ export default function Profile({ onSave }) {
                 value={email} 
                 readOnly={true}
               />
+            </div>
+          </div>
+          
+          {/* Google Calendar Section */}
+          <div className="profile-field-row">
+            <div className="profile-label"></div>
+            <div className="profile-google-calendar-container">
+              {isConnected ? (
+                <>
+                  {/* Trạng thái đã kết nối */}
+                  <div className="profile-google-calendar-status">
+                    <div className="profile-google-calendar-status-header">
+                      <SiGooglecalendar className="profile-google-calendar-icon connected" />
+                      <div className="profile-google-calendar-status-info">
+                        <div className="profile-google-calendar-status-title">
+                          Đã kết nối Google Calendar
+                        </div>
+                        {connectedEmail && (
+                          <div className="profile-google-calendar-status-email">
+                            {connectedEmail}
+                          </div>
+                        )}
+                      </div>
+                      <div className="profile-google-calendar-status-badge">
+                        <span className="status-dot"></span>
+                        Đã kết nối
+                      </div>
+                    </div>
+                    <div className="profile-google-calendar-sync-notice">
+                      <span className="sync-icon">✓</span>
+                      Đồng bộ hóa tự động đã bật
+                    </div>
+                    <button 
+                      className="profile-google-calendar-disconnect-btn" 
+                      onClick={handleDisconnectGoogleCalendar}
+                      disabled={googleCalendarLoading}
+                    >
+                      {googleCalendarLoading ? 'Đang xử lý...' : 'Ngắt kết nối'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Trạng thái chưa kết nối */}
+                  <div className="profile-google-calendar-status">
+                    <div className="profile-google-calendar-status-header">
+                      <SiGooglecalendar className="profile-google-calendar-icon disconnected" />
+                      <div className="profile-google-calendar-status-info">
+                        <div className="profile-google-calendar-status-title">
+                          Chưa kết nối Google Calendar
+                        </div>
+                        <div className="profile-google-calendar-status-description">
+                          Kết nối để đồng bộ lịch họp với Google Calendar
+                        </div>
+                      </div>
+                      <div className="profile-google-calendar-status-badge disconnected">
+                        <span className="status-dot"></span>
+                        Chưa kết nối
+                      </div>
+                    </div>
+                    {googleCalendarError && (
+                      <div className="profile-google-calendar-error">
+                        {googleCalendarError}
+                      </div>
+                    )}
+                    <button 
+                      className="profile-google-calendar-btn" 
+                      onClick={handleConnectGoogleCalendar}
+                      disabled={googleCalendarLoading}
+                    >
+                      <SiGooglecalendar className="profile-google-calendar-icon" />
+                      <span>{googleCalendarLoading ? 'Đang kết nối...' : 'Kết nối Google Calendar'}</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           

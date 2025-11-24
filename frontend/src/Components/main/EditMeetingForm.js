@@ -50,10 +50,13 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
 
   const normalizeInvitees = useCallback((list = []) => {
     return list.map(inv => ({
-      id: inv.inviteeId || inv.id,
+      inviteId: inv.inviteId || inv.inviteeId || inv.id,
+      id: inv.inviteId || inv.inviteeId || inv.id,
       email: (inv.email || '').trim(),
       fullName: inv.fullName || inv.name || inv.userName || null,
       status: (inv.status || inv.inviteStatus || 'PENDING').toUpperCase(),
+      role: inv.role || null,
+      invitedAt: inv.invitedAt || null,
       respondedAt: inv.respondedAt || inv.responseAt || inv.updatedAt || null
     }));
   }, []);
@@ -337,19 +340,19 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
         return;
       }
 
-      if (isMountedRef.current) setLoadingInvitees(true);
+          if (isMountedRef.current) setLoadingInvitees(true);
       try {
-        const inviteesData = await calendarAPI.getMeetingInvitees(meetingId);
-        if (isMountedRef.current) {
+          const inviteesData = await calendarAPI.getMeetingInvitees(meetingId);
+          if (isMountedRef.current) {
           setInvitees(normalizeInvitees(inviteesData || []));
-        }
-      } catch (error) {
-        console.error('Error loading invitees:', error);
-        if (isMountedRef.current) {
-          setInvitees([]);
-        }
-      } finally {
-        if (isMountedRef.current) setLoadingInvitees(false);
+          }
+        } catch (error) {
+          console.error('Error loading invitees:', error);
+          if (isMountedRef.current) {
+            setInvitees([]);
+          }
+        } finally {
+          if (isMountedRef.current) setLoadingInvitees(false);
       }
     };
     
@@ -1611,8 +1614,8 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
               {/* Invitees List with Status */}
               {loadingInvitees ? (
                 <div style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>Đang tải...</div>
-              ) : (
-                <>
+            ) : (
+              <>
                   {invitees.length > 0 && (
                     <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '16px 0' }}>
                       {[
@@ -1650,9 +1653,9 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                       <div style={{ fontSize: '13px', fontWeight: '500', color: '#202124', marginBottom: '8px' }}>Lọc theo trạng thái:</div>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {['all', 'PENDING', 'ACCEPTED', 'DECLINED'].map(status => (
-                          <button
+                <button
                             key={status}
-                            type="button"
+                  type="button"
                             onClick={() => setInviteeFilter(status)}
                             style={{
                               padding: '6px 12px',
@@ -1668,7 +1671,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                             {status === 'all' ? 'Tất cả' : 
                              status === 'PENDING' ? 'Đang chờ' :
                              status === 'ACCEPTED' ? 'Đồng ý' : 'Từ chối'}
-                          </button>
+                </button>
                         ))}
                       </div>
                     </div>
