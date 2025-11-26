@@ -255,22 +255,38 @@ class RoomService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/room-devices/room/${roomId}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
+      // Handle network errors gracefully
       if (!response.ok) {
+        // Don't throw for 404 or network errors, just return empty array
+        if (response.status === 404) {
+          return { success: true, data: [], message: 'No devices found for this room' };
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const apiResponse = await response.json();
       if (apiResponse.success) {
-        return { success: true, data: apiResponse.data, message: apiResponse.message };
+        return { success: true, data: apiResponse.data || [], message: apiResponse.message };
       } else {
-        throw new Error(apiResponse.message || 'Lỗi khi lấy thiết bị của phòng');
+        // Don't throw, just return empty array
+        return { success: true, data: [], message: apiResponse.message || 'No devices found' };
       }
     } catch (error) {
-      console.error('Error getting devices by room:', error);
-      return { success: false, error: error.message, data: [] };
+      // Handle network errors gracefully - don't log as error for network issues
+      if (error.message.includes('Failed to fetch') || 
+          error.message.includes('ERR_NETWORK_CHANGED') ||
+          error.message.includes('NetworkError')) {
+        // Network error - likely backend is restarting or connection issue
+        // Return empty array instead of failing
+        return { success: true, data: [], error: 'Network error - devices unavailable' };
+      }
+      // For other errors, log but still return empty array
+      console.warn('Error getting devices by room:', error.message);
+      return { success: true, data: [], error: error.message };
     }
   }
 

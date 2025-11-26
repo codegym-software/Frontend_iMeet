@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import './Login.css'
 import '../../Components/common/PasswordToggleStyles.css'
 import ImgAsset from '../../assets'
@@ -15,6 +15,22 @@ export default function Login() {
 	
 	const { login, loginWithCognito, loginWithCognitoHostedUI, userRole } = useAuth();
 	const history = useHistory();
+
+	useEffect(() => {
+		// Clear các flags calendar cũ nếu có (để tránh trigger lại)
+		// Note: Calendar callback giờ redirect về profile, nhưng vẫn clear flags ở đây để đảm bảo
+		const calendarConnecting = localStorage.getItem('calendar_connecting');
+		const calendarJustConnected = localStorage.getItem('calendar_just_connected');
+		const calendarConnectSuccess = localStorage.getItem('calendarConnectSuccess');
+		
+		// Nếu có flags cũ, clear chúng để tránh vấn đề
+		if (calendarConnecting || calendarJustConnected || calendarConnectSuccess) {
+			localStorage.removeItem('calendar_connecting');
+			localStorage.removeItem('calendar_just_connected');
+			localStorage.removeItem('calendarConnectSuccess');
+			localStorage.removeItem('calendarConnectError');
+		}
+	}, []);
 
 	const handleLogin = async (e) => {
 		e.preventDefault();

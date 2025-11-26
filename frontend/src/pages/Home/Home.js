@@ -1,6 +1,6 @@
 // src/Components/main/Main.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useHistory, useLocation } from 'react-router-dom';
 
 // Import useCallback để sử dụng trong component
 import { AuthProvider } from '../../contexts/AuthContext';
@@ -12,6 +12,9 @@ import MiniCalendar from '../../Components/main/MiniCalendar';
 import UpcomingMeetings from '../../Components/main/UpcomingMeetings';
 import TimeTable from '../../Components/main/MainCalendar/TimeTable';
 import RoomFinder from '../../Components/main/RoomFinder/RoomFinder';
+import RoomSearchForm from '../../Components/main/RoomFinder/RoomSearchForm';
+import RoomResultsList from '../../Components/main/RoomFinder/RoomResultsList';
+import { useRoomFinder } from '../../hooks/useRoomFinder';
 import RoomDetailModal from './RoomDetailModal';
 import Toast from '../../Components/common/Toast';
 import EditMeetingForm from '../../Components/main/EditMeetingForm';
@@ -37,6 +40,7 @@ const MainContent = () => {
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [quickCreateRange, setQuickCreateRange] = useState(null);
   const history = useHistory();
+  const location = useLocation();
   const { addMeeting, fetchMeetings } = useMeetings(); // Get optimistic update function and fetch
   const [preselectedRoomId, setPreselectedRoomId] = useState(null);
   const [roomDetail, setRoomDetail] = useState(null);
@@ -63,12 +67,16 @@ const MainContent = () => {
     }
   };
 
-  // Hàm xử lý thay đổi ngày
+  // Hàm xử lý thay đổi ngày - định nghĩa trước để có thể dùng trong hook
   const handleDateChange = useCallback((newDate) => {
     setSelectedDate(newDate);
     // Cập nhật currentMonth để MiniCalendar hiển thị đúng tháng
     setCurrentMonth(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
   }, []);
+
+  // Room finder logic - sử dụng custom hook (sau khi handleDateChange được định nghĩa)
+  // Sử dụng useMemo để tránh tạo lại hook mỗi lần render
+  const roomFinder = useRoomFinder(selectedDate, handleDateChange);
 
   // Hàm xử lý khi click vào ngày trong week/month/year view
   // Chuyển sang day view và set ngày
@@ -334,16 +342,16 @@ const MainContent = () => {
                 <UpcomingMeetings onMeetingDoubleClick={handleUpcomingMeetingDoubleClick} />
               </>
             ) : (
-              <div className="room-mode-note">
-                <div className="room-mode-note__icon">💡</div>
-                <div>
-                  <div className="room-mode-note__title">Chọn tiêu chí bên phải</div>
-                  <div className="room-mode-note__text">
-                    Nhập ngày, giờ, số người và loại thiết bị để lọc phòng trống. 
-                    Bạn có thể xóa bộ lọc để xem lại toàn bộ phòng.
-                  </div>
-                </div>
-              </div>
+              <RoomSearchForm
+                criteria={roomFinder.criteria}
+                onChange={roomFinder.updateCriteria}
+                onToggleDeviceType={roomFinder.toggleDeviceType}
+                onSubmit={roomFinder.fetchRooms}
+                onClear={roomFinder.clearFilters}
+                deviceTypeOptions={roomFinder.DEVICE_TYPE_OPTIONS}
+                loading={roomFinder.loading}
+                formError={roomFinder.formError}
+              />
             )}
           </div>
 
@@ -360,10 +368,17 @@ const MainContent = () => {
                 onSelectionRangeChange={handleSelectionRangeChange}
               />
             ) : (
-              <RoomFinder
-                initialDate={selectedDate}
-                onDateChange={handleDateChange}
-                onBookRoom={handleBookRoom}
+              <RoomResultsList
+                rooms={roomFinder.hasSearched ? roomFinder.rooms : roomFinder.allRooms}
+                loading={roomFinder.loading}
+                error={roomFinder.apiError}
+                hasSearched={roomFinder.hasSearched}
+                searchRange={roomFinder.searchRange}
+                onRetry={roomFinder.fetchRooms}
+                onBookRoom={(room) => {
+                  if (!room || !roomFinder.searchRange) return;
+                  handleBookRoom(room, roomFinder.searchRange);
+                }}
                 onViewDetails={handleOpenRoomDetail}
               />
             )}

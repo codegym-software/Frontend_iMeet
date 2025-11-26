@@ -14,6 +14,35 @@ class AdminService {
     };
   }
 
+  // Xử lý response và kiểm tra authentication
+  async handleResponse(response) {
+    // Xử lý 401 - Unauthorized
+    if (response.status === 401) {
+      // Clear auth data
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('oauth2User');
+      
+      // Chỉ redirect nếu đang ở trang admin và không phải trang login
+      const isAdminPage = window.location.pathname.includes('/admin');
+      const isLoginPage = window.location.pathname.includes('/login');
+      
+      if (isAdminPage && !isLoginPage) {
+        // Nếu đang ở trang admin, redirect đến login
+        window.location.href = '/login';
+      }
+      
+      throw new Error('Authentication required. Please login again.');
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
   // Lấy danh sách users với phân trang
   async getUsers(page = 0, size = 10, sortBy = 'createdAt', sortDir = 'desc', search = '') {
     try {
@@ -30,16 +59,16 @@ class AdminService {
 
       const response = await fetch(`${API_BASE_URL}/api/admin/users?${params}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
+      // Không log lỗi nếu đã redirect
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not fetch users:', error.message);
+      }
       throw error;
     }
   }
@@ -49,14 +78,11 @@ class AdminService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/admin/users/${id}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
       console.warn('⚠️ Could not fetch user:', error.message);
       throw error;
@@ -69,15 +95,11 @@ class AdminService {
       const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(userData)
+        body: JSON.stringify(userData),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
       console.warn('⚠️ Could not create user:', error.message);
       throw error;
@@ -90,15 +112,11 @@ class AdminService {
       const response = await fetch(`${API_BASE_URL}/api/admin/users/${id}`, {
         method: 'PUT',
         headers: this.getHeaders(),
-        body: JSON.stringify(userData)
+        body: JSON.stringify(userData),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
       console.warn('⚠️ Could not update user:', error.message);
       throw error;
@@ -110,15 +128,11 @@ class AdminService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/admin/users/${id}`, {
         method: 'DELETE',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
       console.warn('⚠️ Could not delete user:', error.message);
       throw error;
@@ -130,16 +144,16 @@ class AdminService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/admin/users/stats`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
+      // Không log lỗi nếu đã redirect
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not fetch user stats:', error.message);
+      }
       throw error;
     }
   }
@@ -150,28 +164,15 @@ class AdminService {
       const response = await fetch(`${API_BASE_URL}/api/admin/create-admin`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify({ email, password, username, fullName })
+        body: JSON.stringify({ email, password, username, fullName }),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        // Try to parse JSON error body, otherwise include raw text for diagnostics
-        let errBody = null;
-        try {
-          errBody = await response.json();
-          throw new Error(errBody.message || JSON.stringify(errBody) || `HTTP error! status: ${response.status}`);
-        } catch (e) {
-          try {
-            const txt = await response.text();
-            throw new Error(txt || `HTTP error! status: ${response.status}`);
-          } catch (e2) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-        }
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not create admin:', error.message);
+      }
       throw error;
     }
   }
@@ -181,16 +182,15 @@ class AdminService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/admin/check-admin`, {
         method: 'POST',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not check admin:', error.message);
+      }
       throw error;
     }
   }
@@ -202,18 +202,17 @@ class AdminService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/rooms`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const json = await response.json();
+      const json = await this.handleResponse(response);
       // Backend wraps response in ApiResponse { success, message, data }
       return json.data || [];
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not fetch rooms:', error.message);
+      }
       throw error;
     }
   }
@@ -224,27 +223,15 @@ class AdminService {
       const response = await fetch(`${API_BASE_URL}/api/rooms`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(roomData)
+        body: JSON.stringify(roomData),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        // Try to parse JSON error body, otherwise include raw text for diagnostics
-        try {
-          const errBody = await response.json();
-          throw new Error(errBody.message || JSON.stringify(errBody) || `HTTP error! status: ${response.status}`);
-        } catch (e) {
-          try {
-            const txt = await response.text();
-            throw new Error(txt || `HTTP error! status: ${response.status}`);
-          } catch (e2) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-        }
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not create room:', error.message);
+      }
       throw error;
     }
   }
@@ -255,17 +242,15 @@ class AdminService {
       const response = await fetch(`${API_BASE_URL}/api/rooms/${roomId}`, {
         method: 'PUT',
         headers: this.getHeaders(),
-        body: JSON.stringify(roomData)
+        body: JSON.stringify(roomData),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not update room:', error.message);
+      }
       throw error;
     }
   }
@@ -275,17 +260,15 @@ class AdminService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/rooms/${roomId}`, {
         method: 'DELETE',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not delete room:', error.message);
+      }
       throw error;
     }
   }
@@ -295,16 +278,15 @@ class AdminService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/rooms/${roomId}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      return await this.handleResponse(response);
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not fetch room:', error.message);
+      }
       throw error;
     }
   }
@@ -318,15 +300,21 @@ class AdminService {
       // Default to no filters to get all devices
       const response = await fetch(`${API_BASE_URL}/api/devices/filter`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Handle network errors gracefully
+      if (response.status === 0 || !response.ok) {
+        // Network error or failed response
+        if (response.status === 0 || response.type === 'error') {
+          console.warn('⚠️ Network error fetching devices - returning empty array');
+          return [];
+        }
       }
 
       // Backend returns ApiResponse<List<DeviceResponse>> { success, message, data: [...] }
-      const json = await response.json();
+      const json = await this.handleResponse(response);
       console.log('📥 getDevices response from /filter:', json);
       
       if (!json) return [];
@@ -344,7 +332,19 @@ class AdminService {
       
       return [];
     } catch (error) {
-      console.warn('⚠️ Could not fetch devices:', error.message);
+      // Handle network errors gracefully
+      if (error.message.includes('Failed to fetch') || 
+          error.message.includes('ERR_NETWORK_CHANGED') ||
+          error.message.includes('NetworkError') ||
+          error.message.includes('Network Error')) {
+        console.warn('⚠️ Network error fetching devices - returning empty array');
+        return [];
+      }
+      
+      if (!error.message.includes('Authentication required')) {
+        console.warn('⚠️ Could not fetch devices:', error.message);
+      }
+      // For non-network errors, still throw to let caller handle
       throw error;
     }
   }
@@ -355,20 +355,18 @@ class AdminService {
       const response = await fetch(`${API_BASE_URL}/api/devices`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(deviceData)
+        body: JSON.stringify(deviceData),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
       // Backend returns ApiResponse<DeviceResponse> with structure: { success, message, data }
-      const json = await response.json();
+      const json = await this.handleResponse(response);
       // Return the full response so DeviceList can access json.data
       return json;
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not create device:', error.message);
+      }
       throw error;
     }
   }
@@ -379,20 +377,18 @@ class AdminService {
       const response = await fetch(`${API_BASE_URL}/api/devices/${deviceId}`, {
         method: 'PUT',
         headers: this.getHeaders(),
-        body: JSON.stringify(deviceData)
+        body: JSON.stringify(deviceData),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
       // Backend returns ApiResponse<DeviceResponse> with structure: { success, message, data }
-      const json = await response.json();
+      const json = await this.handleResponse(response);
       // Return the full response so DeviceList can access json.data
       return json;
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not update device:', error.message);
+      }
       throw error;
     }
   }
@@ -402,14 +398,11 @@ class AdminService {
     try {
       const response = await fetch(`${API_BASE_URL}/api/devices/${deviceId}`, {
         method: 'DELETE',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
+      if (response.status === 204 || response.status === 200) {
       const text = await response.text();
       if (!text) return { message: 'deleted' };
       try {
@@ -419,8 +412,13 @@ class AdminService {
       } catch (e) {
         return { message: 'deleted' };
       }
+      }
+
+      return await this.handleResponse(response);
     } catch (error) {
+      if (!error.message.includes('Authentication required')) {
       console.warn('⚠️ Could not delete device:', error.message);
+      }
       throw error;
     }
   }

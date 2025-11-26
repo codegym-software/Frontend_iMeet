@@ -82,49 +82,92 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
   }, [allDevices, inventory, inventoryLoading]);
   
   // Update formData when meeting changes - use useMemo to prevent infinite loops
-  const meetingId = meeting?.id || meeting?.meetingId;
+  const baseMeetingId = meeting?.meetingId ?? meeting?.id ?? null;
+  const meetingId = fullMeeting?.meetingId ?? fullMeeting?.id ?? baseMeetingId ?? null;
   
-  // ✅ NEW: Fetch full meeting details including devices when form opens
+  // Cache cho full meeting data
+  const fullMeetingCacheRef = useRef(new Map());
+
+  // ✅ NEW: Fetch full meeting details including devices when form opens - với cache
   useEffect(() => {
-    if (meetingId && !fullMeeting?.devices) {
-      // Meeting doesn't have devices yet, fetch full details
-      console.log('📥 Fetching full meeting details for ID:', meetingId);
-      calendarAPI.getMeetingById(meetingId)
+    if (baseMeetingId) {
+      // Kiểm tra cache trước
+      const cacheKey = `full_meeting_${baseMeetingId}`;
+      const cached = fullMeetingCacheRef.current.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 30000) { // Cache 30 giây
+        setFullMeeting(cached.data);
+        return;
+      }
+
+      // Always fetch full details to ensure we have devices data
+      console.log('📥 Fetching full meeting details for ID:', baseMeetingId);
+      calendarAPI.getMeetingById(baseMeetingId)
         .then(fullMeetingData => {
           if (fullMeetingData) {
             console.log('✅ Full meeting loaded with devices:', fullMeetingData);
             setFullMeeting(fullMeetingData);
+            // Lưu vào cache
+            fullMeetingCacheRef.current.set(cacheKey, {
+              data: fullMeetingData,
+              timestamp: Date.now()
+            });
+          } else if (meeting?.devices || meeting?.deviceIds) {
+            // Fallback to meeting prop if API doesn't return data
+            console.log('⚠️ Using meeting prop as fallback');
+            setFullMeeting(meeting);
           }
         })
         .catch(error => {
           console.error('❌ Error fetching meeting details:', error);
+          // Fallback to meeting prop on error
+          if (meeting?.devices || meeting?.deviceIds) {
+            console.log('⚠️ Using meeting prop as fallback after error');
+            setFullMeeting(meeting);
+          }
         });
-    } else if (!fullMeeting?.devices && meeting?.devices) {
-      // If meeting prop already has devices, use it
+    } else if (meeting?.devices || meeting?.deviceIds) {
+      // If no meetingId but meeting prop has device data, use it
       setFullMeeting(meeting);
     }
-  }, [meetingId]);
+  }, [baseMeetingId, meeting]);
   
   useEffect(() => {
-    if (fullMeeting && meetingId) {
-      console.log('Updating formData with fullMeeting:', fullMeeting);
+    if (fullMeeting && (meetingId || meeting)) {
+      console.log('🔄 Updating formData with fullMeeting:', fullMeeting);
+      console.log('📱 Available devices in inventory:', allDevices.length);
+      
       // Convert attendees to guests array format (robust guards)
       const attendeesRaw = Array.isArray(fullMeeting.attendees)
         ? fullMeeting.attendees
-        : (typeof fullMeeting.attendees === 'string'
-            ? fullMeeting.attendees.split(/[;,]/).map(s => s.trim()).filter(Boolean)
-            : []);
+        : Array.isArray(fullMeeting.invitees)
+            ? fullMeeting.invitees
+                .map(inv => (typeof inv === 'string' ? inv : inv?.email))
+                .filter(Boolean)
+            : (typeof fullMeeting.attendees === 'string'
+                ? fullMeeting.attendees.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+                : []);
       const guestsArray = attendeesRaw.map(email => ({ email, fullName: null }));
       
       // ✅ FIX: Extract device data from fullMeeting inside useEffect so we use the updated state
       const meetingDevicesData = fullMeeting?.devices;
       const meetingDeviceIdsData = fullMeeting?.deviceIds;
       
+      console.log('🔍 Checking device data in meeting:', {
+        hasDevices: !!meetingDevicesData,
+        devicesLength: meetingDevicesData?.length || 0,
+        hasDeviceIds: !!meetingDeviceIdsData,
+        deviceIdsLength: meetingDeviceIdsData?.length || 0,
+        fullMeetingKeys: Object.keys(fullMeeting || {}),
+        devicesSample: meetingDevicesData?.[0],
+        fullMeetingDevices: fullMeeting?.devices
+      });
+      
       // Load devices from meeting - check both deviceIds and devices array
       let meetingDevices = [];
-      if (meetingDevicesData && Array.isArray(meetingDevicesData)) {
-        // If devices array exists, use it
-        console.log('📱 EditForm - Loading devices from meeting:', meetingDevicesData);
+      
+      if (meetingDevicesData && Array.isArray(meetingDevicesData) && meetingDevicesData.length > 0) {
+        // If devices array exists, use it (from MeetingDeviceResponse)
+        console.log('📱 EditForm - Loading devices from meeting.devices array:', meetingDevicesData);
         meetingDevices = meetingDevicesData.map(d => {
           // Handle both numeric and string device IDs
           const deviceId = d.deviceId || d.id;
@@ -132,44 +175,66 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
             // Compare as numbers to handle type mismatches
             return Number(ad.deviceId) === Number(deviceId);
           });
-          console.log(`  Device ${deviceId}: found=${!!deviceInfo}, qty=${d.quantityBorrowed}`);
+          console.log(`  Device ${deviceId}: found=${!!deviceInfo}, name=${deviceInfo?.name || d.deviceName || d.name}, qty=${d.quantityBorrowed || d.quantity || 1}`);
           return {
-            deviceId: deviceId,
+            deviceId: Number(deviceId), // Ensure it's a number
             quantity: d.quantityBorrowed || d.quantity || 1,
-            deviceName: deviceInfo?.name || d.name || d.deviceName || `Device ${deviceId}`,
+            deviceName: deviceInfo?.name || d.deviceName || d.name || `Device ${deviceId}`,
             notes: d.notes || null
           };
         });
-      } else if (meetingDeviceIdsData && Array.isArray(meetingDeviceIdsData)) {
+      } else if (meetingDeviceIdsData && Array.isArray(meetingDeviceIdsData) && meetingDeviceIdsData.length > 0) {
         // Fallback to deviceIds
+        console.log('📱 EditForm - Loading devices from meeting.deviceIds array:', meetingDeviceIdsData);
         meetingDevices = meetingDeviceIdsData.map(id => {
-          const device = allDevices.find(d => Number(d.deviceId) === Number(id));
+          const deviceId = Number(id);
+          const device = allDevices.find(d => Number(d.deviceId) === deviceId);
+          console.log(`  Device ID ${deviceId}: found=${!!device}, name=${device?.name || 'Unknown'}`);
           return {
-            deviceId: id,
+            deviceId: deviceId,
             quantity: 1,
-            deviceName: device?.name || `Device ${id}`
+            deviceName: device?.name || `Device ${deviceId}`
           };
+        });
+      } else {
+        console.log('⚠️ No device data found in meeting:', {
+          hasDevices: !!meetingDevicesData,
+          hasDeviceIds: !!meetingDeviceIdsData,
+          devicesLength: meetingDevicesData?.length || 0,
+          deviceIdsLength: meetingDeviceIdsData?.length || 0,
+          fullMeeting: fullMeeting
         });
       }
       
-      console.log('✅ EditForm - Final devices array:', meetingDevices);
-      setFormData({
-        title: fullMeeting.title || '',
-        description: fullMeeting.description || '',
-        startDateTime: fullMeeting.start ? new Date(fullMeeting.start) : new Date(),
-        endDateTime: fullMeeting.end ? new Date(fullMeeting.end) : new Date(),
-        guests: guestsArray,
-        room: fullMeeting.roomId || '',
-        devices: meetingDevices,
-        isAllDay: fullMeeting.allDay || false
+      console.log('✅ EditForm - Final devices array to set:', meetingDevices);
+      console.log('📊 Device count:', meetingDevices.length);
+      
+      setFormData(prev => {
+        // Always update devices if we have data, otherwise keep existing
+        const finalDevices = meetingDevices.length > 0 ? meetingDevices : (prev.devices || []);
+        
+        return {
+          title: fullMeeting.title || prev.title || '',
+          description: fullMeeting.description || prev.description || '',
+          startDateTime: fullMeeting.start ? new Date(fullMeeting.start) : prev.startDateTime,
+          endDateTime: fullMeeting.end ? new Date(fullMeeting.end) : prev.endDateTime,
+          guests: guestsArray.length > 0 ? guestsArray : prev.guests,
+          room: fullMeeting.roomId || prev.room || '',
+          devices: finalDevices, // Always set devices (even if empty)
+          isAllDay: fullMeeting.allDay !== undefined ? fullMeeting.allDay : prev.isAllDay
+        };
       });
+      
+      // Log final state for debugging
+      console.log('✅ FormData devices set:', meetingDevices.length, 'devices');
 
       if (Array.isArray(fullMeeting.invitees) && fullMeeting.invitees.length > 0) {
         setInvitees(normalizeInvitees(fullMeeting.invitees));
+        setLoadingInvitees(false);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingId, fullMeeting?.devices, fullMeeting?.invitees, normalizeInvitees]); // Only depend on meeting ID to prevent infinite loops
+  }, [meetingId, fullMeeting, allDevices.length, normalizeInvitees]); // Add allDevices.length to dependencies
 
   // Track if component is mounted to prevent memory leaks
   const isMountedRef = useRef(true);
@@ -331,7 +396,10 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
     loadRoomDevices();
   }, [formData.room]);
 
-  // Load invitees when meeting changes
+  // Cache cho invitees
+  const inviteesCacheRef = useRef(new Map());
+
+  // Load invitees when meeting changes - với cache
   useEffect(() => {
     const loadInvitees = async () => {
       if (!meetingId) {
@@ -340,32 +408,43 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
         return;
       }
 
-          if (isMountedRef.current) setLoadingInvitees(true);
+      // Kiểm tra cache trước
+      const cacheKey = `edit_invitees_${meetingId}`;
+      const cached = inviteesCacheRef.current.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 60000) { // Cache 1 phút
+        if (isMountedRef.current) {
+          setInvitees(cached.data);
+          setLoadingInvitees(false);
+        }
+        return;
+      }
+
+      if (isMountedRef.current) setLoadingInvitees(true);
       try {
-          const inviteesData = await calendarAPI.getMeetingInvitees(meetingId);
-          if (isMountedRef.current) {
-          setInvitees(normalizeInvitees(inviteesData || []));
-          }
-        } catch (error) {
-          console.error('Error loading invitees:', error);
-          if (isMountedRef.current) {
-            setInvitees([]);
-          }
-        } finally {
-          if (isMountedRef.current) setLoadingInvitees(false);
+        const inviteesData = await calendarAPI.getMeetingInvitees(meetingId);
+        const normalized = normalizeInvitees(inviteesData || []);
+        
+        if (isMountedRef.current) {
+          setInvitees(normalized);
+          
+          // Lưu vào cache
+          inviteesCacheRef.current.set(cacheKey, {
+            data: normalized,
+            timestamp: Date.now()
+          });
+        }
+      } catch (error) {
+        console.error('Error loading invitees:', error);
+        if (isMountedRef.current) {
+          setInvitees([]);
+        }
+      } finally {
+        if (isMountedRef.current) setLoadingInvitees(false);
       }
     };
     
     loadInvitees();
   }, [meetingId, normalizeInvitees]);
-
-  const inviteeSummary = useMemo(() => {
-    return invitees.reduce((acc, inv) => {
-      const status = inv.status || 'PENDING';
-      acc[status] = (acc[status] || 0) + 1;
-      return acc;
-    }, { PENDING: 0, ACCEPTED: 0, DECLINED: 0 });
-  }, [invitees]);
 
   const filteredInvitees = useMemo(() => {
     if (inviteeFilter === 'all') return invitees;
@@ -577,7 +656,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
 
     try {
       // Resolve meeting ID once to avoid shadowing errors
-      const currentMeetingId = (meeting?.meetingId || meeting?.id || meetingId);
+      const currentMeetingId = meetingId;
       if (!currentMeetingId) {
         throw new Error('Không tìm thấy ID của cuộc họp. Vui lòng thử lại.');
       }
@@ -771,34 +850,50 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
           </div>
         )}
         
-        {/* Body - 2 columns */}
-        <div className="google-calendar-body">
-          {/* Main Content - Left */}
-          <div className="google-calendar-main">
+        {/* Body - Google Calendar style display */}
+        <div className="google-calendar-body" style={{ padding: '0' }}>
+          <div className="google-calendar-main" style={{ 
+            padding: '24px 32px',
+            maxWidth: '100%',
+            borderRight: 'none'
+          }}>
             <form onSubmit={handleSubmit}>
-              {/* Title - At the top */}
-              <div className="google-calendar-field" style={{ marginBottom: '24px' }}>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                placeholder="Thêm tiêu đề"
-                  className="google-calendar-input"
-                  style={{ 
+              {/* Title - Large, bold */}
+              <div style={{ marginBottom: '16px' }}>
+                {isEditable ? (
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                    placeholder="Thêm tiêu đề"
+                    className="meeting-title-display"
+                    style={{ 
+                      fontSize: '22px', 
+                      fontWeight: '400', 
+                      padding: '8px 0', 
+                      border: 'none', 
+                      borderBottom: '1px solid transparent',
+                      width: '100%',
+                      outline: 'none',
+                      color: '#202124'
+                    }}
+                    onFocus={(e) => e.target.style.borderBottomColor = '#1a73e8'}
+                    onBlur={(e) => e.target.style.borderBottomColor = 'transparent'}
+                  />
+                ) : (
+                  <h1 style={{ 
                     fontSize: '22px', 
                     fontWeight: '400', 
-                    padding: '12px 0', 
-                    border: 'none', 
-                    borderBottom: '1px solid transparent',
-                    minHeight: 'auto'
-                  }}
-                disabled={!isEditable}
-                  onFocus={(e) => e.target.style.borderBottomColor = '#1a73e8'}
-                  onBlur={(e) => e.target.style.borderBottomColor = 'transparent'}
-              />
+                    margin: 0,
+                    color: '#202124',
+                    padding: '8px 0'
+                  }}>
+                    {formData.title || 'Không có tiêu đề'}
+                  </h1>
+                )}
                 {errors.title && <span style={{ color: '#d93025', fontSize: '12px', marginTop: '4px', display: 'block' }}>{errors.title}</span>}
-            </div>
+              </div>
 
               {/* Chi tiết sự kiện heading */}
               <div style={{ marginBottom: '16px', marginTop: '8px' }}>
@@ -1014,74 +1109,126 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                   <span style={{ fontWeight: '500' }}>Thiết bị mượn:</span>
                 </div>
 
-                {/* Hiển thị thiết bị được chọn dạng tags */}
-                {formData.devices.length > 0 && (
-                  <div style={{
-                    marginTop: '12px',
-                    marginBottom: '16px',
-                    padding: '12px',
-                    backgroundColor: '#e8f5e9',
-                    borderRadius: '8px',
-                    border: '1px solid #4caf50'
-                  }}>
-                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#2e7d32', marginBottom: '10px' }}>
-                      Thiết bị được chọn ({formData.devices.length}):
+                {/* Hiển thị thiết bị được mượn dạng tags */}
+                <div style={{
+                  marginTop: '12px',
+                  marginBottom: '16px',
+                  padding: formData.devices.length > 0 ? '12px' : '8px',
+                  backgroundColor: formData.devices.length > 0 ? '#e8f5e9' : '#f5f5f5',
+                  borderRadius: '8px',
+                  border: formData.devices.length > 0 ? '1px solid #4caf50' : '1px solid #dadce0',
+                  minHeight: '40px'
+                }}>
+                  {formData.devices.length > 0 ? (
+                    <>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#2e7d32', marginBottom: '10px' }}>
+                        Thiết bị đã mượn ({formData.devices.length}):
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {formData.devices.map((device, index) => {
+                          // Compare as numbers to handle type mismatches
+                          const deviceInfo = allDevices.find(d => Number(d.deviceId) === Number(device.deviceId));
+                          const displayName = device.deviceName || deviceInfo?.name || `Device ${device.deviceId}`;
+                          const deviceType = deviceInfo?.deviceType || deviceInfo?.type || 'Khác';
+                          const typeMap = {
+                            'MIC': 'Microphone',
+                            'CAM': 'Camera',
+                            'LAPTOP': 'Laptop',
+                            'BANG': 'Bảng',
+                            'MAN_HINH': 'Màn hình',
+                            'KHAC': 'Khác',
+                            'MAY_CHIEU': 'Máy chiếu'
+                          };
+                          const typeDisplay = typeMap[deviceType] || deviceType;
+                          
+                          return (
+                            <div
+                              key={`${device.deviceId}-${index}`}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '8px 14px',
+                                backgroundColor: '#fff',
+                                border: '2px solid #4caf50',
+                                borderRadius: '20px',
+                                fontSize: '13px',
+                                fontWeight: '500',
+                                color: '#2e7d32',
+                                boxShadow: '0 2px 4px rgba(76, 175, 80, 0.2)'
+                              }}
+                            >
+                              <span style={{ fontWeight: '600' }}>{displayName}</span>
+                              <span style={{ 
+                                fontSize: '11px', 
+                                color: '#666',
+                                padding: '2px 6px',
+                                backgroundColor: '#f0f0f0',
+                                borderRadius: '10px'
+                              }}>
+                                {typeDisplay}
+                              </span>
+                              <span style={{ 
+                                fontSize: '12px', 
+                                color: '#1a73e8',
+                                fontWeight: '600'
+                              }}>
+                                SL: {device.quantity || 1}
+                              </span>
+                              {isEditable && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newDevices = formData.devices.filter((_, i) => i !== index);
+                                    setFormData(prev => ({ ...prev, devices: newDevices }));
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#d32f2f',
+                                    cursor: 'pointer',
+                                    fontSize: '18px',
+                                    padding: '0',
+                                    width: '20px',
+                                    height: '20px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: '50%',
+                                    transition: 'background-color 0.2s',
+                                    fontWeight: 'bold'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.backgroundColor = 'rgba(211, 47, 47, 0.1)';
+                                    e.target.style.color = '#b71c1c';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.backgroundColor = 'transparent';
+                                    e.target.style.color = '#d32f2f';
+                                  }}
+                                  title="Xóa thiết bị"
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ 
+                      fontSize: '13px', 
+                      color: '#5f6368', 
+                      fontStyle: 'italic',
+                      textAlign: 'center',
+                      padding: '8px'
+                    }}>
+                      Chưa có thiết bị nào được mượn. Vui lòng chọn thiết bị từ bảng bên dưới.
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {formData.devices.map((device, index) => {
-                        const deviceInfo = allDevices.find(d => d.deviceId === device.deviceId);
-                        const displayName = device.deviceName || deviceInfo?.name || `Device ${device.deviceId}`;
-                        return (
-                          <div
-                            key={device.deviceId || index}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '6px 12px',
-                              backgroundColor: '#fff',
-                              border: '1px solid #4caf50',
-                              borderRadius: '20px',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              color: '#2e7d32'
-                            }}
-                          >
-                            <span>{displayName} (SL: {device.quantity})</span>
-                            {isEditable && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newDevices = formData.devices.filter((_, i) => i !== index);
-                                  setFormData(prev => ({ ...prev, devices: newDevices }));
-                                }}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#2e7d32',
-                                  cursor: 'pointer',
-                                  fontSize: '16px',
-                                  padding: '0',
-                                  width: '16px',
-                                  height: '16px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  borderRadius: '50%',
-                                  transition: 'background-color 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(76, 175, 80, 0.1)'}
-                                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                              >
-                                ×
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* Search & Filter */}
                 {isEditable && (
@@ -1273,7 +1420,9 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                             return searchMatch && typeMatch;
                           })
                           .map((device, index) => {
-                            const selected = formData.devices.find(d => d.deviceId === device.deviceId);
+                            // Compare deviceId as numbers to handle type mismatches
+                            const selected = formData.devices.find(d => Number(d.deviceId) === Number(device.deviceId));
+                            const selectedQuantity = selected ? (selected.quantity || 1) : 0;
                             const typeMap = {
                               'MIC': 'Microphone',
                               'CAM': 'Camera',
@@ -1290,8 +1439,9 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                                 key={device.deviceId}
                                 style={{
                                   borderBottom: '1px solid #e9ecef',
-                                  backgroundColor: selected ? '#fff3e0' : (index % 2 === 0 ? 'white' : '#f8f9fa'),
-                                  transition: 'background-color 0.2s',
+                                  backgroundColor: selected ? '#e8f5e9' : (index % 2 === 0 ? 'white' : '#f8f9fa'),
+                                  borderLeft: selected ? '4px solid #4caf50' : '4px solid transparent',
+                                  transition: 'all 0.2s',
                                   cursor: 'pointer'
                                 }}
                                 onClick={() => {
@@ -1299,13 +1449,13 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                                   if (selected) {
                                     setFormData(prev => ({
                                       ...prev,
-                                      devices: prev.devices.filter(d => d.deviceId !== device.deviceId)
+                                      devices: prev.devices.filter(d => Number(d.deviceId) !== Number(device.deviceId))
                                     }));
                                   } else {
                                     setFormData(prev => ({
                                       ...prev,
                                       devices: [...prev.devices, {
-                                        deviceId: device.deviceId,
+                                        deviceId: Number(device.deviceId), // Ensure it's a number
                                         quantity: 1,
                                         deviceName: device.name
                                       }]
@@ -1313,10 +1463,14 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                                   }
                                 }}
                                 onMouseEnter={(e) => {
-                                  if (!selected) e.currentTarget.style.backgroundColor = '#f0f0f0';
+                                  if (!selected) {
+                                    e.currentTarget.style.backgroundColor = '#f0f0f0';
+                                  } else {
+                                    e.currentTarget.style.backgroundColor = '#d4edda';
+                                  }
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = selected ? '#fff3e0' : (index % 2 === 0 ? 'white' : '#f8f9fa');
+                                  e.currentTarget.style.backgroundColor = selected ? '#e8f5e9' : (index % 2 === 0 ? 'white' : '#f8f9fa');
                                 }}
                               >
                                 <td style={{ padding: '10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
@@ -1324,11 +1478,30 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                                     type="checkbox"
                                     checked={!!selected}
                                     onChange={() => {}}
-                                    style={{ cursor: 'pointer' }}
+                                    style={{ 
+                                      cursor: 'pointer',
+                                      width: '18px',
+                                      height: '18px',
+                                      accentColor: '#4caf50'
+                                    }}
                                   />
                                 </td>
-                                <td style={{ padding: '10px', color: '#202124', fontWeight: '500' }}>
+                                <td style={{ 
+                                  padding: '10px', 
+                                  color: selected ? '#2e7d32' : '#202124', 
+                                  fontWeight: selected ? '600' : '500'
+                                }}>
                                   {device.name}
+                                  {selected && (
+                                    <span style={{
+                                      marginLeft: '8px',
+                                      fontSize: '11px',
+                                      color: '#4caf50',
+                                      fontWeight: '600'
+                                    }}>
+                                      ✓ Đã mượn
+                                    </span>
+                                  )}
                                 </td>
                                 <td style={{ padding: '10px', textAlign: 'center' }}>
                                   <span style={{
@@ -1355,7 +1528,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                                         setFormData(prev => ({
                                           ...prev,
                                           devices: prev.devices.map(d =>
-                                            d.deviceId === device.deviceId
+                                            Number(d.deviceId) === Number(device.deviceId)
                                               ? { ...d, quantity: newQuantity }
                                               : d
                                           )
@@ -1616,38 +1789,6 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                 <div style={{ padding: '16px', textAlign: 'center', color: '#5f6368' }}>Đang tải...</div>
             ) : (
               <>
-                  {invitees.length > 0 && (
-                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '16px 0' }}>
-                      {[
-                        { key: 'ACCEPTED', label: 'Đồng ý', color: '#1a73e8' },
-                        { key: 'PENDING', label: 'Đang chờ', color: '#f9ab00' },
-                        { key: 'DECLINED', label: 'Từ chối', color: '#d93025' }
-                      ].map(item => (
-                        <div
-                          key={item.key}
-                          style={{
-                            flex: '1 1 120px',
-                            minWidth: '140px',
-                            background: `${item.color}15`,
-                            border: `1px solid ${item.color}30`,
-                            borderRadius: '12px',
-                            padding: '12px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '4px'
-                          }}
-                        >
-                          <span style={{ fontSize: '12px', color: item.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            {item.label}
-                          </span>
-                          <span style={{ fontSize: '22px', fontWeight: '700', color: '#202124' }}>
-                            {inviteeSummary[item.key] || 0}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
                   {invitees.length > 0 && (
                     <div style={{ marginTop: '8px', marginBottom: '12px' }}>
                       <div style={{ fontSize: '13px', fontWeight: '500', color: '#202124', marginBottom: '8px' }}>Lọc theo trạng thái:</div>

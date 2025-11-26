@@ -457,6 +457,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
           calendar: 'Meeting',
           organizer: meeting.userName || meeting.organizer || 'Unknown',
           attendees: meeting.participants || meeting.attendees || [],
+          participantsCount: meeting.participants || 0, // Lưu participants count để dùng làm fallback
           description: meeting.description || '',
           meetingRoom: meeting.roomName || meeting.room || 'N/A',
           roomLocation: meeting.roomLocation || meeting.location || '',
@@ -589,9 +590,72 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     return { x: adjustedX, y: adjustedY };
   }, []);
 
+  // Cache cho invitees count trong tooltip
+  const tooltipInviteesCacheRef = useRef(new Map());
+  const tooltipCacheTimeoutRef = useRef(new Map());
+
   // Tooltip component
   const EventTooltip = () => {
     const eventToShow = hoveredEvent;
+    const [acceptedInviteesCount, setAcceptedInviteesCount] = useState(0);
+    const [loadingInvitees, setLoadingInvitees] = useState(false);
+
+    // Load invitees count khi eventToShow thay đổi - tối ưu với lazy load và cache
+    useEffect(() => {
+      if (!eventToShow?.id) {
+        setAcceptedInviteesCount(0);
+        return;
+      }
+
+      // Sử dụng participants count từ event data làm giá trị ban đầu (instant display)
+      const initialCount = eventToShow.participantsCount || 0;
+      setAcceptedInviteesCount(initialCount);
+
+      // Kiểm tra cache trước
+      const cacheKey = `tooltip_invitees_${eventToShow.id}`;
+      const cached = tooltipInviteesCacheRef.current.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 60000) { // Cache 1 phút
+        setAcceptedInviteesCount(cached.count);
+        return;
+      }
+
+      // Lazy load: chỉ load sau 800ms nếu user vẫn hover (giảm API calls không cần thiết)
+      // Load ở background, không block UI
+      const timeoutId = setTimeout(async () => {
+        try {
+          const invitees = await calendarAPI.getMeetingInvitees(eventToShow.id);
+          // Chỉ đếm những người có status ACCEPTED (không tính người tạo)
+          const acceptedCount = Array.isArray(invitees)
+            ? invitees.filter(inv => (inv.status || '').toUpperCase() === 'ACCEPTED').length
+            : 0;
+          
+          // Update state với functional update để tránh stale closure
+          setAcceptedInviteesCount(prev => {
+            // Chỉ update nếu khác với giá trị hiện tại
+            return acceptedCount !== prev ? acceptedCount : prev;
+          });
+          
+          // Lưu vào cache
+          tooltipInviteesCacheRef.current.set(cacheKey, { count: acceptedCount, timestamp: Date.now() });
+          
+          // Clear cache sau 1 phút
+          if (tooltipCacheTimeoutRef.current.has(cacheKey)) {
+            clearTimeout(tooltipCacheTimeoutRef.current.get(cacheKey));
+          }
+          const cacheTimeout = setTimeout(() => {
+            tooltipInviteesCacheRef.current.delete(cacheKey);
+            tooltipCacheTimeoutRef.current.delete(cacheKey);
+          }, 60000);
+          tooltipCacheTimeoutRef.current.set(cacheKey, cacheTimeout);
+        } catch (error) {
+          console.warn('⚠️ Could not load invitees for tooltip:', error);
+          // Giữ nguyên giá trị ban đầu nếu có lỗi - không cần làm gì
+        }
+      }, 800); // Tăng debounce lên 800ms để giảm API calls - chỉ load khi user thực sự muốn xem
+
+      return () => clearTimeout(timeoutId);
+    }, [eventToShow?.id, eventToShow?.participantsCount]);
+
     if (!eventToShow) return null;
 
     const adjustedPos = getAdjustedPosition(tooltipPosition.x, tooltipPosition.y);
@@ -607,132 +671,241 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         onMouseEnter={() => setHoveredEvent(eventToShow)}
         onMouseLeave={() => setHoveredEvent(null)}
       >
-        <div className="tooltip-header" style={{ backgroundColor: eventToShow.color }}>
-          <div className="tooltip-title">{eventToShow.title}</div>
-          <div className="tooltip-meta">
-            <span className="tooltip-calendar">{eventToShow.calendar}</span>
-          </div>
-        </div>
-
-        <div className="tooltip-body">
-          {/* 1. Ngày/tháng/năm */}
-          <div className="tooltip-section">
-            <div className="tooltip-time">
-              <strong>📅 {formatDateFull(eventToShow.start)}</strong>
+        {/* Header với icons - Google Calendar style */}
+        <div className="tooltip-header" style={{ 
+          background: `linear-gradient(135deg, ${eventToShow.color || '#4285f4'} 0%, ${eventToShow.color || '#4285f4'}dd 100%)`,
+          padding: '16px 20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          <div style={{ flex: 1 }}>
+            <div className="tooltip-title" style={{ 
+              fontSize: '20px', 
+              fontWeight: '500', 
+              color: 'white',
+              marginBottom: '4px'
+            }}>
+              {eventToShow.title}
+            </div>
+            <div className="tooltip-meta" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)' }}>
+              {eventToShow.calendar || 'Meeting'}
             </div>
           </div>
-
-          {/* 2. Start time - End time */}
-          <div className="tooltip-section">
-            <div className="tooltip-time">
-              <strong>🕐 {formatTime(eventToShow.start)} - {formatTime(eventToShow.end)}</strong>
-            </div>
-          </div>
-
-          {/* 3. Phòng họp */}
-          {eventToShow.meetingRoom && eventToShow.meetingRoom !== 'N/A' && (
-            <div className="tooltip-section">
-              <div className="tooltip-info compact">
-                <span className="tooltip-label">🚪</span>
-                <span>{eventToShow.meetingRoom}</span>
-              </div>
-            </div>
-          )}
-
-          {/* 4. Vị trí phòng */}
-          <div className="tooltip-section">
-            <div className="tooltip-info compact">
-              <span className="tooltip-label">📍</span>
-              <span>
-                {eventToShow.roomLocation && eventToShow.roomLocation !== 'N/A' && eventToShow.roomLocation.trim() !== '' 
-                  ? eventToShow.roomLocation 
-                  : (eventToShow.building && eventToShow.building !== 'N/A' && eventToShow.building.trim() !== '' 
-                      ? `${eventToShow.building}${eventToShow.floor && eventToShow.floor !== 'N/A' ? ` - Tầng ${eventToShow.floor}` : ''}`
-                      : 'Chưa có thông tin vị trí'
-                    )
-                }
-              </span>
-            </div>
-          </div>
-
-          {/* 5. Người chủ trì (người tạo lịch) */}
-          <div className="tooltip-section">
-            <div className="tooltip-info compact">
-              <span className="tooltip-label">👤</span>
-              <span>{eventToShow.organizer}</span>
-            </div>
-          </div>
-
-          {/* 6. Số người tham gia */}
-          <div className="tooltip-section">
-            <div className="tooltip-info compact">
-              <span className="tooltip-label">👥</span>
-              <span>{eventToShow.attendees.length} người tham gia</span>
-            </div>
-          </div>
-
-          {/* 7. Thiết bị mượn */}
-          {eventToShow.devices && eventToShow.devices.length > 0 && (
-            <div className="tooltip-section">
-              <div className="tooltip-info">
-                <span className="tooltip-label">💻 Thiết bị mượn:</span>
-                <div className="devices-list">
-                  {eventToShow.devices.map((device, index) => (
-                    <span key={index} className="device-item">
-                      • {device.deviceName} ({device.deviceType}) x{device.quantity}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 8. Mô tả (nếu có) */}
-          {eventToShow.description && (
-            <div className="tooltip-section">
-              <div className="tooltip-info">
-                <span className="tooltip-label">📝</span>
-                <span>{eventToShow.description.length > 100
-                  ? `${eventToShow.description.substring(0, 100)}...`
-                  : eventToShow.description}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Notice for read-only meetings */}
-        {(!eventToShow.canEdit || eventToShow.meetingRole === 'guest') && (
-          <div className="edit-disabled-notice">
-            <span>ℹ️ Bạn chỉ có thể xem cuộc họp này.</span>
-          </div>
-        )}
-
-        <div className="tooltip-footer">
-          {/* Chỉ hiển thị nút Edit nếu status hợp lệ và user có quyền */}
-          {eventToShow.canEdit && ['BOOKED', 'IN_PROGRESS'].includes(eventToShow.bookingStatus?.toUpperCase()) ? (
-            <>
-              <button 
-                className="tooltip-action-btn" 
-                onClick={() => handleEditMeeting(eventToShow)}
+          
+          {/* Icons: Edit, Delete, Download, Close */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '4px',
+            alignItems: 'center'
+          }}>
+            {/* Edit button */}
+            {eventToShow.canEdit && ['BOOKED', 'IN_PROGRESS'].includes(eventToShow.bookingStatus?.toUpperCase()) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditMeeting(eventToShow);
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: 'white',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.3)'}
+                onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.2)'}
+                title="Chỉnh sửa"
               >
-                ✏️ Edit
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
               </button>
-              <button 
-                className="tooltip-action-btn" 
-                onClick={() => handleDeleteMeeting(eventToShow.id)}
+            )}
+            
+            {/* Delete button */}
+            {eventToShow.canEdit && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm('Bạn có chắc chắn muốn xóa cuộc họp này?')) {
+                    handleDeleteMeeting(eventToShow.id);
+                  }
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: 'white',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.3)'}
+                onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.2)'}
+                title="Xóa"
               >
-                🗑️ Delete
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                </svg>
               </button>
-            </>
-          ) : eventToShow.canEdit ? (
-            <button 
-              className="tooltip-action-btn"
-              onClick={() => handleDeleteMeeting(eventToShow.id)}
-              style={{ width: '100%' }}
+            )}
+            
+            {/* Download button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // TODO: Implement download functionality
+                console.log('Download meeting:', eventToShow);
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'white',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.3)'}
+              onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.2)'}
+              title="Tải xuống"
             >
-              🗑️ Delete
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+              </svg>
             </button>
-          ) : null}
+            
+            {/* Close button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setHoveredEvent(null);
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'white',
+                fontSize: '20px',
+                lineHeight: '1',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.3)'}
+              onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.2)'}
+              title="Đóng"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Body - White background */}
+        <div className="tooltip-body" style={{ 
+          backgroundColor: 'white',
+          padding: '20px',
+          fontSize: '14px',
+          color: '#202124'
+        }}>
+          {/* Ngày/tháng/năm và thời gian - Small text */}
+          <div style={{ 
+            marginBottom: '16px',
+            fontSize: '14px',
+            color: '#5f6368',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span>📅</span>
+            <span>
+              {formatDateFull(eventToShow.start)} • {formatTime(eventToShow.start)} - {formatTime(eventToShow.end)}
+            </span>
+          </div>
+
+          {/* Tên phòng */}
+          {eventToShow.meetingRoom && eventToShow.meetingRoom !== 'N/A' && (
+            <div style={{ 
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              color: '#202124'
+            }}>
+              <span>🏛️</span>
+              <span>{eventToShow.meetingRoom}</span>
+            </div>
+          )}
+
+          {/* Vị trí phòng */}
+          <div style={{ 
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            color: '#202124'
+          }}>
+            <span>📍</span>
+            <span>
+              {eventToShow.roomLocation && eventToShow.roomLocation !== 'N/A' && eventToShow.roomLocation.trim() !== '' 
+                ? eventToShow.roomLocation 
+                : (eventToShow.building && eventToShow.building !== 'N/A' && eventToShow.building.trim() !== '' 
+                    ? `${eventToShow.building}${eventToShow.floor && eventToShow.floor !== 'N/A' ? ` - Tầng ${eventToShow.floor}` : ''}`
+                    : 'Chưa có thông tin vị trí'
+                  )
+              }
+            </span>
+          </div>
+
+          {/* Số khách đã chấp nhận tham gia */}
+          <div style={{ 
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            color: '#202124'
+          }}>
+            <span>👥</span>
+            <span>
+              {acceptedInviteesCount > 0 
+                ? `${acceptedInviteesCount} người tham gia`
+                : 'Chưa có người tham gia'}
+            </span>
+          </div>
+
+          {/* Mô tả */}
+          {eventToShow.description && (
+            <div style={{ 
+              marginBottom: '12px',
+              fontSize: '14px',
+              color: '#202124',
+              lineHeight: '1.5'
+            }}>
+              {eventToShow.description}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -806,7 +979,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
       case 'schedule':
         return <ScheduleView selectedDate={selectedDate} onMeetingUpdated={onMeetingUpdated} refreshTrigger={refreshTrigger} />;
       default:
-        return <MonthView {...commonProps} />;
+        return <MonthView {...monthViewProps} />;
     }
   }, [
     viewType,

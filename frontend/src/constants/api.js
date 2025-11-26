@@ -44,6 +44,15 @@ export const API_ENDPOINTS = {
     LIST: '/api/rooms',
     AVAILABLE: '/api/rooms/available',
   },
+  
+  // Google Calendar
+  GOOGLE_CALENDAR: {
+    AUTH_URL: '/api/auth/google/calendar/auth-url',
+    CALLBACK: '/api/auth/google/calendar/callback',
+    STATUS: '/api/auth/google/calendar/status',
+    DISCONNECT: '/api/auth/google/calendar/disconnect',
+    SYNC_NOW: '/api/auth/google/calendar/sync-now',
+  },
 };
 
 export default API_ENDPOINTS;

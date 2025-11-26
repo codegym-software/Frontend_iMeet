@@ -94,6 +94,17 @@ export const DataPreloaderProvider = ({ children }) => {
   // Load users
   const loadUsers = useCallback(async (page = 0, size = 10, sortBy = 'createdAt', sortDir = 'desc', search = '', isMounted = { current: true }) => {
     try {
+      // Kiểm tra token trước khi gọi API
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('⚠️ No token available for loading users');
+        if (isMounted.current) {
+          setUsers([]);
+          setUsersLoading(false);
+        }
+        return { users: [], totalPages: 0, totalElements: 0, currentPage: 0 };
+      }
+
       if (isMounted.current) setUsersLoading(true);
       const response = await adminService.getUsers(page, size, sortBy, sortDir, search);
       
@@ -106,7 +117,10 @@ export const DataPreloaderProvider = ({ children }) => {
       
       return response;
     } catch (error) {
-      console.error('Error loading users:', error);
+      // Chỉ log error nếu không phải lỗi authentication
+      if (!error.message.includes('Authentication required')) {
+        console.error('Error loading users:', error);
+      }
       if (isMounted.current) setUsers([]);
       throw error;
     } finally {
@@ -117,11 +131,24 @@ export const DataPreloaderProvider = ({ children }) => {
   // Load user stats
   const loadUserStats = useCallback(async (isMounted = { current: true }) => {
     try {
+      // Kiểm tra token trước khi gọi API
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('⚠️ No token available for loading user stats');
+        if (isMounted.current) {
+          setUserStats(null);
+        }
+        return null;
+      }
+
       const response = await adminService.getUserStats();
       if (isMounted.current) setUserStats(response);
       return response;
     } catch (error) {
-      console.error('Error loading user stats:', error);
+      // Chỉ log error nếu không phải lỗi authentication
+      if (!error.message.includes('Authentication required')) {
+        console.error('Error loading user stats:', error);
+      }
       if (isMounted.current) setUserStats(null);
       throw error;
     }
@@ -157,11 +184,20 @@ export const DataPreloaderProvider = ({ children }) => {
         try {
           const devicePromises = roomsList.map(r => {
             const roomId = r.id || r.roomId;
-            return roomService.getDevicesByRoom(roomId);
+            // Wrap in promise that always resolves to prevent Promise.all from failing
+            return roomService.getDevicesByRoom(roomId)
+              .catch(err => {
+                console.warn(`Failed to get devices for room ${roomId}:`, err);
+                return { success: true, data: [] }; // Return empty array on error
+              });
           });
-          const deviceResponses = await Promise.all(devicePromises);
+          const deviceResponses = await Promise.allSettled(devicePromises);
+          // Extract values from settled promises
+          const deviceData = deviceResponses.map(result => 
+            result.status === 'fulfilled' ? result.value : { success: true, data: [] }
+          );
           const enriched = roomsList.map((r, idx) => {
-            const resp = deviceResponses[idx];
+            const resp = deviceData[idx];
             const ids = (resp && resp.success && Array.isArray(resp.data)) 
               ? resp.data.map(x => Number(x.deviceId)) 
               : [];
@@ -416,6 +452,15 @@ export const DataPreloaderProvider = ({ children }) => {
       return;
     }
 
+    // Kiểm tra authentication trước khi gọi API
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.warn('⚠️ No authentication token found. Skipping data preload.');
+      setIsPreloading(false);
+      setIsDataLoaded(true); // Mark as loaded to prevent retry
+      return;
+    }
+
     const isMountedRef = { current: true };
 
     const preloadAllData = async () => {
@@ -432,23 +477,34 @@ export const DataPreloaderProvider = ({ children }) => {
           meetingsResponse
         ] = await Promise.all([
           loadUsers(0, 1000, 'createdAt', 'desc', '', isMountedRef).catch(err => {
-            console.warn('❌ Failed to load users:', err.message);
+            // Chỉ log warning nếu không phải lỗi authentication
+            if (!err.message.includes('Authentication required')) {
+              console.warn('❌ Failed to load users:', err.message);
+            }
             return null;
           }),
           loadUserStats(isMountedRef).catch(err => {
-            console.warn('❌ Failed to load user stats:', err.message);
+            if (!err.message.includes('Authentication required')) {
+              console.warn('❌ Failed to load user stats:', err.message);
+            }
             return null;
           }),
           loadDevices([], isMountedRef).catch(err => {
-            console.warn('❌ Failed to load devices:', err.message);
+            if (!err.message.includes('Authentication required')) {
+              console.warn('❌ Failed to load devices:', err.message);
+            }
             return null;
           }),
           loadRooms(isMountedRef).catch(err => {
-            console.warn('❌ Failed to load rooms:', err.message);
+            if (!err.message.includes('Authentication required')) {
+              console.warn('❌ Failed to load rooms:', err.message);
+            }
             return null;
           }),
           loadMeetings(isMountedRef).catch(err => {
-            console.warn('❌ Failed to load meetings:', err.message);
+            if (!err.message.includes('Authentication required')) {
+              console.warn('❌ Failed to load meetings:', err.message);
+            }
             return null;
           })
         ]);
@@ -456,7 +512,9 @@ export const DataPreloaderProvider = ({ children }) => {
         // ✅ Load room-device mappings after rooms are loaded
         if (isMountedRef.current && roomsResponse && roomsResponse.length > 0) {
           await loadRoomDeviceMappings(roomsResponse, isMountedRef).catch(err => {
-            console.warn('❌ Failed to load room-device mappings:', err.message);
+            if (!err.message.includes('Authentication required')) {
+              console.warn('❌ Failed to load room-device mappings:', err.message);
+            }
           });
         }
         

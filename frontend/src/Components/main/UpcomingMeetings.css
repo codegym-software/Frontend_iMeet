@@ -36,102 +36,80 @@
 .meetings-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
-.meeting-item {
-  background: var(--card-bg, rgba(255, 255, 255, 0.05));
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+/* Meeting Card - Google Calendar Style */
+.meeting-card {
+  background: white;
+  border-radius: 12px;
   padding: 16px;
-  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
   transition: all 0.2s ease;
   cursor: pointer;
 }
 
-.meeting-item:hover {
-  background: var(--hover-bg);
-  border-color: var(--accent-color);
-  transform: translateY(-1px);
+.meeting-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
 }
 
-.meeting-item.next-meeting {
-  border-left: 4px solid var(--accent-color);
-  background: linear-gradient(135deg, var(--card-bg) 0%, rgba(26, 115, 232, 0.1) 100%);
-  padding-right: 100px; /* Add space for the next badge */
-}
-
-/* Meeting Time */
-.meeting-time {
+/* Card Header - Title and Calendar Icon */
+.meeting-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 8px;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
-.meeting-time .time {
-  font-size: 16px;
+.meeting-card-title {
+  font-size: 18px;
   font-weight: 600;
-  color: var(--accent-color);
-}
-
-.meeting-time .time-until {
-  font-size: 11px;
-  color: var(--muted-color);
-  background: var(--bg-color);
-  padding: 4px 8px;
-  border-radius: 12px;
-  white-space: nowrap;
-  max-width: 120px;
-}
-
-/* Meeting Details */
-.meeting-details {
+  margin: 0;
+  color: #202124;
+  line-height: 1.3;
   flex: 1;
 }
 
-.meeting-title {
-  font-size: 14px;
-  font-weight: 500;
-  margin: 0 0 6px 0;
-  color: var(--text-color);
-  line-height: 1.4;
-}
-
-.meeting-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--muted-color);
-}
-
-.meeting-meta .duration {
-  background: var(--bg-color);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.meeting-meta .participants {
+.calendar-icon {
+  flex-shrink: 0;
+  margin-left: 12px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
 }
 
-/* Next Meeting Badge */
-.next-badge {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: var(--accent-color);
-  color: white;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
+/* Date and Time */
+.meeting-card-datetime {
+  font-size: 14px;
+  color: #5f6368;
+  margin-bottom: 12px;
+}
+
+/* Attendees Section */
+.meeting-card-attendees {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.participants-count {
+  font-size: 14px;
+  color: #5f6368;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.meeting-countdown {
+  font-size: 14px;
+  color: #202124;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 /* No Meetings State */

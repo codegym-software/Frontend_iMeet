@@ -20,7 +20,8 @@ export default function Profile({ onSave }) {
     loading: googleCalendarLoading, 
     error: googleCalendarError,
     connect: connectGoogleCalendar,
-    disconnect: disconnectGoogleCalendar
+    disconnect: disconnectGoogleCalendar,
+    refreshStatus
   } = useGoogleCalendar();
   
   // Simplified state management
@@ -85,6 +86,85 @@ export default function Profile({ onSave }) {
     };
     fetchProfile();
   }, [user]);
+  
+  // Effect riêng để kiểm tra calendar callback
+  useEffect(() => {
+    const handleCalendarCallback = async () => {
+      // Kiểm tra localStorage flag từ Google Calendar callback
+      const calendarJustConnected = localStorage.getItem('calendar_just_connected');
+      const calendarError = localStorage.getItem('calendarConnectError');
+      
+      if (calendarJustConnected === 'true') {
+        setMessage('Kết nối Google Calendar thành công!');
+        // Xóa tất cả flags ngay lập tức để tránh trigger lại
+        localStorage.removeItem('calendar_just_connected');
+        localStorage.removeItem('calendar_connecting');
+        localStorage.removeItem('calendar_connecting_time');
+        localStorage.removeItem('calendarConnectSuccess');
+        localStorage.removeItem('calendarConnectError');
+        
+        // Replace history để xóa entry Google OAuth khỏi history stack
+        // Đảm bảo khi user click "quay lại" sẽ về trang chủ, không phải Google OAuth
+        if (window.history.length > 1) {
+          // Replace current entry với profile để xóa entry callback và OAuth
+          window.history.replaceState(null, '', '/profile');
+        }
+        
+        // Refresh status kết nối Google Calendar
+        try {
+          // Đợi một chút để backend cập nhật xong
+          await new Promise(resolve => setTimeout(resolve, 500));
+          // Force refresh Google Calendar status
+          if (typeof refreshStatus === 'function') {
+            await refreshStatus();
+          }
+        } catch (error) {
+          console.error('Error refreshing calendar status:', error);
+        }
+        
+        // Tự động ẩn thông báo sau 3 giây
+        timeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setMessage('');
+          }
+        }, 3000);
+      } else if (calendarError) {
+        // Hiển thị lỗi nếu có
+        setMessage(calendarError);
+        // Xóa flags
+        localStorage.removeItem('calendarConnectError');
+        localStorage.removeItem('calendar_connecting');
+        localStorage.removeItem('calendar_connecting_time');
+        localStorage.removeItem('calendar_just_connected');
+        
+        // Tự động ẩn thông báo sau 5 giây
+        timeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setMessage('');
+          }
+        }, 5000);
+      }
+      
+      // Kiểm tra và clear flag connecting nếu còn sót lại (tránh trigger lại)
+      const isConnecting = localStorage.getItem('calendar_connecting');
+      if (isConnecting === 'true') {
+        const connectingTime = localStorage.getItem('calendar_connecting_time');
+        // Nếu flag cũ quá 5 phút, clear nó
+        if (connectingTime) {
+          const timeDiff = Date.now() - parseInt(connectingTime);
+          if (timeDiff > 5 * 60 * 1000) {
+            localStorage.removeItem('calendar_connecting');
+            localStorage.removeItem('calendar_connecting_time');
+          }
+        } else {
+          // Nếu không có timestamp, clear luôn
+        localStorage.removeItem('calendar_connecting');
+        }
+      }
+    };
+    
+    handleCalendarCallback();
+  }, [refreshStatus]);
   
   // Cleanup effect
   useEffect(() => {
@@ -214,7 +294,9 @@ export default function Profile({ onSave }) {
   };
 
   const handleBack = () => {
-    history.goBack();
+    // Luôn về trang chủ thay vì dùng goBack() để tránh quay về Google OAuth
+    // sau khi kết nối Google Calendar thành công
+    history.push('/trang-chu');
   };
   
   const handleLogout = () => {
@@ -241,10 +323,22 @@ export default function Profile({ onSave }) {
 
   const handleConnectGoogleCalendar = async () => {
     try {
+      // Clear các flags cũ trước khi bắt đầu kết nối mới
+      localStorage.removeItem('calendar_just_connected');
+      localStorage.removeItem('calendarConnectSuccess');
+      localStorage.removeItem('calendarConnectError');
+      
+      // Lấy auth URL và set flag connecting với timestamp
+      localStorage.setItem('calendar_connecting', 'true');
+      localStorage.setItem('calendar_connecting_time', Date.now().toString());
+      
+      // connectGoogleCalendar sẽ redirect đến Google OAuth
       await connectGoogleCalendar();
-      // Nếu thành công, window.location.href sẽ được gọi trong service
-      // để chuyển hướng đến Google OAuth
+      // Note: Code sau dòng này sẽ không chạy vì đã redirect
     } catch (error) {
+      // Nếu có lỗi trước khi redirect, clear flag và hiển thị lỗi
+      localStorage.removeItem('calendar_connecting');
+      localStorage.removeItem('calendar_connecting_time');
       setMessage(error.message || 'Không thể kết nối Google Calendar');
       timeoutRef.current = setTimeout(() => {
         if (isMountedRef.current) {

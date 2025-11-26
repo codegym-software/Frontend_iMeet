@@ -111,6 +111,16 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
     setDeviceQuantities({});
   }, [selectedDateKey, initialStartKey, initialEndKey, initialRoomKey]);
 
+  // Cleanup debounce và cache khi unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+      userSearchCacheRef.current.clear();
+    };
+  }, []);
+
   // Load rooms only - devices từ cache rồi!
   useEffect(() => {
     let isMounted = true;
@@ -365,15 +375,27 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
     return regex.test(timeString);
   }
 
-  // Search users by email or name using real API
+  // Cache cho user search
+  const userSearchCacheRef = useRef(new Map());
+  const searchDebounceRef = useRef(null);
+
+  // Search users by email or name using real API - với cache và debounce
   const searchUsers = async (query) => {
     if (!query || query.trim().length < 2) {
       return [];
     }
     
+    const trimmedQuery = query.trim().toLowerCase();
+    
+    // Kiểm tra cache trước
+    const cached = userSearchCacheRef.current.get(trimmedQuery);
+    if (cached && Date.now() - cached.timestamp < 300000) { // Cache 5 phút
+      return cached.data;
+    }
+    
     setIsLoading(true);
     try {
-      const response = await adminService.getUsers(0, 10, 'email', 'asc', query.trim());
+      const response = await adminService.getUsers(0, 10, 'email', 'asc', trimmedQuery);
       const users = response.users || [];
       
       // Map to format: { id, email, fullName }
@@ -382,6 +404,12 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
         email: user.email,
         fullName: user.fullName || user.name || null
       }));
+      
+      // Lưu vào cache
+      userSearchCacheRef.current.set(trimmedQuery, {
+        data: mappedUsers,
+        timestamp: Date.now()
+      });
       
       setIsLoading(false);
       return mappedUsers;
@@ -406,8 +434,8 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
     return emailRegex.test(trimmed);
   };
 
-  // Handle guest input change
-  const handleGuestChange = async (e) => {
+  // Handle guest input change - với debounce
+  const handleGuestChange = (e) => {
     const value = e.target.value;
     setGuestInputValue(value);
 
@@ -419,11 +447,21 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
       }));
     }
 
+    // Clear previous debounce
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
     // Show suggestions if query is not empty and doesn't contain comma
     if (value.trim().length > 1 && !value.includes(',')) {
-      const suggestions = await searchUsers(value.trim());
-      setGuestSuggestions(suggestions);
-      setShowSuggestions(true);
+      // Debounce: chỉ search sau 300ms khi user ngừng gõ
+      searchDebounceRef.current = setTimeout(async () => {
+        const suggestions = await searchUsers(value.trim());
+        if (isMountedRef.current) {
+          setGuestSuggestions(suggestions);
+          setShowSuggestions(true);
+        }
+      }, 300);
     } else {
       setGuestSuggestions([]);
       setShowSuggestions(false);

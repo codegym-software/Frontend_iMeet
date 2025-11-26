@@ -86,8 +86,8 @@ export const roomAPI = {
     }
   },
 
-  // ✅ NEW: Lấy phòng trống theo khoảng thời gian (startTime, endTime)
-  async getAvailableRoomsInRange(startTime, endTime) {
+  // ✅ NEW: Lấy phòng trống theo khoảng thời gian (startTime, endTime) với các filter
+  async getAvailableRoomsInRange(startTime, endTime, options = {}) {
     try {
       // Format datetime to ISO string for backend
       const startDateTime = startTime instanceof Date ? startTime.toISOString() : new Date(startTime).toISOString();
@@ -98,7 +98,25 @@ export const roomAPI = {
         endTime: endDateTime
       });
       
-      console.log('📡 Fetching available rooms for range:', startDateTime, 'to', endDateTime);
+      // Thêm minCapacity nếu có
+      if (options.minCapacity && Number(options.minCapacity) > 0) {
+        params.append('minCapacity', Number(options.minCapacity));
+      }
+      
+      // Thêm requiredDeviceTypes nếu có
+      if (options.requiredDeviceTypes && Array.isArray(options.requiredDeviceTypes) && options.requiredDeviceTypes.length > 0) {
+        // Backend nhận requiredDeviceTypes là danh sách string
+        options.requiredDeviceTypes.forEach(deviceType => {
+          params.append('requiredDeviceTypes', deviceType);
+        });
+      }
+      
+      console.log('📡 Fetching available rooms for range:', {
+        startTime: startDateTime,
+        endTime: endDateTime,
+        minCapacity: options.minCapacity,
+        requiredDeviceTypes: options.requiredDeviceTypes
+      });
       
       const response = await fetch(`${API_BASE_URL}/rooms/available-in-range?${params}`, {
         credentials: 'include',
@@ -107,14 +125,15 @@ export const roomAPI = {
         },
       });
       if (!response.ok) {
-        console.warn('⚠️ Could not fetch available rooms in range. Status:', response.status);
+        const errorText = await response.text();
+        console.warn('⚠️ Could not fetch available rooms in range. Status:', response.status, 'Error:', errorText);
         return [];
       }
       const data = await response.json();
-      console.log('✅ Available rooms in range:', data.data || []);
+      console.log('✅ Available rooms in range:', data.data?.length || 0, 'rooms found');
       return data.data || [];
     } catch (error) {
-      console.warn('⚠️ Could not fetch available rooms in range. Returning empty data.', error);
+      console.error('❌ Error fetching available rooms in range:', error);
       return [];
     }
   },

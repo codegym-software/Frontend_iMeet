@@ -1,8 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import './RoomFinder.css';
-import { roomAPI } from '../MainCalendar/utils/RoomAPI';
-import RoomSearchForm from './RoomSearchForm';
-import RoomResultsList from './RoomResultsList';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { roomAPI } from '../Components/main/MainCalendar/utils/RoomAPI';
 
 const DEVICE_TYPE_OPTIONS = [
   { id: 'CAM', label: 'Camera' },
@@ -46,7 +43,7 @@ const createDefaultCriteria = (baseDate = new Date()) => {
   };
 };
 
-const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, renderFormInLeftPanel = false, onFormReady }) => {
+export const useRoomFinder = (initialDate, onDateChange) => {
   const [criteria, setCriteria] = useState(() => createDefaultCriteria(initialDate || new Date()));
   const [rooms, setRooms] = useState([]);
   const [allRooms, setAllRooms] = useState([]);
@@ -55,6 +52,13 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, rend
   const [formError, setFormError] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
   const [searchRange, setSearchRange] = useState(null);
+  const isMountedRef = useRef(true);
+  const onDateChangeRef = useRef(onDateChange);
+  
+  // Cập nhật ref khi onDateChange thay đổi
+  useEffect(() => {
+    onDateChangeRef.current = onDateChange;
+  }, [onDateChange]);
 
   const normalizeRooms = useCallback((data = []) => {
     return (data || [])
@@ -68,20 +72,30 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, rend
     try {
       const data = await roomAPI.getAllRooms();
       const normalized = normalizeRooms(Array.isArray(data) ? data : data?.data || []);
-      setAllRooms(normalized);
-      setRooms(normalized);
-      setHasSearched(false);
-      setSearchRange(null);
+      if (isMountedRef.current) {
+        setAllRooms(normalized);
+        setRooms(normalized);
+        setHasSearched(false);
+        setSearchRange(null);
+      }
     } catch (error) {
       console.error('Error loading rooms:', error);
-      setApiError('Không thể tải danh sách phòng. Vui lòng thử lại.');
+      if (isMountedRef.current) {
+        setApiError('Không thể tải danh sách phòng. Vui lòng thử lại.');
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [normalizeRooms]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     loadAllRooms();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [loadAllRooms]);
 
   useEffect(() => {
@@ -108,8 +122,13 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, rend
     setCriteria(prev => {
       if (field === 'selectedDate') {
         const normalizedDate = startOfDay(value || new Date());
-        if (typeof onDateChange === 'function') {
-          onDateChange(normalizedDate);
+        // Sử dụng ref để tránh lỗi "Cannot access before initialization"
+        if (onDateChangeRef.current && typeof onDateChangeRef.current === 'function') {
+          try {
+            onDateChangeRef.current(normalizedDate);
+          } catch (error) {
+            console.warn('Error calling onDateChange:', error);
+          }
         }
         return {
           ...prev,
@@ -145,7 +164,7 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, rend
 
       return prev;
     });
-  }, [onDateChange]);
+  }, []); // Không cần onDateChange trong dependency array vì đã dùng ref
 
   const toggleDeviceType = useCallback((typeId) => {
     setCriteria(prev => {
@@ -163,12 +182,27 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, rend
     if (!current.startDateTime || !current.endDateTime) {
       return 'Vui lòng chọn thời gian bắt đầu và kết thúc.';
     }
-    if (current.endDateTime <= current.startDateTime) {
+    
+    // Kiểm tra thời gian hợp lệ
+    const start = new Date(current.startDateTime);
+    const end = new Date(current.endDateTime);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return 'Thời gian không hợp lệ.';
+    }
+    
+    if (end <= start) {
       return 'Thời gian kết thúc phải sau thời gian bắt đầu.';
     }
-    if (current.participants && Number(current.participants) <= 0) {
-      return 'Số người tham gia phải lớn hơn 0.';
+    
+    // Kiểm tra số người tham gia
+    if (current.participants && current.participants.trim() !== '') {
+      const participantsNum = Number(current.participants);
+      if (isNaN(participantsNum) || participantsNum <= 0) {
+        return 'Số người tham gia phải là số lớn hơn 0.';
+      }
     }
+    
     return '';
   }, []);
 
@@ -183,7 +217,25 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, rend
     setApiError('');
     setLoading(true);
 
-    const minCapacity = Number(criteria.participants) > 0 ? Number(criteria.participants) : undefined;
+    // Xử lý minCapacity - chỉ gửi nếu có giá trị hợp lệ
+    const participantsNum = criteria.participants && criteria.participants.trim() !== '' 
+      ? Number(criteria.participants) 
+      : null;
+    const minCapacity = participantsNum && !isNaN(participantsNum) && participantsNum > 0 
+      ? participantsNum 
+      : undefined;
+
+    // Xử lý deviceTypes - chỉ gửi nếu có ít nhất 1 loại được chọn
+    const requiredDeviceTypes = criteria.deviceTypes && criteria.deviceTypes.length > 0
+      ? criteria.deviceTypes.filter(type => type && type.trim() !== '')
+      : undefined;
+
+    console.log('🔍 Filtering rooms with criteria:', {
+      startTime: criteria.startDateTime,
+      endTime: criteria.endDateTime,
+      minCapacity,
+      requiredDeviceTypes
+    });
 
     try {
       const availableRooms = await roomAPI.getAvailableRoomsInRange(
@@ -191,28 +243,38 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, rend
         criteria.endDateTime,
         {
           minCapacity,
-          requiredDeviceTypes: criteria.deviceTypes
+          requiredDeviceTypes
         }
       );
+
+      console.log('📦 Raw API response:', availableRooms);
 
       const normalizedRooms = normalizeRooms(
         Array.isArray(availableRooms) ? availableRooms : availableRooms?.data || []
       );
 
-      setRooms(normalizedRooms);
-      setHasSearched(true);
-      setSearchRange({
-        start: criteria.startDateTime,
-        end: criteria.endDateTime,
-        minCapacity,
-        deviceTypes: [...criteria.deviceTypes]
-      });
+      console.log('✅ Normalized rooms:', normalizedRooms.length, 'rooms');
+
+      if (isMountedRef.current) {
+        setRooms(normalizedRooms);
+        setHasSearched(true);
+        setSearchRange({
+          start: criteria.startDateTime,
+          end: criteria.endDateTime,
+          minCapacity,
+          deviceTypes: [...criteria.deviceTypes]
+        });
+      }
     } catch (error) {
       console.error('Error fetching available rooms:', error);
-      setApiError(error?.message || 'Không thể lấy danh sách phòng trống. Vui lòng thử lại.');
-      setRooms([]);
+      if (isMountedRef.current) {
+        setApiError(error?.message || 'Không thể lấy danh sách phòng trống. Vui lòng thử lại.');
+        setRooms([]);
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [criteria, normalizeRooms, validateCriteria]);
 
@@ -226,87 +288,20 @@ const RoomFinder = ({ initialDate, onDateChange, onBookRoom, onViewDetails, rend
     setSearchRange(null);
   }, [allRooms, criteria.selectedDate]);
 
-  const handleBookRoom = useCallback((room) => {
-    if (!room || !searchRange || typeof onBookRoom !== 'function') return;
-    onBookRoom(room, searchRange);
-  }, [onBookRoom, searchRange]);
-
-  const handleViewDetail = useCallback((room) => {
-    if (typeof onViewDetails === 'function') {
-      onViewDetails(room);
-    }
-  }, [onViewDetails]);
-
-  // Expose form component nếu cần render riêng trong left panel
-  useEffect(() => {
-    if (renderFormInLeftPanel && onFormReady) {
-      onFormReady({
-        formComponent: (
-          <RoomSearchForm
-            criteria={criteria}
-            onChange={updateCriteria}
-            onToggleDeviceType={toggleDeviceType}
-            onSubmit={fetchRooms}
-            onClear={clearFilters}
-            deviceTypeOptions={DEVICE_TYPE_OPTIONS}
-            loading={loading}
-            formError={formError}
-          />
-        )
-      });
-    }
-  }, [criteria, loading, formError, renderFormInLeftPanel, onFormReady, updateCriteria, toggleDeviceType, fetchRooms, clearFilters]);
-
-  // Nếu render form riêng, chỉ render results
-  if (renderFormInLeftPanel) {
-    return (
-      <div className="roomfinder">
-        <div className="roomfinder__column roomfinder__column--results">
-          <RoomResultsList
-            rooms={rooms}
-            loading={loading}
-            error={apiError}
-            hasSearched={hasSearched}
-            searchRange={searchRange}
-            onRetry={fetchRooms}
-            onBookRoom={handleBookRoom}
-            onViewDetails={handleViewDetail}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // Render bình thường (form và results cùng nhau)
-  return (
-    <div className="roomfinder">
-      <div className="roomfinder__column roomfinder__column--form">
-        <RoomSearchForm
-          criteria={criteria}
-          onChange={updateCriteria}
-          onToggleDeviceType={toggleDeviceType}
-          onSubmit={fetchRooms}
-          onClear={clearFilters}
-          deviceTypeOptions={DEVICE_TYPE_OPTIONS}
-          loading={loading}
-          formError={formError}
-        />
-      </div>
-      <div className="roomfinder__column roomfinder__column--results">
-        <RoomResultsList
-          rooms={rooms}
-          loading={loading}
-          error={apiError}
-          hasSearched={hasSearched}
-          searchRange={searchRange}
-          onRetry={fetchRooms}
-          onBookRoom={handleBookRoom}
-          onViewDetails={handleViewDetail}
-        />
-      </div>
-    </div>
-  );
+  return {
+    criteria,
+    updateCriteria,
+    toggleDeviceType,
+    fetchRooms,
+    clearFilters,
+    rooms,
+    allRooms,
+    loading,
+    apiError,
+    formError,
+    hasSearched,
+    searchRange,
+    DEVICE_TYPE_OPTIONS
+  };
 };
-
-export default RoomFinder;
 

@@ -15,19 +15,43 @@ class AuthService {
   // Đăng nhập truyền thống bằng username/email/password
   async login(usernameOrEmail, password) {
     try {
+      // Validate input
+      if (!usernameOrEmail || !usernameOrEmail.trim()) {
+        throw { message: 'Username or email is required' };
+      }
+      
+      if (!password || !password.trim()) {
+        throw { message: 'Password is required' };
+      }
+
       const response = await apiClient.post('/api/auth/login', {
-        usernameOrEmail,
-        password
+        usernameOrEmail: usernameOrEmail.trim(),
+        password: password
       });
       
       // Lưu token vào localStorage nếu login thành công
-      if (response.data.success && response.data.token) {
+      if (response.data && response.data.success && response.data.token) {
         localStorage.setItem('token', response.data.token);
       }
       
       return response.data;
     } catch (error) {
-      throw error.response?.data || error.message;
+      // Xử lý lỗi từ backend
+      if (error.response && error.response.data) {
+        // Backend trả về LoginResponse với message
+        const errorData = error.response.data;
+        throw {
+          message: errorData.message || errorData.error || 'Login failed',
+          success: false
+        };
+      }
+      
+      // Xử lý lỗi network hoặc validation
+      if (error.message) {
+        throw { message: error.message, success: false };
+      }
+      
+      throw { message: 'An unexpected error occurred', success: false };
     }
   }
 
@@ -317,6 +341,16 @@ class AuthService {
     // Kiểm tra traditional login
     const localUser = this.getUserFromStorage();
     if (localUser) {
+      // Kiểm tra nếu đang trong quá trình calendar callback, skip validation
+      const isCalendarConnecting = localStorage.getItem('calendar_connecting');
+      const calendarJustConnected = localStorage.getItem('calendar_just_connected');
+      
+      if (isCalendarConnecting === 'true' || calendarJustConnected === 'true') {
+        // Đang trong quá trình calendar callback, tin tưởng local data
+        console.log('📅 Calendar callback in progress, trusting local auth data');
+        return { authenticated: true, user: localUser, type: 'traditional' };
+      }
+      
       // Chỉ cập nhật từ server nếu có token hợp lệ
       if (localUser.token) {
         try {
@@ -334,11 +368,14 @@ class AuthService {
             return { authenticated: true, user: updatedUserData, type: 'traditional' };
           } else {
             // Token không hợp lệ, xóa local data
+            console.log('❌ Token invalid, clearing local data');
             localStorage.removeItem('user');
+            localStorage.removeItem('token');
             return { authenticated: false, user: null, type: null };
           }
         } catch (error) {
           // Nếu có lỗi (server không chạy, network error, etc.), vẫn trả về user từ localStorage
+          console.log('⚠️ Token validation error, trusting local data:', error.message);
           return { authenticated: true, user: localUser, type: 'traditional' };
         }
       }
