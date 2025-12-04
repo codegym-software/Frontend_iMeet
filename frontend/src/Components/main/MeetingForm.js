@@ -456,10 +456,10 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
     if (value.trim().length > 1 && !value.includes(',')) {
       // Debounce: chỉ search sau 300ms khi user ngừng gõ
       searchDebounceRef.current = setTimeout(async () => {
-        const suggestions = await searchUsers(value.trim());
+      const suggestions = await searchUsers(value.trim());
         if (isMountedRef.current) {
-          setGuestSuggestions(suggestions);
-          setShowSuggestions(true);
+      setGuestSuggestions(suggestions);
+      setShowSuggestions(true);
         }
       }, 300);
     } else {

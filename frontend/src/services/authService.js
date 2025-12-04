@@ -462,9 +462,26 @@ class AuthService {
       });
       
       const response = await Promise.race([responsePromise, timeoutPromise]);
-      return { valid: true, data: response.data };
+      
+      // Kiểm tra response data
+      if (response.data && response.data.authenticated === true && response.data.valid === true) {
+        return { valid: true, data: response.data };
+      } else {
+        // Token không hợp lệ hoặc đã hết hạn
+        return { valid: false, message: response.data?.message || 'Token không hợp lệ' };
+      }
     } catch (error) {
-      return { valid: false, message: 'Token không hợp lệ' };
+      // Xử lý lỗi network hoặc timeout
+      if (error.message === 'Request timeout') {
+        console.warn('⚠️ Token validation timeout, assuming invalid');
+      } else if (error.response && error.response.status === 401) {
+        // 401 từ server - token không hợp lệ
+        return { valid: false, message: 'Token không hợp lệ hoặc đã hết hạn' };
+      } else if (error.response && error.response.data) {
+        // Server trả về response nhưng authenticated = false
+        return { valid: false, message: error.response.data.message || 'Token không hợp lệ' };
+      }
+      return { valid: false, message: 'Lỗi kiểm tra token: ' + (error.message || 'Unknown error') };
     }
   }
 

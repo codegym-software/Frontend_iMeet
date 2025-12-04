@@ -14,6 +14,22 @@ import MonthView from './views/MonthView';
 import YearView from './views/YearView';
 import ScheduleView from './ScheduleView';
 
+// Helper function to get color based on status - Định nghĩa bên ngoài component để tránh lỗi initialization
+const getStatusColor = (status) => {
+  // ✅ Normalize status - Map CONFIRMED → BOOKED for backward compatibility
+  const normalizedStatus = status === 'CONFIRMED' ? 'BOOKED' : status;
+  
+  const colorMap = {
+    'PENDING': '#f9ab00',   // Đang xử lý
+    'BOOKED': '#4285f4',    // Đã đặt - màu xanh cũ (mặc định)
+    'CONFIRMED': '#4285f4', // ⚠️ DEPRECATED - Map to BOOKED (xanh cũ)
+    'IN_PROGRESS': '#f9ab00', // Đang diễn ra - màu vàng
+    'COMPLETED': '#5f6368', // Đã hoàn thành - màu xám
+    'CANCELLED': '#ea4335'  // Đã hủy
+  };
+  return colorMap[normalizedStatus] || '#5f6368';
+};
+
 const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMeetingUpdated, onSelectionComplete, activeSelection, onSelectionRangeChange }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [events, setEvents] = useState([]);
@@ -37,22 +53,6 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
 
   const { meetings, isDataLoaded, fetchMeetings } = useMeetings();
-  
-  // ✅ Log meetings from context whenever they change
-  useEffect(() => {
-    console.log('📦 TimeTable: Meetings from context changed', {
-      meetingsLength: meetings?.length || 0,
-      isDataLoaded,
-      meetingsType: typeof meetings,
-      isArray: Array.isArray(meetings),
-      sampleMeeting: meetings?.[0] ? {
-        id: meetings[0].meetingId || meetings[0].id,
-        title: meetings[0].title,
-        startTime: meetings[0].startTime,
-        endTime: meetings[0].endTime
-      } : null
-    });
-  }, [meetings, isDataLoaded]);
 
   // Custom functions cho event management
   const handleEventMouseEnter = useCallback((event, mouseEvent) => {
@@ -245,41 +245,22 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     };
   }, []);
 
-  // Ensure meeting data is cached (fetch once or on refresh trigger)
+  // Ensure meeting data is cached (fetch once or on refresh trigger) - Tối ưu
   useEffect(() => {
     let cancelled = false;
     
     const ensureMeetings = async () => {
       try {
-        console.log('🔄 TimeTable: ensureMeetings called', {
-          refreshTrigger,
-          isDataLoaded,
-          meetingsLength: meetings?.length || 0
-        });
-
         setError(null);
         
         if (refreshTrigger > 0) {
-          console.log('🔄 TimeTable: Force refresh triggered');
           setLoading(true);
-          const fetchedMeetings = await fetchMeetings(true);
-          if (!cancelled) {
-            console.log('✅ TimeTable: Meetings fetched after refresh:', fetchedMeetings?.length || 0);
-          }
+          await fetchMeetings(true);
         } else if (!isDataLoaded) {
-          console.log('🔄 TimeTable: Data not loaded, fetching...');
           setLoading(true);
-          const fetchedMeetings = await fetchMeetings(false);
-          if (!cancelled) {
-            console.log('✅ TimeTable: Meetings fetched:', fetchedMeetings?.length || 0);
-          }
-        } else {
-          console.log('✅ TimeTable: Data already loaded, skipping fetch', {
-            meetingsCount: meetings?.length || 0
-          });
+          await fetchMeetings(false);
         }
       } catch (fetchError) {
-        console.error('❌ TimeTable: Error loading meetings:', fetchError);
         if (!cancelled) {
           setError('Không thể tải danh sách cuộc họp');
         }
@@ -295,61 +276,23 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     return () => {
       cancelled = true;
     };
-  }, [fetchMeetings, isDataLoaded, refreshTrigger]); // ✅ FIX: Remove meetings?.length to avoid re-render loop
+  }, [fetchMeetings, isDataLoaded, refreshTrigger]);
 
-  // Transform cached meetings into events for the current view
-  useEffect(() => {
-    console.log('🔄 TimeTable: useEffect triggered for transform', {
-      meetingsLength: meetings?.length || 0,
-      meetingsIsArray: Array.isArray(meetings),
-      meetingsType: typeof meetings,
-      selectedDate: selectedDate?.toISOString(),
-      viewType,
-      isDataLoaded
-    });
-
+  // Transform cached meetings into events for the current view - Tối ưu với useMemo
+  const transformedEvents = useMemo(() => {
     // ✅ CRITICAL: Check if meetings is empty or undefined
     if (!meetings || meetings.length === 0) {
-      console.warn('⚠️ TimeTable: No meetings available!', {
-        meetings,
-        isDataLoaded,
-        meetingsType: typeof meetings
-      });
-      setEvents([]);
-      return;
+      return [];
     }
 
     const startRange = CalendarHelpers.getStartDateForView(selectedDate, viewType);
     const endRange = CalendarHelpers.getEndDateForView(selectedDate, viewType);
 
     if (!startRange || !endRange) {
-      console.log('⚠️ TimeTable: Invalid date range', { startRange, endRange });
-      setEvents([]);
-      return;
+      return [];
     }
 
-    console.log('📅 TimeTable: Transforming meetings', {
-      meetingsCount: meetings?.length || 0,
-      viewType,
-      selectedDate: selectedDate?.toISOString(),
-      startRange: startRange.toISOString(),
-      endRange: endRange.toISOString()
-    });
-
-    // ✅ Log first meeting structure to debug
-    if (meetings.length > 0) {
-      const firstMeeting = meetings[0];
-      console.log('🔍 TimeTable: First meeting structure:', {
-        meetingId: firstMeeting.meetingId || firstMeeting.id,
-        title: firstMeeting.title,
-        startTime: firstMeeting.startTime,
-        endTime: firstMeeting.endTime,
-        start: firstMeeting.start,
-        end: firstMeeting.end,
-        bookingStatus: firstMeeting.bookingStatus,
-        allKeys: Object.keys(firstMeeting)
-      });
-    }
+    const now = currentTime || new Date();
 
     // ✅ Remove duplicates by meetingId/id before filtering
     const uniqueMeetings = (meetings || []).reduce((acc, meeting) => {
@@ -360,31 +303,20 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
       const exists = acc.find(m => (m.meetingId || m.id) === meetingId);
       if (!exists) {
         acc.push(meeting);
-      } else {
-        console.log('⚠️ Duplicate meeting found:', meeting.title, 'ID:', meetingId);
       }
       return acc;
     }, []);
 
-    console.log('📊 Unique meetings after deduplication:', {
-      original: meetings?.length || 0,
-      unique: uniqueMeetings.length
-    });
-
-    const now = currentTime || new Date();
-
-    const transformedEvents = uniqueMeetings
+    return uniqueMeetings
       .filter((meeting) => {
         const status = meeting.bookingStatus?.toUpperCase();
         if (status === 'CANCELLED') {
-          console.log('❌ Filtered out CANCELLED meeting:', meeting.title);
           return false;
         }
 
         const rawStart = meeting.startTime || meeting.start;
         const rawEnd = meeting.endTime || meeting.end;
         if (!rawStart || !rawEnd) {
-          console.log('❌ Filtered out meeting (no dates):', meeting.title, { rawStart, rawEnd });
           return false;
         }
 
@@ -392,43 +324,16 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         const end = new Date(rawEnd);
 
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-          console.log('❌ Filtered out meeting (invalid dates):', meeting.title, { rawStart, rawEnd, start, end });
           return false;
         }
 
-        // ✅ FIX: Use getTime() for reliable numeric comparison
         // Check if meeting overlaps with view range
-        // Meeting overlaps if: meeting.end >= view.start AND meeting.start <= view.end
         const startTime = start.getTime();
         const endTime = end.getTime();
         const startRangeTime = startRange.getTime();
         const endRangeTime = endRange.getTime();
         
-        const overlaps = endTime >= startRangeTime && startTime <= endRangeTime;
-        
-        if (!overlaps) {
-          console.log('❌ Filtered out meeting (out of range):', meeting.title, {
-            meetingStart: start.toISOString(),
-            meetingEnd: end.toISOString(),
-            viewStart: startRange.toISOString(),
-            viewEnd: endRange.toISOString(),
-            meetingStartTime: startTime,
-            meetingEndTime: endTime,
-            viewStartTime: startRangeTime,
-            viewEndTime: endRangeTime,
-            check1: endTime >= startRangeTime,
-            check2: startTime <= endRangeTime
-          });
-        } else {
-          console.log('✅ Meeting in range:', meeting.title, {
-            meetingStart: start.toISOString(),
-            meetingEnd: end.toISOString(),
-            viewStart: startRange.toISOString(),
-            viewEnd: endRange.toISOString()
-          });
-        }
-
-        return overlaps;
+        return endTime >= startRangeTime && startTime <= endRangeTime;
       })
       .map((meeting) => {
         const rawStart = meeting.startTime || meeting.start;
@@ -457,7 +362,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
           calendar: 'Meeting',
           organizer: meeting.userName || meeting.organizer || 'Unknown',
           attendees: meeting.participants || meeting.attendees || [],
-          participantsCount: meeting.participants || 0, // Lưu participants count để dùng làm fallback
+          participantsCount: meeting.participants || 0,
           description: meeting.description || '',
           meetingRoom: meeting.roomName || meeting.room || 'N/A',
           roomLocation: meeting.roomLocation || meeting.location || '',
@@ -475,51 +380,12 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         };
       })
       .sort((a, b) => a.start.getTime() - b.start.getTime());
-
-    console.log('✅ TimeTable: Transformed events', {
-      totalMeetings: meetings?.length || 0,
-      uniqueMeetings: uniqueMeetings.length,
-      transformedCount: transformedEvents.length,
-      events: transformedEvents.map(e => ({ 
-        id: e.id,
-        title: e.title, 
-        start: e.start.toISOString(), 
-        end: e.end.toISOString(),
-        allDay: e.allDay
-      }))
-    });
-
-    // ✅ Log before setting events
-    console.log('📤 TimeTable: Setting events state', {
-      eventsCount: transformedEvents.length,
-      willRender: transformedEvents.length > 0
-    });
-
-    setEvents(transformedEvents);
-    
-    // ✅ Log after setting (in next render cycle)
-    setTimeout(() => {
-      console.log('✅ TimeTable: Events state updated', {
-        eventsLength: transformedEvents.length
-      });
-    }, 0);
   }, [meetings, selectedDate, viewType, currentTime]);
 
-  // Helper function to get color based on status
-  const getStatusColor = (status) => {
-    // ✅ Normalize status - Map CONFIRMED → BOOKED for backward compatibility
-    const normalizedStatus = status === 'CONFIRMED' ? 'BOOKED' : status;
-    
-    const colorMap = {
-      'PENDING': '#f9ab00',   // Đang xử lý
-      'BOOKED': '#4285f4',    // Đã đặt - màu xanh cũ (mặc định)
-      'CONFIRMED': '#4285f4', // ⚠️ DEPRECATED - Map to BOOKED (xanh cũ)
-      'IN_PROGRESS': '#f9ab00', // Đang diễn ra - màu vàng
-      'COMPLETED': '#5f6368', // Đã hoàn thành - màu xám
-      'CANCELLED': '#ea4335'  // Đã hủy
-    };
-    return colorMap[normalizedStatus] || '#5f6368';
-  };
+  // Update events state only when transformedEvents changes
+  useEffect(() => {
+    setEvents(transformedEvents);
+  }, [transformedEvents]);
 
   // Đóng tooltip khi click outside
   useEffect(() => {
@@ -619,8 +485,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
         return;
       }
 
-      // Lazy load: chỉ load sau 800ms nếu user vẫn hover (giảm API calls không cần thiết)
-      // Load ở background, không block UI
+      // Lazy load: chỉ load sau 500ms nếu user vẫn hover (giảm API calls không cần thiết)
       const timeoutId = setTimeout(async () => {
         try {
           const invitees = await calendarAPI.getMeetingInvitees(eventToShow.id);
@@ -631,7 +496,6 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
           
           // Update state với functional update để tránh stale closure
           setAcceptedInviteesCount(prev => {
-            // Chỉ update nếu khác với giá trị hiện tại
             return acceptedCount !== prev ? acceptedCount : prev;
           });
           
@@ -648,10 +512,9 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
           }, 60000);
           tooltipCacheTimeoutRef.current.set(cacheKey, cacheTimeout);
         } catch (error) {
-          console.warn('⚠️ Could not load invitees for tooltip:', error);
-          // Giữ nguyên giá trị ban đầu nếu có lỗi - không cần làm gì
+          // Giữ nguyên giá trị ban đầu nếu có lỗi
         }
-      }, 800); // Tăng debounce lên 800ms để giảm API calls - chỉ load khi user thực sự muốn xem
+      }, 500); // Giảm debounce xuống 500ms để tăng tốc độ hiển thị
 
       return () => clearTimeout(timeoutId);
     }, [eventToShow?.id, eventToShow?.participantsCount]);
@@ -690,9 +553,9 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
             </div>
             <div className="tooltip-meta" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)' }}>
               {eventToShow.calendar || 'Meeting'}
-            </div>
           </div>
-          
+        </div>
+
           {/* Icons: Edit, Delete, Download, Close */}
           <div style={{ 
             display: 'flex', 
@@ -763,10 +626,14 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
             
             {/* Download button */}
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                // TODO: Implement download functionality
-                console.log('Download meeting:', eventToShow);
+                try {
+                  await calendarAPI.downloadICS(eventToShow.id);
+                } catch (error) {
+                  console.error('Error downloading ICS:', error);
+                  alert('Không thể tải file lịch. Vui lòng thử lại.');
+                }
               }}
               style={{
                 background: 'rgba(255,255,255,0.2)',
@@ -817,8 +684,8 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
             >
               ×
             </button>
+            </div>
           </div>
-        </div>
 
         {/* Body - White background */}
         <div className="tooltip-body" style={{ 
@@ -853,7 +720,7 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
               color: '#202124'
             }}>
               <span>🏛️</span>
-              <span>{eventToShow.meetingRoom}</span>
+                <span>{eventToShow.meetingRoom}</span>
             </div>
           )}
 
@@ -867,15 +734,15 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
             color: '#202124'
           }}>
             <span>📍</span>
-            <span>
-              {eventToShow.roomLocation && eventToShow.roomLocation !== 'N/A' && eventToShow.roomLocation.trim() !== '' 
-                ? eventToShow.roomLocation 
-                : (eventToShow.building && eventToShow.building !== 'N/A' && eventToShow.building.trim() !== '' 
-                    ? `${eventToShow.building}${eventToShow.floor && eventToShow.floor !== 'N/A' ? ` - Tầng ${eventToShow.floor}` : ''}`
-                    : 'Chưa có thông tin vị trí'
-                  )
-              }
-            </span>
+              <span>
+                {eventToShow.roomLocation && eventToShow.roomLocation !== 'N/A' && eventToShow.roomLocation.trim() !== '' 
+                  ? eventToShow.roomLocation 
+                  : (eventToShow.building && eventToShow.building !== 'N/A' && eventToShow.building.trim() !== '' 
+                      ? `${eventToShow.building}${eventToShow.floor && eventToShow.floor !== 'N/A' ? ` - Tầng ${eventToShow.floor}` : ''}`
+                      : 'Chưa có thông tin vị trí'
+                    )
+                }
+              </span>
           </div>
 
           {/* Số khách đã chấp nhận tham gia */}
@@ -892,8 +759,8 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
               {acceptedInviteesCount > 0 
                 ? `${acceptedInviteesCount} người tham gia`
                 : 'Chưa có người tham gia'}
-            </span>
-          </div>
+                    </span>
+                </div>
 
           {/* Mô tả */}
           {eventToShow.description && (
@@ -911,19 +778,8 @@ const TimeTable = ({ selectedDate, viewType, onDateSelect, refreshTrigger, onMee
     );
   };
 
-  // Render view với useMemo
-  // Render view với useMemo
+  // Render view với useMemo - Tối ưu
   const renderTimeTable = useMemo(() => {
-    console.log('🎨 TimeTable: Rendering view', {
-      viewType,
-      eventsCount: events?.length || 0,
-      selectedDate: selectedDate?.toISOString(),
-      eventsSample: events?.slice(0, 2).map(e => ({
-        id: e.id,
-        title: e.title,
-        start: e.start?.toISOString()
-      }))
-    });
 
     const weekViewProps = {
       selectedDate: selectedDate,

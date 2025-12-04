@@ -508,4 +508,65 @@ export const calendarAPI = {
       return [];
     }
   },
+
+  // Tải file ICS cho meeting
+  async downloadICS(meetingId) {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/download-ics`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: headers,
+      });
+
+      if (!response.ok) {
+        // Nếu response không phải là ICS file, thử parse JSON error
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Không thể tải file lịch');
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Lấy filename từ Content-Disposition header hoặc tạo mặc định
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = `meeting-${meetingId}.ics`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+
+      // Lấy nội dung file
+      const blob = await response.blob();
+      
+      // Tạo URL object và trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log('✅ ICS file downloaded successfully:', filename);
+      return { success: true, filename };
+    } catch (error) {
+      console.error('❌ Download ICS error:', error);
+      throw error;
+    }
+  },
 };

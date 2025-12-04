@@ -342,7 +342,7 @@ class AdminService {
       }
       
       if (!error.message.includes('Authentication required')) {
-        console.warn('⚠️ Could not fetch devices:', error.message);
+      console.warn('⚠️ Could not fetch devices:', error.message);
       }
       // For non-network errors, still throw to let caller handle
       throw error;

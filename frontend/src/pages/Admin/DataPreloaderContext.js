@@ -119,7 +119,7 @@ export const DataPreloaderProvider = ({ children }) => {
     } catch (error) {
       // Chỉ log error nếu không phải lỗi authentication
       if (!error.message.includes('Authentication required')) {
-        console.error('Error loading users:', error);
+      console.error('Error loading users:', error);
       }
       if (isMounted.current) setUsers([]);
       throw error;
@@ -147,7 +147,7 @@ export const DataPreloaderProvider = ({ children }) => {
     } catch (error) {
       // Chỉ log error nếu không phải lỗi authentication
       if (!error.message.includes('Authentication required')) {
-        console.error('Error loading user stats:', error);
+      console.error('Error loading user stats:', error);
       }
       if (isMounted.current) setUserStats(null);
       throw error;
@@ -453,9 +453,16 @@ export const DataPreloaderProvider = ({ children }) => {
     }
 
     // Kiểm tra authentication trước khi gọi API
+    // Kiểm tra cả traditional token và OAuth2 user
     const token = localStorage.getItem('token');
-    if (!token) {
-      console.warn('⚠️ No authentication token found. Skipping data preload.');
+    const oauth2User = localStorage.getItem('oauth2User');
+    
+    if (!token && !oauth2User) {
+      // Không có authentication - đây là trạng thái bình thường khi user chưa đăng nhập
+      // Chỉ log ở debug level, không phải warning
+      if (process.env.NODE_ENV === 'development') {
+        console.log('ℹ️ No authentication found. Skipping data preload.');
+      }
       setIsPreloading(false);
       setIsDataLoaded(true); // Mark as loaded to prevent retry
       return;
@@ -479,31 +486,31 @@ export const DataPreloaderProvider = ({ children }) => {
           loadUsers(0, 1000, 'createdAt', 'desc', '', isMountedRef).catch(err => {
             // Chỉ log warning nếu không phải lỗi authentication
             if (!err.message.includes('Authentication required')) {
-              console.warn('❌ Failed to load users:', err.message);
+            console.warn('❌ Failed to load users:', err.message);
             }
             return null;
           }),
           loadUserStats(isMountedRef).catch(err => {
             if (!err.message.includes('Authentication required')) {
-              console.warn('❌ Failed to load user stats:', err.message);
+            console.warn('❌ Failed to load user stats:', err.message);
             }
             return null;
           }),
           loadDevices([], isMountedRef).catch(err => {
             if (!err.message.includes('Authentication required')) {
-              console.warn('❌ Failed to load devices:', err.message);
+            console.warn('❌ Failed to load devices:', err.message);
             }
             return null;
           }),
           loadRooms(isMountedRef).catch(err => {
             if (!err.message.includes('Authentication required')) {
-              console.warn('❌ Failed to load rooms:', err.message);
+            console.warn('❌ Failed to load rooms:', err.message);
             }
             return null;
           }),
           loadMeetings(isMountedRef).catch(err => {
             if (!err.message.includes('Authentication required')) {
-              console.warn('❌ Failed to load meetings:', err.message);
+            console.warn('❌ Failed to load meetings:', err.message);
             }
             return null;
           })
@@ -513,7 +520,7 @@ export const DataPreloaderProvider = ({ children }) => {
         if (isMountedRef.current && roomsResponse && roomsResponse.length > 0) {
           await loadRoomDeviceMappings(roomsResponse, isMountedRef).catch(err => {
             if (!err.message.includes('Authentication required')) {
-              console.warn('❌ Failed to load room-device mappings:', err.message);
+            console.warn('❌ Failed to load room-device mappings:', err.message);
             }
           });
         }

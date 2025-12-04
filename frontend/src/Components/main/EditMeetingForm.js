@@ -143,9 +143,9 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
             ? fullMeeting.invitees
                 .map(inv => (typeof inv === 'string' ? inv : inv?.email))
                 .filter(Boolean)
-            : (typeof fullMeeting.attendees === 'string'
-                ? fullMeeting.attendees.split(/[;,]/).map(s => s.trim()).filter(Boolean)
-                : []);
+        : (typeof fullMeeting.attendees === 'string'
+            ? fullMeeting.attendees.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+            : []);
       const guestsArray = attendeesRaw.map(email => ({ email, fullName: null }));
       
       // ✅ FIX: Extract device data from fullMeeting inside useEffect so we use the updated state
@@ -419,12 +419,12 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
         return;
       }
 
-      if (isMountedRef.current) setLoadingInvitees(true);
+          if (isMountedRef.current) setLoadingInvitees(true);
       try {
-        const inviteesData = await calendarAPI.getMeetingInvitees(meetingId);
+          const inviteesData = await calendarAPI.getMeetingInvitees(meetingId);
         const normalized = normalizeInvitees(inviteesData || []);
         
-        if (isMountedRef.current) {
+          if (isMountedRef.current) {
           setInvitees(normalized);
           
           // Lưu vào cache
@@ -432,14 +432,14 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
             data: normalized,
             timestamp: Date.now()
           });
-        }
-      } catch (error) {
-        console.error('Error loading invitees:', error);
-        if (isMountedRef.current) {
-          setInvitees([]);
-        }
-      } finally {
-        if (isMountedRef.current) setLoadingInvitees(false);
+          }
+        } catch (error) {
+          console.error('Error loading invitees:', error);
+          if (isMountedRef.current) {
+            setInvitees([]);
+          }
+        } finally {
+          if (isMountedRef.current) setLoadingInvitees(false);
       }
     };
     
@@ -757,6 +757,16 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
       
       console.log('✅ Meeting updated successfully:', updatedMeeting);
       
+      // Check sync status and show notification
+      const syncStatus = updatedMeeting.syncStatus;
+      if (syncStatus === 'SYNCED' && updatedMeeting.googleEventId) {
+        // Show success notification for Google Calendar sync
+        console.log('✅ Google Calendar đã được cập nhật');
+      } else if (syncStatus === 'UPDATE_PENDING') {
+        // Show warning notification for pending sync
+        console.warn('⚠️ Đang chờ đồng bộ với Google Calendar');
+      }
+      
       // If there are new invite emails, call invite API separately
       if (inviteEmails.length > 0) {
         try {
@@ -861,26 +871,26 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
               {/* Title - Large, bold */}
               <div style={{ marginBottom: '16px' }}>
                 {isEditable ? (
-                  <input
-                    type="text"
-                    name="title"
-                    value={formData.title}
-                    onChange={handleChange}
-                    placeholder="Thêm tiêu đề"
+              <input
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                placeholder="Thêm tiêu đề"
                     className="meeting-title-display"
-                    style={{ 
-                      fontSize: '22px', 
-                      fontWeight: '400', 
+                  style={{ 
+                    fontSize: '22px', 
+                    fontWeight: '400', 
                       padding: '8px 0', 
-                      border: 'none', 
-                      borderBottom: '1px solid transparent',
+                    border: 'none', 
+                    borderBottom: '1px solid transparent',
                       width: '100%',
                       outline: 'none',
                       color: '#202124'
-                    }}
-                    onFocus={(e) => e.target.style.borderBottomColor = '#1a73e8'}
-                    onBlur={(e) => e.target.style.borderBottomColor = 'transparent'}
-                  />
+                  }}
+                  onFocus={(e) => e.target.style.borderBottomColor = '#1a73e8'}
+                  onBlur={(e) => e.target.style.borderBottomColor = 'transparent'}
+              />
                 ) : (
                   <h1 style={{ 
                     fontSize: '22px', 
@@ -893,7 +903,7 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                   </h1>
                 )}
                 {errors.title && <span style={{ color: '#d93025', fontSize: '12px', marginTop: '4px', display: 'block' }}>{errors.title}</span>}
-              </div>
+            </div>
 
               {/* Chi tiết sự kiện heading */}
               <div style={{ marginBottom: '16px', marginTop: '8px' }}>
@@ -1110,25 +1120,25 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                 </div>
 
                 {/* Hiển thị thiết bị được mượn dạng tags */}
-                <div style={{
-                  marginTop: '12px',
-                  marginBottom: '16px',
+                  <div style={{
+                    marginTop: '12px',
+                    marginBottom: '16px',
                   padding: formData.devices.length > 0 ? '12px' : '8px',
                   backgroundColor: formData.devices.length > 0 ? '#e8f5e9' : '#f5f5f5',
-                  borderRadius: '8px',
+                    borderRadius: '8px',
                   border: formData.devices.length > 0 ? '1px solid #4caf50' : '1px solid #dadce0',
                   minHeight: '40px'
-                }}>
+                  }}>
                   {formData.devices.length > 0 ? (
                     <>
-                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#2e7d32', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#2e7d32', marginBottom: '10px' }}>
                         Thiết bị đã mượn ({formData.devices.length}):
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {formData.devices.map((device, index) => {
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {formData.devices.map((device, index) => {
                           // Compare as numbers to handle type mismatches
                           const deviceInfo = allDevices.find(d => Number(d.deviceId) === Number(device.deviceId));
-                          const displayName = device.deviceName || deviceInfo?.name || `Device ${device.deviceId}`;
+                        const displayName = device.deviceName || deviceInfo?.name || `Device ${device.deviceId}`;
                           const deviceType = deviceInfo?.deviceType || deviceInfo?.type || 'Khác';
                           const typeMap = {
                             'MIC': 'Microphone',
@@ -1141,23 +1151,23 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                           };
                           const typeDisplay = typeMap[deviceType] || deviceType;
                           
-                          return (
-                            <div
+                        return (
+                          <div
                               key={`${device.deviceId}-${index}`}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
                                 padding: '8px 14px',
-                                backgroundColor: '#fff',
+                              backgroundColor: '#fff',
                                 border: '2px solid #4caf50',
-                                borderRadius: '20px',
+                              borderRadius: '20px',
                                 fontSize: '13px',
-                                fontWeight: '500',
+                              fontWeight: '500',
                                 color: '#2e7d32',
                                 boxShadow: '0 2px 4px rgba(76, 175, 80, 0.2)'
-                              }}
-                            >
+                            }}
+                          >
                               <span style={{ fontWeight: '600' }}>{displayName}</span>
                               <span style={{ 
                                 fontSize: '11px', 
@@ -1175,30 +1185,30 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                               }}>
                                 SL: {device.quantity || 1}
                               </span>
-                              {isEditable && (
-                                <button
-                                  type="button"
+                            {isEditable && (
+                              <button
+                                type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const newDevices = formData.devices.filter((_, i) => i !== index);
-                                    setFormData(prev => ({ ...prev, devices: newDevices }));
-                                  }}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
+                                  const newDevices = formData.devices.filter((_, i) => i !== index);
+                                  setFormData(prev => ({ ...prev, devices: newDevices }));
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
                                     color: '#d32f2f',
-                                    cursor: 'pointer',
+                                  cursor: 'pointer',
                                     fontSize: '18px',
-                                    padding: '0',
+                                  padding: '0',
                                     width: '20px',
                                     height: '20px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderRadius: '50%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: '50%',
                                     transition: 'background-color 0.2s',
                                     fontWeight: 'bold'
-                                  }}
+                                }}
                                   onMouseEnter={(e) => {
                                     e.target.style.backgroundColor = 'rgba(211, 47, 47, 0.1)';
                                     e.target.style.color = '#b71c1c';
@@ -1208,14 +1218,14 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                                     e.target.style.color = '#d32f2f';
                                   }}
                                   title="Xóa thiết bị"
-                                >
-                                  ×
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                     </>
                   ) : (
                     <div style={{ 
@@ -1226,8 +1236,8 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                       padding: '8px'
                     }}>
                       Chưa có thiết bị nào được mượn. Vui lòng chọn thiết bị từ bảng bên dưới.
-                    </div>
-                  )}
+                  </div>
+                )}
                 </div>
 
                 {/* Search & Filter */}
@@ -1626,6 +1636,72 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                   disabled={!isEditable}
                 />
               </div>
+
+              {/* Google Calendar Sync Status */}
+              {fullMeeting?.syncStatus && (
+                <div className="google-calendar-field">
+                  <div className="google-calendar-field-label">
+                    <span className="google-calendar-field-icon">📅</span>
+                    <span style={{ fontWeight: '500' }}>Trạng thái đồng bộ Google Calendar</span>
+                  </div>
+                  <div style={{ 
+                    padding: '12px', 
+                    borderRadius: '8px',
+                    backgroundColor: 
+                      fullMeeting.syncStatus === 'SYNCED' ? '#e8f5e9' :
+                      fullMeeting.syncStatus === 'UPDATE_PENDING' ? '#fff3e0' :
+                      '#ffebee',
+                    border: `1px solid ${
+                      fullMeeting.syncStatus === 'SYNCED' ? '#4caf50' :
+                      fullMeeting.syncStatus === 'UPDATE_PENDING' ? '#ff9800' :
+                      '#f44336'
+                    }`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    {fullMeeting.syncStatus === 'SYNCED' && (
+                      <>
+                        <span style={{ fontSize: '18px' }}>✅</span>
+                        <span style={{ color: '#2e7d32', fontWeight: '500' }}>
+                          Đã đồng bộ với Google Calendar
+                        </span>
+                        {fullMeeting.googleEventId && (
+                          <a
+                            href={`https://calendar.google.com/calendar/event?eid=${fullMeeting.googleEventId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              marginLeft: 'auto',
+                              fontSize: '12px',
+                              color: '#1a73e8',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            Xem trên Google Calendar →
+                          </a>
+                        )}
+                      </>
+                    )}
+                    {fullMeeting.syncStatus === 'UPDATE_PENDING' && (
+                      <>
+                        <span style={{ fontSize: '18px' }}>⏳</span>
+                        <span style={{ color: '#e65100', fontWeight: '500' }}>
+                          Đang chờ đồng bộ với Google Calendar
+                        </span>
+                      </>
+                    )}
+                    {fullMeeting.syncStatus === 'DELETED' && (
+                      <>
+                        <span style={{ fontSize: '18px' }}>🗑️</span>
+                        <span style={{ color: '#c62828', fontWeight: '500' }}>
+                          Đã xóa khỏi Google Calendar
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
           {/* Error message */}
           {errors.submit && (
