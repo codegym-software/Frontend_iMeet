@@ -14,12 +14,23 @@ const normalizeRoomId = (room) => Number(room?.roomId ?? room?.id);
 const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
   console.log('EditMeetingForm - Meeting data:', meeting);
   
-  // Check if meeting is editable - allow editing for all meetings except CANCELLED and COMPLETED
-  const bookingStatus = meeting?.bookingStatus?.toUpperCase();
-  const isEditable = bookingStatus !== 'CANCELLED' && bookingStatus !== 'COMPLETED';
-  
   // ✅ NEW: Track full meeting details loaded from API
   const [fullMeeting, setFullMeeting] = useState(meeting);
+  
+  // Get current user ID
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const currentUserId = currentUser?.id || currentUser?.userId || null;
+  
+  // Get meeting owner ID - check both meeting and fullMeeting
+  const meetingOwnerId = fullMeeting?.userId || fullMeeting?.user?.id || fullMeeting?.user?.userId || 
+                        meeting?.userId || meeting?.user?.id || meeting?.user?.userId || null;
+  
+  // Check if current user is the owner
+  const isOwner = currentUserId && meetingOwnerId && String(currentUserId) === String(meetingOwnerId);
+  
+  // Check if meeting is editable - only owner can edit/delete, and meeting must not be CANCELLED or COMPLETED
+  const bookingStatus = meeting?.bookingStatus?.toUpperCase() || fullMeeting?.bookingStatus?.toUpperCase();
+  const isEditable = isOwner && bookingStatus !== 'CANCELLED' && bookingStatus !== 'COMPLETED';
   
   const [formData, setFormData] = useState({
     title: meeting?.title || '',
@@ -757,16 +768,6 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
       
       console.log('✅ Meeting updated successfully:', updatedMeeting);
       
-      // Check sync status and show notification
-      const syncStatus = updatedMeeting.syncStatus;
-      if (syncStatus === 'SYNCED' && updatedMeeting.googleEventId) {
-        // Show success notification for Google Calendar sync
-        console.log('✅ Google Calendar đã được cập nhật');
-      } else if (syncStatus === 'UPDATE_PENDING') {
-        // Show warning notification for pending sync
-        console.warn('⚠️ Đang chờ đồng bộ với Google Calendar');
-      }
-      
       // If there are new invite emails, call invite API separately
       if (inviteEmails.length > 0) {
         try {
@@ -847,15 +848,17 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
         {!isEditable && (
           <div style={{
             padding: '12px 24px',
-            backgroundColor: '#fff3cd',
+            backgroundColor: !isOwner ? '#e3f2fd' : '#fff3cd',
             borderBottom: '1px solid #e0e0e0',
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
           }}>
             <span style={{ fontSize: '20px' }}>ℹ️</span>
-            <span style={{ color: '#856404', fontSize: '14px', fontWeight: '500' }}>
-              Cuộc họp này đã bị hủy hoặc đã hoàn thành. Bạn chỉ có thể xem thông tin.
+            <span style={{ color: !isOwner ? '#1565c0' : '#856404', fontSize: '14px', fontWeight: '500' }}>
+              {!isOwner 
+                ? 'Chỉ người tạo cuộc họp mới có thể chỉnh sửa hoặc xóa cuộc họp này. Bạn chỉ có thể xem thông tin.'
+                : 'Cuộc họp này đã bị hủy hoặc đã hoàn thành. Bạn chỉ có thể xem thông tin.'}
             </span>
           </div>
         )}
@@ -1636,72 +1639,6 @@ const EditMeetingForm = ({ meeting, onClose, onSubmit, onDelete }) => {
                   disabled={!isEditable}
                 />
               </div>
-
-              {/* Google Calendar Sync Status */}
-              {fullMeeting?.syncStatus && (
-                <div className="google-calendar-field">
-                  <div className="google-calendar-field-label">
-                    <span className="google-calendar-field-icon">📅</span>
-                    <span style={{ fontWeight: '500' }}>Trạng thái đồng bộ Google Calendar</span>
-                  </div>
-                  <div style={{ 
-                    padding: '12px', 
-                    borderRadius: '8px',
-                    backgroundColor: 
-                      fullMeeting.syncStatus === 'SYNCED' ? '#e8f5e9' :
-                      fullMeeting.syncStatus === 'UPDATE_PENDING' ? '#fff3e0' :
-                      '#ffebee',
-                    border: `1px solid ${
-                      fullMeeting.syncStatus === 'SYNCED' ? '#4caf50' :
-                      fullMeeting.syncStatus === 'UPDATE_PENDING' ? '#ff9800' :
-                      '#f44336'
-                    }`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    {fullMeeting.syncStatus === 'SYNCED' && (
-                      <>
-                        <span style={{ fontSize: '18px' }}>✅</span>
-                        <span style={{ color: '#2e7d32', fontWeight: '500' }}>
-                          Đã đồng bộ với Google Calendar
-                        </span>
-                        {fullMeeting.googleEventId && (
-                          <a
-                            href={`https://calendar.google.com/calendar/event?eid=${fullMeeting.googleEventId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              marginLeft: 'auto',
-                              fontSize: '12px',
-                              color: '#1a73e8',
-                              textDecoration: 'none'
-                            }}
-                          >
-                            Xem trên Google Calendar →
-                          </a>
-                        )}
-                      </>
-                    )}
-                    {fullMeeting.syncStatus === 'UPDATE_PENDING' && (
-                      <>
-                        <span style={{ fontSize: '18px' }}>⏳</span>
-                        <span style={{ color: '#e65100', fontWeight: '500' }}>
-                          Đang chờ đồng bộ với Google Calendar
-                        </span>
-                      </>
-                    )}
-                    {fullMeeting.syncStatus === 'DELETED' && (
-                      <>
-                        <span style={{ fontSize: '18px' }}>🗑️</span>
-                        <span style={{ color: '#c62828', fontWeight: '500' }}>
-                          Đã xóa khỏi Google Calendar
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
 
           {/* Error message */}
           {errors.submit && (

@@ -31,24 +31,20 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Skip handling for /api/auth/check-auth endpoint - 200 response with authenticated=false is expected
-    const isCheckAuthEndpoint = error.config?.url?.includes('/api/auth/check-auth');
-    
-    // Only redirect to login for actual 401 responses (except check-auth endpoint)
-    if (error.response && error.response.status === 401 && !isCheckAuthEndpoint) {
-      console.warn('🚨 Authentication failed (401), clearing auth data');
+    // Only redirect to login for actual 401 responses
+    if (error.response && error.response.status === 401) {
+      console.warn('🚨 Authentication failed (401), redirecting to login');
       
       // Clear auth data
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('oauth2User');
       
-      // Only redirect if not on public paths
+      // Redirect to login
       const publicPaths = ['/login', '/', '/signup', '/forgot-password'];
       const currentPath = window.location.pathname;
       
-      if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/reset-password') && !currentPath.startsWith('/oauth2')) {
-        console.warn('🚨 Redirecting to login');
+      if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/reset-password')) {
         window.location.href = '/login';
       }
     }

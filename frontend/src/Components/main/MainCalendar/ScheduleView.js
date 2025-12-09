@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import './ScheduleView.css';
-import meetingService from '../../../services/meetingService';
 import EditMeetingForm from '../EditMeetingForm';
+import { useMeetings } from '../../../contexts/MeetingContext';
 
 const ScheduleView = ({ selectedDate, onMeetingUpdated, refreshTrigger }) => {
-  const [meetings, setMeetings] = useState([]);
+  // Sử dụng data từ MeetingContext thay vì gọi API riêng
+  const { meetings: allMeetings, isDataLoaded } = useMeetings();
   const [holidays, setHolidays] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [viewYear, setViewYear] = useState(selectedDate.getFullYear());
@@ -44,8 +45,29 @@ const ScheduleView = ({ selectedDate, onMeetingUpdated, refreshTrigger }) => {
     });
   };
 
+  // Filter meetings từ MeetingContext theo viewYear
+  const meetings = useMemo(() => {
+    if (!isDataLoaded || !allMeetings || allMeetings.length === 0) {
+      return [];
+    }
+    
+    // Get current user info
+    const currentUser = JSON.parse(localStorage.getItem('user') || localStorage.getItem('oauth2User') || '{}');
+    const currentUserId = currentUser.userId || currentUser.id;
+    
+    // Filter meetings theo năm và user
+    return allMeetings.filter(meeting => {
+      const meetingDate = new Date(meeting.startTime || meeting.start);
+      const meetingYear = meetingDate.getFullYear();
+      const meetingUserId = meeting.userId || meeting.user?.id || meeting.user?.userId;
+      
+      // Lọc theo năm view và user
+      return meetingYear === viewYear && 
+             (String(meetingUserId) === String(currentUserId) || meeting.groupId);
+    });
+  }, [allMeetings, isDataLoaded, viewYear]);
+
   useEffect(() => {
-    fetchMeetings();
     loadHolidays();
   }, [viewYear, refreshTrigger]);
 
@@ -66,84 +88,47 @@ const ScheduleView = ({ selectedDate, onMeetingUpdated, refreshTrigger }) => {
     setViewYear(new Date().getFullYear());
   };
 
-  const fetchMeetings = async () => {
-    try {
-      setLoading(true);
-      const response = await meetingService.getAllMeetings();
-      
-      // Ensure response is array
-      const meetingsArray = Array.isArray(response) ? response : [];
-      
-      // Get current user info
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const currentUserId = currentUser.userId;
-      
-      // Get view year
-      const now = new Date();
-      
+  // Debug: Log meetings structure
+  useEffect(() => {
+    if (isDataLoaded) {
       console.log('=== Schedule Debug ===');
-      console.log('Current user ID:', currentUserId);
       console.log('View year:', viewYear);
-      console.log('Total meetings:', meetingsArray.length);
+      console.log('Total meetings from context:', allMeetings?.length || 0);
+      console.log('Filtered meetings for year:', meetings.length);
       
       // Debug: Log first meeting to see structure
-      if (meetingsArray.length > 0) {
-        console.log('Sample meeting:', meetingsArray[0]);
+      if (meetings.length > 0) {
+        console.log('Sample meeting:', meetings[0]);
       }
-      
-      // Filter meetings: Show user's meetings that are:
-      // 1. Created by current user
-      // 2. Not cancelled
-      // 3. In the selected year
-      // 4. Upcoming (not ended yet)
-      // 5. All statuses: PENDING, BOOKED, APPROVED
-      const filteredMeetings = meetingsArray.filter(meeting => {
-        const isUserMeeting = meeting.userId === currentUserId;
-        const isNotCancelled = meeting.bookingStatus?.toUpperCase() !== 'CANCELLED';
-        
-        const meetingStartTime = new Date(meeting.startTime);
-        const meetingEndTime = new Date(meeting.endTime);
-        const meetingYear = meetingStartTime.getFullYear();
-        
-        // Check if meeting is in view year
-        const isInViewYear = meetingYear === viewYear;
-        
-        // Check if meeting is upcoming (hasn't ended yet)
-        const isUpcoming = meetingEndTime >= now;
-        
-        // Debug individual meeting
-        if (meeting.userId === currentUserId) {
-          console.log('User meeting found:', {
-            title: meeting.title,
-            userId: meeting.userId,
-            status: meeting.bookingStatus,
-            year: meetingYear,
-            isInViewYear,
-            isUpcoming,
-            endTime: meetingEndTime,
-            now: now
-          });
-        }
-        
-        // Show all user meetings in year that haven't ended yet (including PENDING, BOOKED, APPROVED)
-        return isUserMeeting && isNotCancelled && isInViewYear && isUpcoming;
-      });
-      
-      console.log('Filtered meetings for year', viewYear, ':', filteredMeetings.length);
-      console.log('Meetings by status:', {
-        pending: filteredMeetings.filter(m => m.bookingStatus?.toUpperCase() === 'PENDING').length,
-        booked: filteredMeetings.filter(m => m.bookingStatus?.toUpperCase() === 'BOOKED').length,
-        approved: filteredMeetings.filter(m => m.bookingStatus?.toUpperCase() === 'APPROVED').length
-      });
-      console.log('===================');
-      setMeetings(filteredMeetings);
-    } catch (error) {
-      console.error('Error fetching meetings:', error);
-      setMeetings([]);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [isDataLoaded, viewYear, meetings, allMeetings]);
+  
+  // Filter meetings: Show user's meetings that are:
+  // 1. Not cancelled
+  // 2. In the selected year
+  // 3. Upcoming (hasn't ended yet)
+  const filteredMeetings = useMemo(() => {
+    if (!meetings || meetings.length === 0) return [];
+    
+    const now = new Date();
+    
+    return meetings.filter(meeting => {
+      const isNotCancelled = meeting.bookingStatus?.toUpperCase() !== 'CANCELLED';
+      
+      const meetingStartTime = new Date(meeting.startTime || meeting.start);
+      const meetingEndTime = new Date(meeting.endTime || meeting.end);
+      const meetingYear = meetingStartTime.getFullYear();
+      
+      // Check if meeting is in view year
+      const isInViewYear = meetingYear === viewYear;
+      
+      // Check if meeting is upcoming (hasn't ended yet)
+      const isUpcoming = meetingEndTime >= now;
+      
+      // Show all meetings in year that haven't ended yet (including PENDING, BOOKED, APPROVED)
+      return isNotCancelled && isInViewYear && isUpcoming;
+    });
+  }, [meetings, viewYear]);
 
   const loadHolidays = () => {
     const yearHolidays = generateHolidaysForSelectedYear();
@@ -156,7 +141,7 @@ const ScheduleView = ({ selectedDate, onMeetingUpdated, refreshTrigger }) => {
     const grouped = {};
 
     // Add meetings
-    meetings.forEach(meeting => {
+    filteredMeetings.forEach(meeting => {
       const date = new Date(meeting.startTime).toDateString();
       if (!grouped[date]) {
         grouped[date] = { meetings: [], holidays: [] };
@@ -260,7 +245,8 @@ const ScheduleView = ({ selectedDate, onMeetingUpdated, refreshTrigger }) => {
   };
 
   const handleMeetingUpdate = () => {
-    fetchMeetings();
+    // Data sẽ tự động cập nhật từ MeetingContext
+    // Chỉ cần trigger callback để parent component biết
     if (onMeetingUpdated) {
       onMeetingUpdated();
     }

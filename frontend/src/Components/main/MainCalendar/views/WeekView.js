@@ -97,7 +97,7 @@ const WeekView = React.memo(({
   const weekDays = useMemo(() => {
     const days = [];
     for (let i = 0; i < 7; i++) {
-      const day = new Date(startOfWeek);
+const day = new Date(startOfWeek);
       day.setDate(startOfWeek.getDate() + i);
       days.push(day);
     }
@@ -192,7 +192,7 @@ const WeekView = React.memo(({
         if (event.allDay) {
           eventsByDay[dayIndex].allDay.push(event);
           console.log(`✅ WeekView: Event "${event.title}" added to day ${dayIndex} (all-day)`);
-        } else {
+} else {
           eventsByDay[dayIndex].timed.push(event);
           console.log(`✅ WeekView: Event "${event.title}" added to day ${dayIndex} (timed)`, {
             start: event.start?.toISOString(),
@@ -283,8 +283,7 @@ const WeekView = React.memo(({
 
       const day = weekDays[startIndex];
       if (!day) return;
-
-      const endDate = pixelToDate(day, pixelY);
+const endDate = pixelToDate(day, pixelY);
       if (!endDate) return;
 
       setSelection(prev => prev ? { ...prev, endDate } : prev);
@@ -363,7 +362,7 @@ const WeekView = React.memo(({
                     <div className="week-day-name">
                       {day.toLocaleDateString('en-US', { weekday: 'short' })}
                     </div>
-                    <div className="week-day-number">{day.getDate()}</div>
+<div className="week-day-number">{day.getDate()}</div>
                   </div>
                   
                   {/* All-day cell for this day */}
@@ -432,7 +431,7 @@ const WeekView = React.memo(({
                     <div
                       className="week-day-time-cells"
                       onMouseDown={(e) => handleColumnMouseDown(dayIndex, day, e)}
-                      style={{ position: 'relative' }}
+style={{ position: 'relative' }}
                     >
                       {/* Render hour cells for clicking */}
                       {Array.from({ length: 24 }, (_, hour) => (
@@ -494,7 +493,7 @@ const WeekView = React.memo(({
                       {!selection && lockedSelection && CalendarHelpers.isEventOnDate(
                         {
                           start: lockedSelection.start,
-                          end: lockedSelection.end
+end: lockedSelection.end
                         },
                         day
                       ) && (
@@ -553,7 +552,7 @@ const WeekView = React.memo(({
                         // - Each minute = 1px
                         // Formula: top = (hours × PIXELS_PER_HOUR) + minutes
                         // Example: 9:45 AM = (9 × 60) + 45 = 585px
-                        const PIXELS_PER_HOUR = 60;
+const PIXELS_PER_HOUR = 60;
                         const top = (startHour * PIXELS_PER_HOUR) + startMinute;
                         
                         // ✅ EXACT height like Google Calendar
@@ -608,7 +607,7 @@ const WeekView = React.memo(({
                         );
                       })}
                     </div>
-                  </div>
+</div>
                 );
               })}
             </div>

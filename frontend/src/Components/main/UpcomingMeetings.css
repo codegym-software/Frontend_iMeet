@@ -1,33 +1,33 @@
 /* UpcomingMeetings.css */
 .upcoming-meetings {
-  background: var(--component-bg);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 20px;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 12px;
   flex-shrink: 0;
   color: var(--text-color);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: none;
+  box-shadow: none;
 }
 
 .upcoming-meetings-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .upcoming-meetings h3 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
   color: var(--text-color);
 }
 
 .current-time {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--muted-color);
   font-weight: 500;
 }
@@ -36,16 +36,17 @@
 .meetings-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 /* Meeting Card - Google Calendar Style */
 .meeting-card {
-  background: white;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e0e6ef;
   transition: all 0.2s ease;
   cursor: pointer;
 }
@@ -60,11 +61,11 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .meeting-card-title {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   margin: 0;
   color: #202124;
@@ -74,7 +75,7 @@
 
 .calendar-icon {
   flex-shrink: 0;
-  margin-left: 12px;
+  margin-left: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -82,9 +83,9 @@
 
 /* Date and Time */
 .meeting-card-datetime {
-  font-size: 14px;
+  font-size: 12px;
   color: #5f6368;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 /* Attendees Section */
@@ -92,12 +93,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
-  gap: 12px;
+  margin-bottom: 6px;
+  gap: 8px;
 }
 
 .participants-count {
-  font-size: 14px;
+  font-size: 12px;
   color: #5f6368;
   font-weight: 400;
   display: flex;
@@ -106,7 +107,7 @@
 }
 
 .meeting-countdown {
-  font-size: 14px;
+  font-size: 12px;
   color: #202124;
   font-weight: 400;
   white-space: nowrap;
@@ -115,24 +116,24 @@
 /* No Meetings State */
 .no-meetings {
   text-align: center;
-  padding: 30px 20px;
+  padding: 16px 12px;
   color: var(--muted-color);
 }
 
 .no-meetings-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
+  font-size: 26px;
+  margin-bottom: 6px;
   opacity: 0.5;
 }
 
 .no-meetings p {
   margin: 0;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 /* Today Summary */
 .today-summary {
-  padding-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid var(--border-color);
 }
 
@@ -140,7 +141,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .summary-label {

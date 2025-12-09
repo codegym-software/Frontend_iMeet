@@ -5,6 +5,7 @@ import ImgAsset from '../../assets'
 import { Link, useHistory } from 'react-router-dom' 
 import { useAuth } from '../../contexts/AuthContext'
 import calendarLogo from '../../assets/calendar-logo.png'
+import { acceptGroupInvite } from '../../services/groupService'
 
 export default function Login() {
 	const [email, setEmail] = useState('');
@@ -49,6 +50,7 @@ export default function Login() {
 				setLoginStatus({ message: result.message, type: 'success' });
 				
 				// Redirect dựa trên role sau khi đăng nhập thành công
+				// Token sẽ được xử lý ở trang chủ để user có thể xác nhận tham gia
 				setTimeout(() => {
 					// Lấy role từ response
 					const currentUserRole = result.user?.role || 'user';

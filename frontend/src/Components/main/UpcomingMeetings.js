@@ -1,9 +1,12 @@
 // components/UpcomingMeetings.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './UpcomingMeetings.css';
 import { calendarAPI } from './MainCalendar/utils/CalendarAPI';
+import { useMeetings } from '../../contexts/MeetingContext';
 
 const UpcomingMeetings = ({ onMeetingDoubleClick }) => {
+  // Sử dụng data từ MeetingContext thay vì gọi API riêng
+  const { meetings: allMeetings, isDataLoaded } = useMeetings();
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [todayMeetingsCount, setTodayMeetingsCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -112,20 +115,13 @@ const UpcomingMeetings = ({ onMeetingDoubleClick }) => {
     }
   };
 
-  // Load upcoming meetings từ API - Tối ưu với batch loading
+  // Load upcoming meetings từ cache (MeetingContext) - Tối ưu: không gọi API riêng
   const loadUpcomingMeetings = async () => {
     try {
       if (isMountedRef.current) setLoading(true);
       
-      // ✅ Lấy current user ID
-      const currentUser = JSON.parse(localStorage.getItem('user') || localStorage.getItem('oauth2User') || '{}');
-      const currentUserId = currentUser.userId || currentUser.id;
-      
-      // Gọi API lấy upcoming meetings (với user ID)
-      const meetings = await calendarAPI.getUpcomingMeetings(currentUserId);
-      
-      // Nếu không có meetings, return empty
-      if (!meetings || meetings.length === 0) {
+      // ✅ Sử dụng data từ MeetingContext thay vì gọi API
+      if (!isDataLoaded || !allMeetings || allMeetings.length === 0) {
         if (isMountedRef.current) {
           setUpcomingMeetings([]);
           setLoading(false);
@@ -137,18 +133,18 @@ const UpcomingMeetings = ({ onMeetingDoubleClick }) => {
       const now = new Date();
       
       // ✅ Remove duplicates dựa trên meetingId
-      const uniqueMeetings = Array.from(new Map(meetings.map(m => [m.meetingId, m])).values());
+      const uniqueMeetings = Array.from(new Map(allMeetings.map(m => [m.meetingId || m.id, m])).values());
       
       const filteredMeetings = uniqueMeetings
         .filter(meeting => {
-          const startTime = new Date(meeting.startTime);
+          const startTime = new Date(meeting.startTime || meeting.start);
           const status = meeting.bookingStatus?.toUpperCase();
           const isFuture = startTime > now;
           const isNotCancelled = status !== 'CANCELLED';
           
           return isFuture && isNotCancelled;
         })
-        .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+        .sort((a, b) => new Date(a.startTime || a.start) - new Date(b.startTime || b.start))
         .slice(0, 3); // Chỉ lấy 3 meetings gần nhất
       
       // Batch load participant counts - tối ưu: load song song thay vì tuần tự
@@ -212,7 +208,7 @@ const UpcomingMeetings = ({ onMeetingDoubleClick }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Load data khi component mount
+  // Load data khi component mount hoặc khi meetings data thay đổi
   useEffect(() => {
     isMountedRef.current = true;
     
@@ -222,11 +218,14 @@ const UpcomingMeetings = ({ onMeetingDoubleClick }) => {
       await loadTodayMeetingsCount();
     };
     
-    loadData();
+    // Chỉ load khi data đã sẵn sàng
+    if (isDataLoaded) {
+      loadData();
+    }
     
     // Refresh mỗi 5 phút để cập nhật số lượng người tham gia (tối ưu - giảm API calls)
     const refreshInterval = setInterval(() => {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isDataLoaded) {
         // Clear cache khi refresh để đảm bảo dữ liệu mới nhất
         inviteesCacheRef.current.clear();
         cacheTimeoutRef.current.forEach(timeout => clearTimeout(timeout));
@@ -243,7 +242,7 @@ const UpcomingMeetings = ({ onMeetingDoubleClick }) => {
       cacheTimeoutRef.current.forEach(timeout => clearTimeout(timeout));
       cacheTimeoutRef.current.clear();
     };
-  }, []); // ✅ Empty dependency array - chỉ chạy khi mount // ✅ No dependencies - only run on mount
+  }, [isDataLoaded, allMeetings]); // ✅ Depend on MeetingContext data
 
   // Format thời gian còn lại
   const getTimeUntilMeeting = (startTime) => {

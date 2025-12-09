@@ -10,7 +10,7 @@ import { useMeetingWithDevices } from '../../hooks/useMeetingWithDevices';
 
 const normalizeRoomId = (room) => Number(room?.roomId ?? room?.id);
 
-const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, initialEndTime, initialRoomId }) => {
+const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, initialEndTime, initialRoomId, groups = [] }) => {
   const computeInitialDateTimes = () => {
     let start;
     if (initialStartTime) {
@@ -48,7 +48,8 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
     room: initialRoomId ? Number(initialRoomId) : '',
     location: '',
       devices: [],
-    isAllDay: false
+    isAllDay: false,
+    groupId: '' // Optional group selection
     };
   };
 
@@ -738,6 +739,11 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
         isAllDay: formData.isAllDay,
         roomId: parseInt(formData.room)
       };
+      
+      // Add groupId if selected (optional)
+      if (formData.groupId && formData.groupId !== '') {
+        meetingData.groupId = parseInt(formData.groupId);
+      }
       
       // Only add devices if there are any
       if (formData.devices && formData.devices.length > 0) {
@@ -1469,6 +1475,38 @@ const CreateMeetingForm = ({ selectedDate, onClose, onSubmit, initialStartTime, 
               </div>
             </div>
           </div>
+
+          {/* Group Selection Section (Optional) */}
+          {groups && groups.length > 0 && (
+            <div className="form-row">
+              <div className="form-icon">👥</div>
+              <div className="form-row-content">
+                <select
+                  name="groupId"
+                  value={formData.groupId}
+                  onChange={handleChange}
+                  className="inline-select"
+                >
+                  <option value="">Không chọn nhóm (lịch cá nhân)</option>
+                  {groups.map(group => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+                {formData.groupId && (
+                  <div style={{ 
+                    marginTop: '8px', 
+                    fontSize: '12px', 
+                    color: '#5f6368',
+                    fontStyle: 'italic'
+                  }}>
+                    Tất cả thành viên trong nhóm sẽ được mời tham gia cuộc họp này
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Description Section */}
           <div className="form-row">

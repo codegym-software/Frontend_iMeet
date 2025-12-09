@@ -145,51 +145,6 @@ const googleCalendarService = {
         message: error.response?.data?.error || 'Không thể đồng bộ meeting'
       };
     }
-  },
-
-  /**
-   * Retry đồng bộ các meeting có sync_status = UPDATE_PENDING
-   * @returns {Promise<{success: boolean, message: string, successCount: number}>}
-   */
-  retryPendingSyncs: async () => {
-    try {
-      const response = await apiClient.post(API_ENDPOINTS.GOOGLE_CALENDAR.RETRY_PENDING);
-      return {
-        success: response.data.success,
-        message: response.data.message || 'Đã retry đồng bộ các meeting pending',
-        successCount: response.data.successCount || 0
-      };
-    } catch (error) {
-      console.error('Error retrying pending syncs:', error);
-      throw {
-        success: false,
-        message: error.response?.data?.error || 'Không thể retry đồng bộ'
-      };
-    }
-  },
-
-  /**
-   * Đồng bộ events từ Google Calendar về iMeet
-   * @param {number} daysAhead - Số ngày tới để sync (mặc định 7)
-   * @returns {Promise<{success: boolean, message: string, syncedCount: number}>}
-   */
-  syncFromGoogleCalendar: async (daysAhead = 7) => {
-    try {
-      const response = await apiClient.post(API_ENDPOINTS.GOOGLE_CALENDAR.SYNC_FROM_GOOGLE, null, {
-        params: { daysAhead }
-      });
-      return {
-        success: response.data.success,
-        message: response.data.message || 'Đã đồng bộ events từ Google Calendar',
-        syncedCount: response.data.syncedCount || 0
-      };
-    } catch (error) {
-      console.error('Error syncing from Google Calendar:', error);
-      throw {
-        success: false,
-        message: error.response?.data?.error || 'Không thể đồng bộ từ Google Calendar'
-      };
-    }
   }
 };
 

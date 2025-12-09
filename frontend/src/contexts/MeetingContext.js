@@ -24,8 +24,8 @@ export const MeetingProvider = ({ children }) => {
   // ✅ Track if component is mounted to prevent state updates after unmount
   const isMountedRef = useRef(true);
 
-  // Cache for 30 seconds to avoid unnecessary refetches
-  const CACHE_DURATION = 30000;
+  // Cache for 2 minutes to avoid unnecessary refetches - tăng cache để giảm API calls
+  const CACHE_DURATION = 2 * 60 * 1000; // 2 phút
 
   let authUser = null;
   try {

@@ -5,6 +5,7 @@ import './Signup.css';
 import '../../Components/common/PasswordToggleStyles.css';
 import ImgAsset from '../../assets';
 import calendarLogo from '../../assets/calendar-logo.png';
+import { acceptGroupInvite } from '../../services/groupService';
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -70,6 +71,11 @@ export default function Signup() {
       
       if (result.success) {
         setSignupStatus({ message: result.message, type: 'success' });
+        
+        // Check for pending group invite token after signup
+        // Note: User needs to login first, so we keep the token for after login
+        // The token will be processed in Login.js after user logs in
+        
         // Chuyển hướng đến trang login sau khi đăng ký thành công
         setTimeout(() => {
           history.push('/login');

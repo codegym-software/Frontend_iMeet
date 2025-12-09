@@ -52,8 +52,6 @@ export const API_ENDPOINTS = {
     STATUS: '/api/auth/google/calendar/status',
     DISCONNECT: '/api/auth/google/calendar/disconnect',
     SYNC_NOW: '/api/auth/google/calendar/sync-now',
-    RETRY_PENDING: '/api/auth/google/calendar/retry-pending',
-    SYNC_FROM_GOOGLE: '/api/auth/google/calendar/sync-from-google',
   },
 };
 

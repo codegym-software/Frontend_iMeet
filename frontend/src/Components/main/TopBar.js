@@ -9,7 +9,7 @@ import { FaPlus } from 'react-icons/fa';
 import calendarLogo from '../../assets/calendar-logo.png';
 // MeetingForm will be rendered in Home component instead
 
-const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, theme, toggleTheme, onCreateEvent, onMeetingCreated, onOpenMeetingForm }) => {
+const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, theme, toggleTheme, onCreateEvent, onMeetingCreated, onOpenMeetingForm, isSidebarOpen, onToggleSidebar }) => {
   const { logout, user } = useAuth();
   const history = useHistory();
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
@@ -201,13 +201,15 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, 
   return (
     <div className="top-bar">
       <div className="top-bar-content">
-        {/* Left Section - Menu, Logo, Date Navigation */}
+        {/* Left Section - Menu toggle + Date Navigation */}
         <div className="top-bar-left">
-          <div className="logo-section">
-            <div className="app-logo">
-              <img src={calendarLogo} alt="iMeet Logo" className="logo-image" />
-            </div>
-          </div>
+          <button 
+            className="menu-toggle-btn" 
+            aria-label="Toggle sidebar"
+            onClick={onToggleSidebar}
+          >
+            <span className="menu-toggle-icon">≡</span>
+          </button>
 
           <div className="date-navigation">
             <button className="nav-btn" onClick={goToToday}>

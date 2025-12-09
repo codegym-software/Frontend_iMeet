@@ -454,6 +454,12 @@
   overflow-y: auto;
   background: var(--bg-color);
   box-sizing: border-box;
+  /* Hide its own scrollbar to avoid double-scroll visual */
+  scrollbar-width: none;
+}
+
+.week-time-labels::-webkit-scrollbar {
+  display: none;
 }
 
 .week-time-label {

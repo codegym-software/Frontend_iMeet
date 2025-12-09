@@ -12,6 +12,7 @@ import ProfilePage from '../pages/Profile';
 import OAuth2CallbackPage from '../pages/OAuth2Callback';
 import GoogleCalendarCallback from '../Components/GoogleCalendarCallback';
 import InvitationResponsePage from '../pages/InvitationResponse/InvitationResponse';
+import GroupInvitePage from '../pages/GroupInvite/GroupInvitePage';
 
 // Layouts
 import AdminLayout from '../layouts/AdminLayout';
@@ -27,6 +28,7 @@ const AppRoutes = () => {
       <Route exact path="/oauth2/callback" component={OAuth2CallbackPage} />
       <Route exact path="/google-calendar-callback" component={GoogleCalendarCallback} />
       <Route exact path="/invitation-response" component={InvitationResponsePage} />
+      <Route exact path="/group/invite/:token" component={GroupInvitePage} />
       
       {/* Admin Routes - chỉ admin mới truy cập được */}
       <RoleBasedRoute path="/admin" adminOnly={true}>

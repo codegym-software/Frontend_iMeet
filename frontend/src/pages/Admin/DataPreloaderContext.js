@@ -453,16 +453,9 @@ export const DataPreloaderProvider = ({ children }) => {
     }
 
     // Kiểm tra authentication trước khi gọi API
-    // Kiểm tra cả traditional token và OAuth2 user
     const token = localStorage.getItem('token');
-    const oauth2User = localStorage.getItem('oauth2User');
-    
-    if (!token && !oauth2User) {
-      // Không có authentication - đây là trạng thái bình thường khi user chưa đăng nhập
-      // Chỉ log ở debug level, không phải warning
-      if (process.env.NODE_ENV === 'development') {
-        console.log('ℹ️ No authentication found. Skipping data preload.');
-      }
+    if (!token) {
+      console.warn('⚠️ No authentication token found. Skipping data preload.');
       setIsPreloading(false);
       setIsDataLoaded(true); // Mark as loaded to prevent retry
       return;
