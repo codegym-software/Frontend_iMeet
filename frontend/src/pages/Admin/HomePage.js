@@ -1,66 +1,35 @@
-import React, { useEffect, useState } from 'react';
-import adminService from '../../services/adminService';
-import meetingService from '../../services/meetingService';
+import React, { useMemo } from 'react';
+import { usePreloadedData } from './DataPreloaderContext';
 import RecentActivity from './RecentActivity';
 
-// Small component to fetch and display stats cards (Total Users etc.)
+// ✅ Optimized: Use preloaded data from cache (no refetch!)
 const HomeStats = () => {
-  const [stats, setStats] = useState(null);
-  const [rooms, setRooms] = useState([]);
-  const [devices, setDevices] = useState([]);
-  const [meetings, setMeetings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    userStats,
+    rooms,
+    devices,
+    meetings,
+    usersLoading,
+    roomsLoading,
+    devicesLoading,
+    meetingsLoading,
+    isPreloading
+  } = usePreloadedData();
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        // Load all data in parallel
-        const results = await Promise.allSettled([
-          adminService.getUserStats().catch(e => ({ totalUsers: 0 })),
-          adminService.getRooms().catch(e => []),
-          adminService.getDevices().catch(e => []),
-          meetingService.getAllMeetings().catch(e => ({ data: [] }))
-        ]);
-        
-        const [statsResult, roomsResult, devicesResult, meetingsResult] = results;
-        
-        console.log('Stats Result:', statsResult);
-        console.log('Rooms Result:', roomsResult);
-        console.log('Devices Result:', devicesResult);
-        console.log('Meetings Result:', meetingsResult);
-        
-        if (mounted) {
-          // Extract values from Promise.allSettled results
-          const statsRes = statsResult.status === 'fulfilled' ? statsResult.value : {};
-          const roomsRes = roomsResult.status === 'fulfilled' ? roomsResult.value : [];
-          const devicesRes = devicesResult.status === 'fulfilled' ? devicesResult.value : [];
-          const meetingsRes = meetingsResult.status === 'fulfilled' ? meetingsResult.value : { data: [] };
-          
-          console.log('Extracted Stats:', statsRes);
-          console.log('Extracted Rooms:', roomsRes);
-          console.log('Extracted Devices:', devicesRes);
-          console.log('Extracted Meetings:', meetingsRes);
-          
-          // Set state with proper fallbacks
-          setStats(statsRes?.data || statsRes || {});
-          setRooms(Array.isArray(roomsRes) ? roomsRes : []);
-          setDevices(Array.isArray(devicesRes) ? devicesRes : []);
-          setMeetings(Array.isArray(meetingsRes?.data) ? meetingsRes.data : []);
-        }
-      } catch (e) {
-        console.error('Failed loading stats', e);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, []);
+  // ✅ Calculate overall loading state
+  const loading = useMemo(() => {
+    return isPreloading || usersLoading || roomsLoading || devicesLoading || meetingsLoading;
+  }, [isPreloading, usersLoading, roomsLoading, devicesLoading, meetingsLoading]);
 
   const formatNumber = (n) => {
     if (n === null || n === undefined) return '0';
     try { return Number(n).toLocaleString(); } catch (e) { return String(n); }
+  };
+
+  // ✅ Display helper: show loading state or actual value
+  const displayValue = (value, isLoading) => {
+    if (isLoading) return <span style={{ color: '#95a5a6' }}>Đang tải...</span>;
+    return formatNumber(value || 0);
   };
 
   return (
@@ -69,7 +38,7 @@ const HomeStats = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ fontSize: '14px', color: '#7f8c8d', margin: '0 0 8px 0', fontWeight: '500' }}>Total Users</p>
-            <p style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', margin: 0 }}>{loading ? '...' : formatNumber(stats?.totalUsers || 0)}</p>
+            <p style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', margin: 0 }}>{displayValue(userStats?.totalUsers, usersLoading)}</p>
           </div>
           <div style={{ backgroundColor: '#e8f4fd', padding: '12px', borderRadius: '8px' }}>
             <span style={{ fontSize: '24px' }}>👥</span>
@@ -81,7 +50,7 @@ const HomeStats = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ fontSize: '14px', color: '#7f8c8d', margin: '0 0 8px 0', fontWeight: '500' }}>Total Meetings</p>
-            <p style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', margin: 0 }}>{loading ? '...' : formatNumber(meetings.length)}</p>
+            <p style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', margin: 0 }}>{displayValue(meetings?.length, meetingsLoading)}</p>
           </div>
           <div style={{ backgroundColor: '#e8f5e8', padding: '12px', borderRadius: '8px' }}>
             <span style={{ fontSize: '24px' }}>📅</span>
@@ -93,7 +62,7 @@ const HomeStats = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ fontSize: '14px', color: '#7f8c8d', margin: '0 0 8px 0', fontWeight: '500' }}>Total Rooms</p>
-            <p style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', margin: 0 }}>{loading ? '...' : formatNumber(rooms.length)}</p>
+            <p style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', margin: 0 }}>{displayValue(rooms?.length, roomsLoading)}</p>
           </div>
           <div style={{ backgroundColor: '#fff4e6', padding: '12px', borderRadius: '8px' }}>
             <span style={{ fontSize: '24px' }}>🏢</span>
@@ -105,7 +74,7 @@ const HomeStats = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ fontSize: '14px', color: '#7f8c8d', margin: '0 0 8px 0', fontWeight: '500' }}>Total Equipment</p>
-            <p style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', margin: 0 }}>{loading ? '...' : formatNumber(devices.length)}</p>
+            <p style={{ fontSize: '28px', fontWeight: '700', color: '#2c3e50', margin: 0 }}>{displayValue(devices?.length, devicesLoading)}</p>
           </div>
           <div style={{ backgroundColor: '#f0f9ff', padding: '12px', borderRadius: '8px' }}>
             <span style={{ fontSize: '24px' }}>💻</span>
@@ -133,13 +102,17 @@ const HomePage = () => {
         <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#2c3e50', marginBottom: '16px' }}>Quick Actions</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <a href="/admin/devices" style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', textDecoration: 'none', color: '#2c3e50', transition: 'all 0.2s' }}>
-              <span style={{ marginRight: '12px', fontSize: '20px' }}>💻</span>
-              <span>Manage Equipment</span>
+            <a href="/admin/rooms" style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', textDecoration: 'none', color: '#2c3e50', transition: 'all 0.2s' }}>
+              <span style={{ marginRight: '12px', fontSize: '20px' }}>🏢</span>
+              <span>Rooms</span>
             </a>
             <a href="/admin/users" style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', textDecoration: 'none', color: '#2c3e50', transition: 'all 0.2s' }}>
               <span style={{ marginRight: '12px', fontSize: '20px' }}>👥</span>
               <span>User Management</span>
+            </a>
+            <a href="/admin/devices" style={{ display: 'flex', alignItems: 'center', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '8px', textDecoration: 'none', color: '#2c3e50', transition: 'all 0.2s' }}>
+              <span style={{ marginRight: '12px', fontSize: '20px' }}>💻</span>
+              <span>Equipments</span>
             </a>
           </div>
         </div>

@@ -13,13 +13,26 @@ export const useActivity = () => {
 export const ActivityProvider = ({ children }) => {
   const [activities, setActivities] = useState([]);
 
+  // Helper function to filter activities within 7 days
+  const filterActivitiesWithin7Days = (activitiesList) => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    return activitiesList.filter(activity => {
+      const activityDate = new Date(activity.timestamp);
+      return activityDate >= sevenDaysAgo;
+    });
+  };
+
   // Load activities from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem('adminActivities');
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        setActivities(parsed);
+        // Filter to only show activities within 7 days
+        const recentActivities = filterActivitiesWithin7Days(parsed);
+        setActivities(recentActivities);
       } catch (e) {
         console.error('Failed to parse activities from localStorage', e);
       }
@@ -32,6 +45,21 @@ export const ActivityProvider = ({ children }) => {
       localStorage.setItem('adminActivities', JSON.stringify(activities));
     }
   }, [activities]);
+
+  // Periodically clean up old activities (check every hour)
+  useEffect(() => {
+    const cleanupOldActivities = () => {
+      setActivities(prev => filterActivitiesWithin7Days(prev));
+    };
+
+    // Run cleanup on mount
+    cleanupOldActivities();
+
+    // Set up interval to check every hour (3600000 ms)
+    const intervalId = setInterval(cleanupOldActivities, 3600000);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Add a new activity
   const addActivity = (type, action, itemName, details = '') => {

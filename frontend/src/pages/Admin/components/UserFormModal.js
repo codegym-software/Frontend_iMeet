@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 const UserFormModal = ({ 
   isEdit, 
@@ -10,20 +10,52 @@ const UserFormModal = ({
   onCancel,
   getPasswordStrength 
 }) => {
+  // Disable body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  // Prevent click propagation to elements behind modal
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onCancel();
+    }
+  };
+
+  // Prevent all events from propagating outside the modal
+  const handleModalClick = (e) => {
+    e.stopPropagation();
+  };
+
+  // Prevent keyboard events from propagating
+  const handleKeyDown = (e) => {
+    e.stopPropagation();
+  };
+
   return (
-    <div style={{ 
-      position: 'fixed', 
-      top: 0, 
-      left: 0, 
-      right: 0, 
-      bottom: 0, 
-      backgroundColor: 'rgba(0,0,0,0.5)', 
-      zIndex: 1000,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
-    }}>
-      <div style={{ 
+    <div 
+      onClick={handleBackdropClick}
+      onKeyDown={handleKeyDown}
+      style={{ 
+        position: 'fixed', 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        bottom: 0, 
+        backgroundColor: 'rgba(0,0,0,0.5)', 
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <div 
+        onClick={handleModalClick}
+        onKeyDown={handleKeyDown}
+        style={{ 
         backgroundColor: 'white', 
         borderRadius: '12px', 
         padding: '30px', 
@@ -124,7 +156,7 @@ const UserFormModal = ({
                   </div>
                 )}
                 <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  {formData.fullName.length}/100 ký tự
+                  {(formData.fullName || '').length}/100 ký tự
                 </div>
               </div>
             </div>
@@ -272,34 +304,37 @@ const UserFormModal = ({
                 </div>
               )}
               <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                {formData.fullName.length}/100 ký tự
+                {(formData.fullName || '').length}/100 ký tự
               </div>
             </div>
           </>
         )}
 
-        <div style={{ marginBottom: '30px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
-            Vai trò
-          </label>
-          <select
-            value={formData.role}
-            onChange={(e) => setFormData({...formData, role: e.target.value})}
-            style={{ 
-              width: '100%', 
-              padding: '12px', 
-              border: '2px solid #e9ecef', 
-              borderRadius: '8px',
-              fontSize: '16px',
-              boxSizing: 'border-box',
-              outline: 'none'
-            }}
-          >
-            {roles.map(role => (
-              <option key={role.value} value={role.value}>{role.label}</option>
-            ))}
-          </select>
-        </div>
+        {/* Only show role selector in Add form, not in Edit form */}
+        {!isEdit && (
+          <div style={{ marginBottom: '30px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#2c3e50' }}>
+              Vai trò
+            </label>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData({...formData, role: e.target.value})}
+              style={{ 
+                width: '100%', 
+                padding: '12px', 
+                border: '2px solid #e9ecef', 
+                borderRadius: '8px',
+                fontSize: '16px',
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+            >
+              {roles.map(role => (
+                <option key={role.value} value={role.value}>{role.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
           <button 

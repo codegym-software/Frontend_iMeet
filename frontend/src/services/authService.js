@@ -15,19 +15,43 @@ class AuthService {
   // Đăng nhập truyền thống bằng username/email/password
   async login(usernameOrEmail, password) {
     try {
+      // Validate input
+      if (!usernameOrEmail || !usernameOrEmail.trim()) {
+        throw { message: 'Username or email is required' };
+      }
+      
+      if (!password || !password.trim()) {
+        throw { message: 'Password is required' };
+      }
+
       const response = await apiClient.post('/api/auth/login', {
-        usernameOrEmail,
-        password
+        usernameOrEmail: usernameOrEmail.trim(),
+        password: password
       });
       
       // Lưu token vào localStorage nếu login thành công
-      if (response.data.success && response.data.token) {
+      if (response.data && response.data.success && response.data.token) {
         localStorage.setItem('token', response.data.token);
       }
       
       return response.data;
     } catch (error) {
-      throw error.response?.data || error.message;
+      // Xử lý lỗi từ backend
+      if (error.response && error.response.data) {
+        // Backend trả về LoginResponse với message
+        const errorData = error.response.data;
+        throw {
+          message: errorData.message || errorData.error || 'Login failed',
+          success: false
+        };
+      }
+      
+      // Xử lý lỗi network hoặc validation
+      if (error.message) {
+        throw { message: error.message, success: false };
+      }
+      
+      throw { message: 'An unexpected error occurred', success: false };
     }
   }
 
@@ -317,6 +341,16 @@ class AuthService {
     // Kiểm tra traditional login
     const localUser = this.getUserFromStorage();
     if (localUser) {
+      // Kiểm tra nếu đang trong quá trình calendar callback, skip validation
+      const isCalendarConnecting = localStorage.getItem('calendar_connecting');
+      const calendarJustConnected = localStorage.getItem('calendar_just_connected');
+      
+      if (isCalendarConnecting === 'true' || calendarJustConnected === 'true') {
+        // Đang trong quá trình calendar callback, tin tưởng local data
+        console.log('📅 Calendar callback in progress, trusting local auth data');
+        return { authenticated: true, user: localUser, type: 'traditional' };
+      }
+      
       // Chỉ cập nhật từ server nếu có token hợp lệ
       if (localUser.token) {
         try {
@@ -334,11 +368,14 @@ class AuthService {
             return { authenticated: true, user: updatedUserData, type: 'traditional' };
           } else {
             // Token không hợp lệ, xóa local data
+            console.log('❌ Token invalid, clearing local data');
             localStorage.removeItem('user');
+            localStorage.removeItem('token');
             return { authenticated: false, user: null, type: null };
           }
         } catch (error) {
           // Nếu có lỗi (server không chạy, network error, etc.), vẫn trả về user từ localStorage
+          console.log('⚠️ Token validation error, trusting local data:', error.message);
           return { authenticated: true, user: localUser, type: 'traditional' };
         }
       }
@@ -353,12 +390,28 @@ class AuthService {
   // Đổi mật khẩu
   async changePassword(currentPassword, newPassword, confirmPassword) {
     try {
+      // Kiểm tra xem user có phải OAuth2 không
+      const oauth2User = localStorage.getItem('oauth2User');
+      console.log('changePassword - OAuth2 User:', oauth2User);
+      
+      if (oauth2User) {
+        // OAuth2 users không thể đổi mật khẩu
+        throw new Error('Tài khoản Google không thể đổi mật khẩu tại đây. Vui lòng đổi mật khẩu trên Google.');
+      }
+      
       // Lấy token từ localStorage
       const token = localStorage.getItem('token');
+      console.log('changePassword - Token:', token ? 'Exists (length: ' + token.length + ')' : 'None');
       
       if (!token) {
         throw new Error('Không có token. Vui lòng đăng nhập lại.');
       }
+      
+      console.log('changePassword - Sending request with:', {
+        currentPassword: '***',
+        newPassword: '***',
+        confirmPassword: '***'
+      });
       
       const response = await apiClient.post('/api/auth/change-password', {
         currentPassword,
@@ -370,9 +423,21 @@ class AuthService {
         }
       });
       
+      console.log('changePassword - Response:', response.data);
       return response.data;
     } catch (error) {
-      throw error.response?.data || error.message;
+      console.warn('⚠️ changePassword - Error:', error.message || error);
+      console.warn('⚠️ changePassword - Error response:', error.response?.data);
+      console.warn('⚠️ changePassword - Error response status:', error.response?.status);
+      
+      // Throw error với message rõ ràng
+      if (error.response?.data) {
+        throw error.response.data;
+      } else if (error.message) {
+        throw { message: error.message };
+      } else {
+        throw { message: 'Có lỗi xảy ra khi đổi mật khẩu' };
+      }
     }
   }
 

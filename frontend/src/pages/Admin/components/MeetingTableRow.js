@@ -8,10 +8,10 @@ const MeetingTableRow = ({
   formatDuration, 
   onViewDetail, 
   onCancel, 
-  cancellingId 
+  cancellingId
 }) => {
-  const status = statusConfig[meeting.bookingStatus] || statusConfig.booked;
-  const isCancelled = meeting.bookingStatus === 'cancelled';
+  const status = statusConfig[meeting.bookingStatus?.toLowerCase()] || statusConfig.pending;
+  const isCancelled = meeting.bookingStatus?.toLowerCase() === 'cancelled';
 
   return (
     <tr
@@ -112,7 +112,7 @@ const MeetingTableRow = ({
 
       {/* Actions */}
       <td style={{ padding: '16px', textAlign: 'center' }}>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => onViewDetail(meeting)}
             style={{
@@ -135,7 +135,9 @@ const MeetingTableRow = ({
           >
             <FaEye />
           </button>
-          {!isCancelled && (
+          
+          {/* Show Cancel button for confirmed meetings */}
+          {meeting.bookingStatus?.toLowerCase() === 'confirmed' && onCancel && (
             <button
               onClick={() => onCancel(meeting)}
               disabled={cancellingId === meeting.meetingId}

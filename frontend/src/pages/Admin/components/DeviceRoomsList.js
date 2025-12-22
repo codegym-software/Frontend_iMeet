@@ -1,45 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import roomService from '../../../services/roomService';
+import React, { useState } from 'react';
 
-const DeviceRoomsList = ({ device }) => {
-  const [rooms, setRooms] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ✅ NO API CALLS - Read from cache!
+const DeviceRoomsList = ({ device, roomMappings }) => {
   const [showAllRooms, setShowAllRooms] = useState(false);
   const MAX_VISIBLE_ROOMS = 2;
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadRooms = async () => {
-      try {
-        setLoading(true);
-        const response = await roomService.getRoomsByDevice(device.id);
-        if (isMounted && response && response.success && Array.isArray(response.data)) {
-          setRooms(response.data);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Error loading rooms for device:', err);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    if (device.id) {
-      loadRooms();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [device.id]);
-
-  if (loading) {
-    return <span style={{ fontSize: '13px', color: '#999' }}>Đang tải...</span>;
-  }
+  // Get rooms for this device from mappings (instant!)
+  const rooms = roomMappings?.[device.id] || [];
 
   if (rooms.length === 0) {
     return <span style={{ fontSize: '13px', color: '#999' }}>Chưa gán</span>;
@@ -62,7 +29,7 @@ const DeviceRoomsList = ({ device }) => {
             fontWeight: '500',
             border: '1px solid #a5d6a7'
           }}>
-            {room.name}
+            {room.roomName || room.name}
           </span>
         ))}
         {hasMore && (
@@ -188,13 +155,13 @@ const DeviceRoomsList = ({ device }) => {
                     fontWeight: '600',
                     marginBottom: '4px'
                   }}>
-                    {room.name}
+                    {room.roomName || room.name}
                   </div>
                   <div style={{
                     fontSize: '12px',
                     color: '#666'
                   }}>
-                    📍 {room.location}
+                    📍 {room.roomLocation || room.location || 'N/A'}
                   </div>
                 </div>
               ))}

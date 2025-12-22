@@ -85,6 +85,11 @@
     letter-spacing: -0.5px;
 }
 
+.profile-settings-container {
+    position: relative;
+    margin-right: 24px;
+}
+
 .profile-settings-button {
     display: flex;
     align-items: center;
@@ -94,7 +99,6 @@
     cursor: pointer;
     transition: background-color 0.2s ease;
     border-radius: 8px;
-    margin-right: 24px;
 }
 
 .profile-settings-button:hover {
@@ -109,6 +113,51 @@
 
 .profile-settings-button:hover .profile-settings-icon {
     color: #111827;
+}
+
+.profile-settings-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    padding: 8px;
+    min-width: 150px;
+    z-index: 1000;
+    animation: dropdownFadeIn 0.2s ease;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.profile-logout-btn {
+    width: 100%;
+    padding: 12px 16px;
+    background: #ef4444;
+    border: none;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.profile-logout-btn:hover {
+    background-color: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .profile-avatar-container {
@@ -219,6 +268,14 @@
     background-clip: content-box, border-box;
     box-shadow: 0 15px 35px rgba(0,0,0,0.1), 0 5px 15px rgba(0,0,0,0.05);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    font-weight: 600;
+    color: #667eea;
+    background-color: #f3f4f6;
+    overflow: hidden;
 }
 
 .profile-avatar:hover {
@@ -231,6 +288,7 @@
     height: 100%;
     border-radius: 50%;
     object-fit: cover;
+    display: block;
 }
 
 .profile-fields {
@@ -539,6 +597,55 @@
     box-shadow: 0 8px 25px rgba(156, 163, 175, 0.3);
 }
 
+/* Google Calendar Connect Button */
+.profile-google-calendar-btn {
+    width: 100%;
+    height: 55px;
+    background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+    border: none;
+    border-radius: 16px;
+    color: white;
+    font-size: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(66, 133, 244, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    letter-spacing: 0.5px;
+}
+
+.profile-google-calendar-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 40px rgba(66, 133, 244, 0.4);
+    background: linear-gradient(135deg, #34a853 0%, #4285f4 100%);
+}
+
+.profile-google-calendar-btn:active {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 25px rgba(66, 133, 244, 0.3);
+}
+
+.profile-google-calendar-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.profile-google-calendar-btn:disabled {
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.profile-google-calendar-btn:disabled:hover {
+    transform: none;
+    box-shadow: 0 8px 25px rgba(156, 163, 175, 0.3);
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+}
+
 /* Avatar Button */
 .profile-avatar-btn {
     width: 140px;
@@ -711,5 +818,263 @@
     
     .profile-header-title {
         font-size: 16px;
+    }
+}
+
+/* Google Calendar Connection Styles */
+.profile-google-calendar-container {
+    width: 100%;
+}
+
+.profile-google-calendar-status {
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    transition: all 0.3s ease;
+}
+
+.profile-google-calendar-status:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.profile-google-calendar-status-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.profile-google-calendar-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+}
+
+.profile-google-calendar-icon.connected {
+    color: #34a853;
+}
+
+.profile-google-calendar-icon.disconnected {
+    color: #9ca3af;
+}
+
+.profile-google-calendar-status-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.profile-google-calendar-status-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.profile-google-calendar-status-email {
+    font-size: 14px;
+    color: #6b7280;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.profile-google-calendar-status-description {
+    font-size: 13px;
+    color: #9ca3af;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.4;
+}
+
+.profile-google-calendar-status-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #d1fae5;
+    color: #065f46;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.profile-google-calendar-status-badge.disconnected {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #34a853;
+    display: inline-block;
+}
+
+.profile-google-calendar-status-badge.disconnected .status-dot {
+    background: #9ca3af;
+}
+
+.profile-google-calendar-sync-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border-radius: 12px;
+    border: 1px solid #10b981;
+    font-size: 14px;
+    font-weight: 500;
+    color: #065f46;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.sync-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #10b981;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.profile-google-calendar-error {
+    padding: 12px 16px;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    border-radius: 12px;
+    color: #991b1b;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.profile-google-calendar-disconnect-btn {
+    width: 100%;
+    height: 45px;
+    background: white;
+    border: 2px solid #ef4444;
+    border-radius: 12px;
+    color: #ef4444;
+    font-size: 15px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile-google-calendar-disconnect-btn:hover {
+    background: #ef4444;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.profile-google-calendar-disconnect-btn:active {
+    transform: translateY(0);
+}
+
+.profile-google-calendar-disconnect-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.profile-google-calendar-btn {
+    width: 100%;
+    height: 55px;
+    background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+    border: none;
+    border-radius: 16px;
+    color: white;
+    font-size: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(66, 133, 244, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    letter-spacing: 0.5px;
+}
+
+.profile-google-calendar-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 40px rgba(66, 133, 244, 0.4);
+    background: linear-gradient(135deg, #34a853 0%, #4285f4 100%);
+}
+
+.profile-google-calendar-btn:active {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 25px rgba(66, 133, 244, 0.3);
+}
+
+.profile-google-calendar-btn:disabled {
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.profile-google-calendar-btn:disabled:hover {
+    transform: none;
+    box-shadow: 0 8px 25px rgba(156, 163, 175, 0.3);
+    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+}
+
+/* Dark theme support for Google Calendar */
+[data-theme="dark"] .profile-google-calendar-status {
+    background: rgba(45, 45, 45, 0.95);
+    border-color: #404040;
+}
+
+[data-theme="dark"] .profile-google-calendar-status:hover {
+    border-color: #555;
+}
+
+[data-theme="dark"] .profile-google-calendar-status-title {
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .profile-google-calendar-status-email {
+    color: #999;
+}
+
+[data-theme="dark"] .profile-google-calendar-status-description {
+    color: #777;
+}
+
+[data-theme="dark"] .profile-google-calendar-disconnect-btn {
+    background: #3d3d3d;
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+[data-theme="dark"] .profile-google-calendar-disconnect-btn:hover {
+    background: #ef4444;
+    color: white;
+}
+
+/* Responsive for Google Calendar */
+@media (max-width: 768px) {
+    .profile-google-calendar-status-header {
+        flex-wrap: wrap;
+    }
+    
+    .profile-google-calendar-status-badge {
+        width: 100%;
+        justify-content: center;
+        margin-top: 8px;
     }
 }

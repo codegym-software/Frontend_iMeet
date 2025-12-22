@@ -7,7 +7,8 @@ const DeviceTableRow = ({
   onDelete, 
   actionLoading,
   DeviceQuantityDisplay,
-  DeviceRoomsList 
+  DeviceRoomsList,
+  roomMappings // ✅ Accept mappings
 }) => {
   return (
     <tr style={{ borderBottom: '1px solid #f0f0f0' }}>
@@ -29,7 +30,7 @@ const DeviceTableRow = ({
         </span>
       </td>
       <td style={{ padding: '16px', textAlign: 'center' }}>
-        <DeviceQuantityDisplay device={device} />
+        <DeviceQuantityDisplay device={device} roomMappings={roomMappings} />
       </td>
       <td style={{ padding: '16px', maxWidth: '300px', color: '#555' }}>
         {((device?.description ?? '').length > 60)
@@ -37,7 +38,7 @@ const DeviceTableRow = ({
           : (device?.description ?? '')}
       </td>
       <td style={{ padding: '16px' }}>
-        <DeviceRoomsList device={device} />
+        <DeviceRoomsList device={device} roomMappings={roomMappings} />
       </td>
       <td style={{ padding: '16px', textAlign: 'center' }}>
         <button 

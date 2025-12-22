@@ -1,0 +1,678 @@
+/* DateTimePicker.css */
+.date-time-picker {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.date-time-input-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  /* Unified clickable area - no separate buttons */
+  border-radius: 8px;
+}
+
+.date-time-input {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  background: white;
+  cursor: text !important; /* Force text cursor to show it's editable */
+  transition: all 0.2s ease;
+  font-size: 14px;
+  min-height: 48px;
+  color: #3c4043;
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  outline: none;
+  font-weight: 400;
+  user-select: text; /* Allow text selection */
+  /* Ensure input and icon appear as single unified component */
+  position: relative;
+  z-index: 1;
+}
+
+.input-icons {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto; /* Make sure icons are clickable */
+  z-index: 2; /* Icons above input */
+}
+
+.calendar-icon {
+  color: #5f6368;
+  cursor: pointer !important; /* Force pointer cursor for icons */
+  font-size: 18px;
+  padding: 6px;
+  user-select: none;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-radius: 4px;
+  /* Make icon look like part of input, not separate button */
+  pointer-events: auto;
+  opacity: 0.7;
+}
+
+.calendar-icon:active {
+  opacity: 1;
+}
+
+.calendar-icon:hover {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.dropdown-toggle-icon {
+  color: #5f6368;
+  cursor: pointer !important; /* Force pointer cursor for icons */
+  font-size: 12px;
+  padding: 8px;
+  user-select: none;
+  transition: all 0.2s;
+  border-radius: 4px;
+}
+
+.dropdown-toggle-icon:active {
+  background: #f1f3f4;
+}
+
+.dropdown-toggle-icon:hover {
+  color: #1a73e8;
+}
+
+.date-time-input:hover {
+  border-color: #1a73e8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.date-time-input.active {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+
+.date-time-input.disabled {
+  background: #f8f9fa;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.date-time-input::placeholder {
+  color: #80868b;
+  font-weight: 400;
+}
+
+.date-time-input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+
+.clock-icon {
+  font-size: 16px;
+  color: #5f6368;
+}
+
+.input-text {
+  flex: 1;
+  color: #3c4043;
+  font-weight: 400;
+}
+
+.input-text:empty::before {
+  content: attr(data-placeholder);
+  color: #9aa0a6;
+}
+
+.dropdown-arrow {
+  font-size: 12px;
+  color: #5f6368;
+  transition: transform 0.2s ease;
+}
+
+.date-time-input.active .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+/* Simplified styles for inline date/time pickers */
+.date-only-picker .date-time-input,
+.time-picker-input .date-time-input {
+  padding: 6px 10px;
+  min-height: 36px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.date-only-picker .clock-icon,
+.time-picker-input .clock-icon {
+  display: none;
+}
+
+.date-only-picker .dropdown-arrow,
+.time-picker-input .dropdown-arrow {
+  font-size: 10px;
+}
+
+.date-only-picker .input-text,
+.time-picker-input .input-text {
+  font-size: 13px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.date-time-picker-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px 0 rgba(0,0,0,0.2), 0 1px 3px 0 rgba(0,0,0,0.1);
+  margin-top: 4px;
+  overflow: visible;
+}
+
+/* Compact dropdown for time-only pickers - Google Calendar style */
+.time-picker-input .date-time-picker-dropdown {
+  width: auto;
+  min-width: 160px;
+  max-width: 200px;
+  right: 0;
+  left: auto;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Dropdown for date-only pickers */
+.date-only-picker .date-time-picker-dropdown {
+  position: absolute;
+  width: 320px;
+  right: auto;
+  box-shadow: 0 4px 12px var(--shadow-hover);
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+}
+
+.picker-content {
+  padding: 16px;
+}
+
+/* Compact padding for time-only pickers */
+.time-picker-input .picker-content {
+  padding: 8px;
+}
+
+/* Larger padding for date-only pickers */
+.date-only-picker .picker-content {
+  padding: 16px;
+}
+
+/* Override MiniCalendar styling in DateTimePicker */
+.date-time-picker-dropdown .calendar-container {
+  gap: 0;
+}
+
+/* Remove calendar's own shadow/border since it's inside form wrapper */
+.date-time-picker-dropdown .calendar {
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* Calendar Styles */
+.calendar-section {
+  margin-bottom: 0;
+  overflow: visible;
+  min-height: 300px;
+}
+
+/* Compact calendar for date-only pickers */
+.date-only-picker .calendar-section {
+  margin-bottom: 0;
+  overflow: visible;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.date-only-picker .calendar-header {
+  margin-bottom: 16px;
+}
+
+.date-only-picker .month-year {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.date-only-picker .nav-button {
+  min-width: 36px;
+  height: 36px;
+}
+
+.nav-button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #5f6368;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-button:hover {
+  background: #f1f3f4;
+}
+
+.month-year {
+  font-size: 14px;
+  font-weight: 500;
+  color: #3c4043;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.day-header {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #5f6368;
+  padding: 4px 2px;
+  text-transform: uppercase;
+}
+
+.calendar-day {
+  text-align: center;
+  padding: 6px 4px;
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  position: relative;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-only-picker .calendar-day {
+  min-width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.calendar-day:hover {
+  background: #f1f3f4;
+}
+
+.calendar-day.other-month {
+  color: #9aa0a6;
+}
+
+.calendar-day.today {
+  background: #e8f0fe;
+  color: #1a73e8;
+  font-weight: 600;
+  border-radius: 50%;
+}
+
+.calendar-day.selected {
+  background: #1a73e8;
+  color: white;
+  font-weight: 600;
+  border-radius: 50%;
+}
+
+.calendar-day.hovered {
+  background: #e8f0fe;
+}
+
+/* Tabs */
+.picker-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e8eaed;
+  padding-bottom: 8px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #5f6368;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  background: #f1f3f4;
+  border-radius: 4px 4px 0 0;
+}
+
+.tab-btn.active {
+  color: #1a73e8;
+  border-bottom-color: #1a73e8;
+}
+
+/* Tab Navigation */
+.tab-navigation {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e8eaed;
+  text-align: center;
+}
+
+.next-tab-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.next-tab-btn:hover {
+  background: #1557b0;
+}
+
+/* Time Picker Styles */
+.time-section {
+  padding-top: 16px;
+}
+
+/* Duration Buttons */
+.duration-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Hide duration buttons for time-only start time picker */
+.time-picker-input .duration-buttons {
+  margin-bottom: 8px;
+}
+
+.duration-label-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #5f6368;
+  margin-right: 8px;
+}
+
+.duration-btn {
+  padding: 5px 10px;
+  background: #f1f3f4;
+  border: 1px solid #dadce0;
+  border-radius: 16px;
+  font-size: 12px;
+  color: #3c4043;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.duration-btn:hover {
+  background: #e8eaed;
+  border-color: #1a73e8;
+  color: #1a73e8;
+}
+
+/* Time List Container */
+.time-list-container {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  background: white;
+}
+
+/* Compact time list for time-only pickers */
+.time-picker-input .time-list-container {
+  border: none;
+  border-radius: 0;
+  max-height: 250px;
+}
+
+.time-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid #f1f3f4;
+  color: #3c4043;
+}
+
+/* Compact time slots for time-only pickers */
+.time-picker-input .time-slot {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.time-slot:last-child {
+  border-bottom: none;
+}
+
+.time-slot:hover {
+  background: #f8f9fa;
+}
+
+.time-slot.selected {
+  background: #e8f0fe;
+  color: #1a73e8;
+  font-weight: 500;
+}
+
+.time-label {
+  font-size: 14px;
+  color: inherit;
+  flex: 1;
+}
+
+.duration-label {
+  font-size: 12px;
+  color: #70757a;
+  margin-left: auto;
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+.time-slot.selected .duration-label {
+  color: #1a73e8;
+  font-weight: 500;
+}
+
+/* Scrollbar styling */
+.time-list-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.time-list-container::-webkit-scrollbar-track {
+  background: #f1f3f4;
+  border-radius: 4px;
+}
+
+.time-list-container::-webkit-scrollbar-thumb {
+  background: #dadce0;
+  border-radius: 4px;
+}
+
+.time-list-container::-webkit-scrollbar-thumb:hover {
+  background: #bdc1c6;
+}
+
+/* Action Buttons */
+.picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e8eaed;
+}
+
+.cancel-btn, .confirm-btn {
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.cancel-btn {
+  background: transparent;
+  color: #5f6368;
+}
+
+.cancel-btn:hover {
+  background: #f1f3f4;
+}
+
+.confirm-btn {
+  background: #1a73e8;
+  color: white;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: #1557b0;
+}
+
+.confirm-btn:disabled {
+  background: #dadce0;
+  color: #9aa0a6;
+  cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .date-time-picker-dropdown {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    max-width: 400px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  
+  .time-list-container {
+    max-height: 200px;
+  }
+  
+  .duration-buttons {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .date-time-input {
+    background: #2d2d2d;
+    border-color: #5f6368;
+    color: #e8eaed;
+  }
+  
+  .date-time-picker-dropdown {
+    background: #2d2d2d;
+    border-color: #5f6368;
+  }
+  
+  .input-text {
+    color: #e8eaed;
+  }
+  
+  .month-year {
+    color: #e8eaed;
+  }
+  
+  .calendar-day {
+    color: #e8eaed;
+  }
+  
+  .calendar-day.other-month {
+    color: #5f6368;
+  }
+  
+  .calendar-day.today {
+    background: #1a73e8;
+    color: white;
+  }
+  
+  .time-list-container {
+    background: #2d2d2d;
+    border-color: #5f6368;
+  }
+  
+  .time-slot {
+    color: #e8eaed;
+    border-bottom-color: #3c4043;
+  }
+  
+  .time-slot:hover {
+    background: #3c4043;
+  }
+  
+  .duration-btn {
+    background: #3c4043;
+    border-color: #5f6368;
+    color: #e8eaed;
+  }
+  
+  .duration-btn:hover {
+    background: #5f6368;
+  }
+  
+  .tab-btn {
+    color: #e8eaed;
+  }
+  
+  .tab-btn:hover {
+    background: #3c4043;
+  }
+}
+

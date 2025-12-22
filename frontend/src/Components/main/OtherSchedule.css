@@ -1,3 +1,4 @@
+/* My Schedule - Google Calendar Style */
 .other-schedule {
   background: var(--component-bg);
   border-radius: 12px;
@@ -8,37 +9,241 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.other-schedule strong {
+/* Header Section */
+.my-schedule-header {
+  margin-bottom: 16px;
+}
+
+.my-schedule-header strong {
   color: var(--text-color);
   font-size: 16px;
   font-weight: 600;
   display: block;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
-.other-schedule ul {
-  list-style: none;
-  margin-top: 10px;
-  padding: 0;
-}
-
-.other-schedule li {
-  padding: 8px 0;
-  color: var(--muted-color);
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-
-.other-schedule li:last-child {
-  border-bottom: none;
-}
-
-.other-schedule li:hover {
-  color: var(--text-color);
+/* View Mode Tabs */
+.view-mode-tabs {
+  display: flex;
+  gap: 4px;
   background: var(--hover-bg);
-  border-radius: 4px;
-  padding-left: 8px;
-  padding-right: 8px;
-  margin-left: -8px;
-  margin-right: -8px;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.view-tab {
+  flex: 1;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.view-tab:hover {
+  background: var(--component-bg);
+  color: var(--text-color);
+}
+
+.view-tab.active {
+  background: var(--accent-color);
+  color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Loading State */
+.schedule-loading-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  gap: 12px;
+  color: var(--muted-color);
+  font-size: 13px;
+}
+
+.spinner-mini {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty State */
+.schedule-empty-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted-color);
+}
+
+.empty-icon-mini {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.schedule-empty-mini p {
+  font-size: 13px;
+  margin: 0;
+  color: var(--muted-color);
+}
+
+/* Schedule List */
+.my-schedule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Schedule Item - Google Calendar Style */
+.my-schedule-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--card-color);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.my-schedule-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  background: var(--hover-bg);
+}
+
+/* Date Badge */
+.meeting-date-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  padding: 8px 6px;
+  background: var(--component-bg);
+  border-radius: 6px;
+  text-align: center;
+  gap: 2px;
+}
+
+.date-day {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-color);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.date-time {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted-color);
+  white-space: nowrap;
+}
+
+/* Meeting Info */
+.meeting-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.meeting-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.meeting-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.meeting-room {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted-color);
+}
+
+.room-icon {
+  font-size: 12px;
+}
+
+.meeting-status-badge {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.status-label {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .view-tab {
+    font-size: 10px;
+    padding: 5px 8px;
+  }
+
+  .meeting-date-badge {
+    min-width: 50px;
+  }
+
+  .date-day {
+    font-size: 10px;
+  }
+
+  .date-time {
+    font-size: 9px;
+  }
+
+  .meeting-title {
+    font-size: 13px;
+  }
 }

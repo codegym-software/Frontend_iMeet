@@ -42,6 +42,29 @@
   min-width: 0; /* Allow shrinking */
 }
 
+.menu-toggle-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--component-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-color);
+  transition: all 0.2s ease;
+}
+
+.menu-toggle-btn:hover {
+  background: var(--hover-bg);
+}
+
+.menu-toggle-icon {
+  line-height: 1;
+}
+
 .logo-section {
   display: flex;
   align-items: center;
@@ -88,7 +111,7 @@
 .date-navigation {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
   margin-left: 16px;
   margin-right: 0; /* Reset negative margin */
 }
