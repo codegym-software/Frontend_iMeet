@@ -3,7 +3,9 @@ import { useHistory } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import authService from '../../services/authService';
 import { FaRegCalendarAlt, FaCog, FaEdit, FaCheck, FaTimes, FaCamera } from 'react-icons/fa';
+import { SiGooglecalendar } from 'react-icons/si';
 import ChangePassword from '../../Components/ChangePassword';
+import { useGoogleCalendar } from '../../hooks/useGoogleCalendar';
 import './Profile.css';
 import calendarLogo from '../../assets/calendar-logo.png';
 
@@ -11,11 +13,22 @@ export default function Profile({ onSave }) {
   const history = useHistory();
   const { user, updateUser } = useAuth();
   
+  // Google Calendar connection
+  const { 
+    isConnected, 
+    connectedEmail, 
+    loading: googleCalendarLoading, 
+    error: googleCalendarError,
+    connect: connectGoogleCalendar,
+    disconnect: disconnectGoogleCalendar,
+    refreshStatus
+  } = useGoogleCalendar();
+  
   // Simplified state management
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [avatar, setAvatar] = useState('https://placehold.co/180x180');
+  const [avatar, setAvatar] = useState(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
   
   // Edit states
@@ -23,6 +36,10 @@ export default function Profile({ onSave }) {
   const [tempName, setTempName] = useState('');
   const [message, setMessage] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Settings dropdown
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
   
   // Avatar upload
   const fileInputRef = useRef(null);
@@ -52,18 +69,102 @@ export default function Profile({ onSave }) {
         setUsername(username || 'user');
         setEmail(email || 'user@example.com');
         
-        // Avatar
-        setAvatar(userData.avatarUrl || 'https://placehold.co/180x180');
+        // Avatar - ưu tiên picture từ OAuth2, sau đó avatarUrl
+        const avatarSource = userData.picture || userData.avatarUrl;
+        if (avatarSource) {
+          setAvatar(avatarSource);
+        } else {
+          setAvatar(null); // Set null để hiển thị initials
+        }
       } else {
         // Fallback dummy data
         setName('User');
         setUsername('user');
         setEmail('user@example.com');
-        setAvatar('https://placehold.co/180x180');
+        setAvatar(null);
       }
     };
     fetchProfile();
   }, [user]);
+  
+  // Effect riêng để kiểm tra calendar callback
+  useEffect(() => {
+    const handleCalendarCallback = async () => {
+      // Kiểm tra localStorage flag từ Google Calendar callback
+      const calendarJustConnected = localStorage.getItem('calendar_just_connected');
+      const calendarError = localStorage.getItem('calendarConnectError');
+      
+      if (calendarJustConnected === 'true') {
+        setMessage('Kết nối Google Calendar thành công!');
+        // Xóa tất cả flags ngay lập tức để tránh trigger lại
+        localStorage.removeItem('calendar_just_connected');
+        localStorage.removeItem('calendar_connecting');
+        localStorage.removeItem('calendar_connecting_time');
+        localStorage.removeItem('calendarConnectSuccess');
+        localStorage.removeItem('calendarConnectError');
+        
+        // Replace history để xóa entry Google OAuth khỏi history stack
+        // Đảm bảo khi user click "quay lại" sẽ về trang chủ, không phải Google OAuth
+        if (window.history.length > 1) {
+          // Replace current entry với profile để xóa entry callback và OAuth
+          window.history.replaceState(null, '', '/profile');
+        }
+        
+        // Refresh status kết nối Google Calendar
+        try {
+          // Đợi một chút để backend cập nhật xong
+          await new Promise(resolve => setTimeout(resolve, 500));
+          // Force refresh Google Calendar status
+          if (typeof refreshStatus === 'function') {
+            await refreshStatus();
+          }
+        } catch (error) {
+          console.error('Error refreshing calendar status:', error);
+        }
+        
+        // Tự động ẩn thông báo sau 3 giây
+        timeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setMessage('');
+          }
+        }, 3000);
+      } else if (calendarError) {
+        // Hiển thị lỗi nếu có
+        setMessage(calendarError);
+        // Xóa flags
+        localStorage.removeItem('calendarConnectError');
+        localStorage.removeItem('calendar_connecting');
+        localStorage.removeItem('calendar_connecting_time');
+        localStorage.removeItem('calendar_just_connected');
+        
+        // Tự động ẩn thông báo sau 5 giây
+        timeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setMessage('');
+          }
+        }, 5000);
+      }
+      
+      // Kiểm tra và clear flag connecting nếu còn sót lại (tránh trigger lại)
+      const isConnecting = localStorage.getItem('calendar_connecting');
+      if (isConnecting === 'true') {
+        const connectingTime = localStorage.getItem('calendar_connecting_time');
+        // Nếu flag cũ quá 5 phút, clear nó
+        if (connectingTime) {
+          const timeDiff = Date.now() - parseInt(connectingTime);
+          if (timeDiff > 5 * 60 * 1000) {
+            localStorage.removeItem('calendar_connecting');
+            localStorage.removeItem('calendar_connecting_time');
+          }
+        } else {
+          // Nếu không có timestamp, clear luôn
+        localStorage.removeItem('calendar_connecting');
+        }
+      }
+    };
+    
+    handleCalendarCallback();
+  }, [refreshStatus]);
   
   // Cleanup effect
   useEffect(() => {
@@ -75,6 +176,23 @@ export default function Profile({ onSave }) {
       }
     };
   }, []);
+
+  // Close settings dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
+        setIsSettingsOpen(false);
+      }
+    };
+
+    if (isSettingsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSettingsOpen]);
 
   // Lấy thông tin user từ context hoặc localStorage
   const getUserData = () => {
@@ -176,7 +294,14 @@ export default function Profile({ onSave }) {
   };
 
   const handleBack = () => {
-    history.goBack();
+    // Luôn về trang chủ thay vì dùng goBack() để tránh quay về Google OAuth
+    // sau khi kết nối Google Calendar thành công
+    history.push('/trang-chu');
+  };
+  
+  const handleLogout = () => {
+    authService.logout();
+    history.push('/login');
   };
   
   const handleSave = () => {
@@ -194,6 +319,52 @@ export default function Profile({ onSave }) {
 
   const handleBackFromChangePassword = () => {
     setShowChangePassword(false);
+  };
+
+  const handleConnectGoogleCalendar = async () => {
+    try {
+      // Clear các flags cũ trước khi bắt đầu kết nối mới
+      localStorage.removeItem('calendar_just_connected');
+      localStorage.removeItem('calendarConnectSuccess');
+      localStorage.removeItem('calendarConnectError');
+      
+      // Lấy auth URL và set flag connecting với timestamp
+      localStorage.setItem('calendar_connecting', 'true');
+      localStorage.setItem('calendar_connecting_time', Date.now().toString());
+      
+      // connectGoogleCalendar sẽ redirect đến Google OAuth
+      await connectGoogleCalendar();
+      // Note: Code sau dòng này sẽ không chạy vì đã redirect
+    } catch (error) {
+      // Nếu có lỗi trước khi redirect, clear flag và hiển thị lỗi
+      localStorage.removeItem('calendar_connecting');
+      localStorage.removeItem('calendar_connecting_time');
+      setMessage(error.message || 'Không thể kết nối Google Calendar');
+      timeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setMessage('');
+        }
+      }, 3000);
+    }
+  };
+
+  const handleDisconnectGoogleCalendar = async () => {
+    try {
+      const message = await disconnectGoogleCalendar();
+      setMessage(message || 'Đã ngắt kết nối Google Calendar thành công');
+      timeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setMessage('');
+        }
+      }, 3000);
+    } catch (error) {
+      setMessage(error.message || 'Không thể ngắt kết nối Google Calendar');
+      timeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setMessage('');
+        }
+      }, 3000);
+    }
   };
 
   // Name edit handlers
@@ -349,14 +520,33 @@ export default function Profile({ onSave }) {
   };
 
 
-  if (showChangePassword) {
-    return <ChangePassword onBack={handleBackFromChangePassword} />;
-  }
-  
-  // Remove the userData check since we're using fallback data
-  
   return (
     <div className="profile-main-container">
+      {/* Change Password Modal Overlay */}
+      {showChangePassword && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            maxWidth: '500px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <ChangePassword onBack={handleBackFromChangePassword} />
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="profile-header">
         {/* Left side with back button, logo and title */}
@@ -382,9 +572,22 @@ export default function Profile({ onSave }) {
           </div>
         </div>
         
-        {/* Settings button */}
-        <div className="profile-settings-button">
-          <FaCog className="profile-settings-icon" />
+        {/* Settings button with dropdown */}
+        <div className="profile-settings-container" ref={settingsRef}>
+          <div 
+            className="profile-settings-button"
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+          >
+            <FaCog className="profile-settings-icon" />
+          </div>
+          
+          {isSettingsOpen && (
+            <div className="profile-settings-dropdown">
+              <button onClick={handleLogout} className="profile-logout-btn">
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {/* Message Display - ở phần trên trang */}
@@ -397,7 +600,9 @@ export default function Profile({ onSave }) {
       <div className="profile-content-layout">
         <div className="profile-avatar-container">
           <div className="profile-avatar-wrapper">
-            <img className="profile-avatar" src={avatar} alt="Avatar" />
+            <div className="profile-avatar">
+              {renderAvatar()}
+            </div>
             {!isOAuth2Account && (
               <div className="profile-avatar-overlay" onClick={handleAvatarClick}>
                 <FaCamera className="profile-avatar-camera" />
@@ -494,6 +699,82 @@ export default function Profile({ onSave }) {
                 value={email} 
                 readOnly={true}
               />
+            </div>
+          </div>
+          
+          {/* Google Calendar Section */}
+          <div className="profile-field-row">
+            <div className="profile-label"></div>
+            <div className="profile-google-calendar-container">
+              {isConnected ? (
+                <>
+                  {/* Trạng thái đã kết nối */}
+                  <div className="profile-google-calendar-status">
+                    <div className="profile-google-calendar-status-header">
+                      <SiGooglecalendar className="profile-google-calendar-icon connected" />
+                      <div className="profile-google-calendar-status-info">
+                        <div className="profile-google-calendar-status-title">
+                          Đã kết nối Google Calendar
+                        </div>
+                        {connectedEmail && (
+                          <div className="profile-google-calendar-status-email">
+                            {connectedEmail}
+                          </div>
+                        )}
+                      </div>
+                      <div className="profile-google-calendar-status-badge">
+                        <span className="status-dot"></span>
+                        Đã kết nối
+                      </div>
+                    </div>
+                    <div className="profile-google-calendar-sync-notice">
+                      <span className="sync-icon">✓</span>
+                      Đồng bộ hóa tự động đã bật
+                    </div>
+                    <button 
+                      className="profile-google-calendar-disconnect-btn" 
+                      onClick={handleDisconnectGoogleCalendar}
+                      disabled={googleCalendarLoading}
+                    >
+                      {googleCalendarLoading ? 'Đang xử lý...' : 'Ngắt kết nối'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Trạng thái chưa kết nối */}
+                  <div className="profile-google-calendar-status">
+                    <div className="profile-google-calendar-status-header">
+                      <SiGooglecalendar className="profile-google-calendar-icon disconnected" />
+                      <div className="profile-google-calendar-status-info">
+                        <div className="profile-google-calendar-status-title">
+                          Chưa kết nối Google Calendar
+                        </div>
+                        <div className="profile-google-calendar-status-description">
+                          Kết nối để đồng bộ lịch họp với Google Calendar
+                        </div>
+                      </div>
+                      <div className="profile-google-calendar-status-badge disconnected">
+                        <span className="status-dot"></span>
+                        Chưa kết nối
+                      </div>
+                    </div>
+                    {googleCalendarError && (
+                      <div className="profile-google-calendar-error">
+                        {googleCalendarError}
+                      </div>
+                    )}
+                    <button 
+                      className="profile-google-calendar-btn" 
+                      onClick={handleConnectGoogleCalendar}
+                      disabled={googleCalendarLoading}
+                    >
+                      <SiGooglecalendar className="profile-google-calendar-icon" />
+                      <span>{googleCalendarLoading ? 'Đang kết nối...' : 'Kết nối Google Calendar'}</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           

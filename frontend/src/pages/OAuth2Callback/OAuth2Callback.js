@@ -36,7 +36,8 @@ const OAuth2Callback = () => {
             username: userData.username,
             email: userData.email,
             fullName: userData.fullName || userData.name,
-            avatarUrl: userData.picture,
+            picture: userData.picture, // Lưu picture từ Google
+            avatarUrl: userData.picture, // Cũng lưu vào avatarUrl để tương thích
             authType: 'cognito-oauth2-server',
             attributes: userData.attributes
           };

@@ -7,7 +7,8 @@ const DeviceAccordion = ({
   onToggle, 
   formData, 
   handleDeviceToggle, 
-  handleQuantityChange 
+  handleQuantityChange,
+  inventory // ✅ Receive inventory prop
 }) => {
   const selectedCount = typeDevices.filter(d => (formData.selectedDevices || []).includes(d.id)).length;
 
@@ -82,10 +83,14 @@ const DeviceAccordion = ({
               {typeDevices.map((device, idx) => {
                 const isSelected = (formData.selectedDevices || []).includes(device?.id);
                 const currentQuantity = (formData.deviceQuantities || {})[device?.id] || 1;
-                const maxQuantity = device?.quantity || 0;
+                
+                // ✅ Use AVAILABLE from inventory, not total quantity!
+                const deviceInfo = inventory?.[device?.id];
+                const available = deviceInfo?.available || 0;
+                const total = deviceInfo?.total || device?.quantity || 0;
               
-                const isOutOfStock = maxQuantity === 0;
-                const canSelect = maxQuantity > 0 || isSelected;
+                const isOutOfStock = available === 0;
+                const canSelect = available > 0 || isSelected;
               
                 return (
                   <tr 
@@ -154,13 +159,14 @@ const DeviceAccordion = ({
                           <input
                             type="number"
                             min="1"
-                            max={maxQuantity}
+                            max={available}
                             value={currentQuantity}
                             onChange={(e) => {
                               e.stopPropagation();
                               handleQuantityChange(device?.id, e.target.value);
                             }}
                             onClick={(e) => e.stopPropagation()}
+                            disabled={isOutOfStock} // ✅ Disable if out of stock
                             style={{
                               width: '60px',
                               padding: '6px 8px',
@@ -168,18 +174,20 @@ const DeviceAccordion = ({
                               borderRadius: '4px',
                               fontSize: '14px',
                               textAlign: 'center',
-                              outline: 'none'
+                              outline: 'none',
+                              cursor: isOutOfStock ? 'not-allowed' : 'text',
+                              backgroundColor: isOutOfStock ? '#f5f5f5' : 'white'
                             }}
                             onFocus={(e) => e.currentTarget.style.borderColor = '#007bff'}
                             onBlur={(e) => e.currentTarget.style.borderColor = '#ced4da'}
                           />
                           <span style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                            / {maxQuantity}
+                            / {available} <span style={{ color: '#999' }}>({total} tổng)</span>
                           </span>
                         </div>
                       ) : (
-                        <span style={{ fontSize: '14px', color: '#999' }}>
-                          {maxQuantity} có sẵn
+                        <span style={{ fontSize: '14px', color: available === 0 ? '#dc3545' : '#999', fontWeight: available === 0 ? '600' : '400' }}>
+                          {available}/{total} {available === 0 && '❌'}
                         </span>
                       )}
                     </td>

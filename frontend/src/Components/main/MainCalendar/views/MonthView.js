@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
+import { CalendarHelpers } from '../utils/CalendarHelpers';
 
 const MonthView = React.memo(({
   selectedDate,
   events,
   onDateSelect,
   handleEventClick,
+  handleEventDoubleClick,
   handleEventMouseEnter,
   handleEventMouseLeave,
   formatTime
@@ -24,11 +26,12 @@ const MonthView = React.memo(({
       currentDay.setDate(startDay.getDate() + index);
 
       const isCurrentMonth = currentDay.getMonth() === month;
-      const isToday = currentDay.toDateString() === today.toDateString();
-      const isSelected = currentDay.toDateString() === selectedDate.toDateString();
+      const isToday = CalendarHelpers.isSameDate(currentDay, today);
+      const isSelected = CalendarHelpers.isSameDate(currentDay, selectedDate);
 
+      // ✅ FIX: Sử dụng isEventOnDate để check chính xác, tránh lỗi timezone
       const dayEvents = events.filter(event =>
-        event.start.toDateString() === currentDay.toDateString()
+        CalendarHelpers.isEventOnDate(event, currentDay)
       );
 
       return {
@@ -55,8 +58,8 @@ const MonthView = React.memo(({
 
       <div className="month-calendar">
         <div className="month-week-days">
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
-            <div key={day} className="month-week-day">{day}</div>
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+            <div key={index} className="month-week-day">{day}</div>
           ))}
         </div>
 
@@ -81,13 +84,16 @@ const MonthView = React.memo(({
                       className="month-event-indicator"
                       style={{ backgroundColor: event.color }}
                       onClick={(e) => handleEventClick(event, e)}
+                      onDoubleClick={(e) => handleEventDoubleClick && handleEventDoubleClick(event, e)}
                       onMouseEnter={(e) => handleEventMouseEnter(event, e)}
                       onMouseLeave={handleEventMouseLeave}
                     >
                       <span className="event-time">
                         {event.allDay ? 'All day' : formatTime(event.start)}
                       </span>
-                      <span className="event-title">{event.title}</span>
+                      <span className="event-title">
+                        {event.title}
+                      </span>
                     </div>
                   ))}
                   {dayInfo.dayEvents.length > 3 && (

@@ -6,10 +6,6 @@ import DeviceList from '../pages/Admin/DeviceList';
 import RoomManagement from '../pages/Admin/RoomManagement';
 import MeetingList from '../pages/Admin/MeetingList';
 import HomePage from '../pages/Admin/HomePage';
-import { DeviceProvider } from '../pages/Admin/DeviceContext';
-import { DeviceTypeProvider } from '../pages/Admin/DeviceTypeContext';
-import { DataPreloaderProvider } from '../pages/Admin/DataPreloaderContext';
-import { ActivityProvider } from '../pages/Admin/ActivityContext';
 import { useAuth } from '../contexts/AuthContext';
 
 const AdminLayout = () => {
@@ -27,12 +23,8 @@ const AdminLayout = () => {
   };
 
   return (
-    <ActivityProvider>
-      <DataPreloaderProvider>
-        <DeviceTypeProvider>
-          <DeviceProvider>
-        <div style={{ display: 'flex', minHeight: '100vh' }}>
-          <Sidebar onLogout={handleLogout} user={user} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar onLogout={handleLogout} user={user} isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
           <div style={{ flex: 1, backgroundColor: '#f5f5f5', marginLeft: isCollapsed ? '80px' : '250px', transition: 'margin-left 0.3s ease' }}>
             {/* Top bar */}
             <div style={{
@@ -84,10 +76,6 @@ const AdminLayout = () => {
             </div>
           </div>
         </div>
-        </DeviceProvider>
-      </DeviceTypeProvider>
-    </DataPreloaderProvider>
-    </ActivityProvider>
   );
 };
 

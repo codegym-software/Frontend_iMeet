@@ -101,8 +101,13 @@ const RecentActivity = () => {
 
   return (
     <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#2c3e50', margin: 0 }}>Recent Activity</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <div>
+          <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#2c3e50', margin: 0 }}>Recent Activity</h3>
+          <p style={{ fontSize: '12px', color: '#6c757d', margin: '4px 0 0 0' }}>
+            Hiển thị hoạt động trong 7 ngày gần đây
+          </p>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '12px', color: '#6c757d', backgroundColor: '#f8f9fa', padding: '4px 8px', borderRadius: '4px' }}>
             {recentActivities.length} hoạt động
@@ -183,9 +188,9 @@ const RecentActivity = () => {
       {allActivities.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', color: '#7f8c8d' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-          <p style={{ fontSize: '14px', margin: 0 }}>Chưa có hoạt động nào</p>
+          <p style={{ fontSize: '14px', margin: 0 }}>Chưa có hoạt động nào trong 7 ngày gần đây</p>
           <p style={{ fontSize: '12px', margin: '8px 0 0 0', color: '#adb5bd' }}>
-            Các hoạt động thêm, sửa, xóa phòng, thiết bị và người dùng sẽ hiển thị ở đây
+            Các hoạt động thêm, sửa, xóa phòng, thiết bị, người dùng và cuộc họp sẽ hiển thị ở đây
           </p>
         </div>
       ) : recentActivities.length === 0 ? (

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import meetingService from '../../services/meetingService';
+import { calendarAPI } from '../../Components/main/MainCalendar/utils/CalendarAPI';
 import { useActivity } from './ActivityContext';
 import { usePreloadedData } from './DataPreloaderContext';
 import MeetingFilters from './components/MeetingFilters';
 import MeetingTableRow from './components/MeetingTableRow';
 import MeetingDetailModal from './components/MeetingDetailModal';
+import ConfirmModal from './components/ConfirmModal';
 
 const MeetingList = () => {
   const { addActivity } = useActivity();
@@ -19,13 +21,16 @@ const MeetingList = () => {
   const [cancellingId, setCancellingId] = useState(null);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null });
 
   const itemsPerPage = 10;
 
   const statusConfig = {
-    booked: { label: 'Đã đặt', color: '#17a2b8', bgColor: '#d1ecf1' },
+    pending: { label: 'Chờ duyệt', color: '#856404', bgColor: '#fff3cd' },
+    booked: { label: 'Chờ duyệt', color: '#856404', bgColor: '#fff3cd' }, // Backward compatibility
     confirmed: { label: 'Đã xác nhận', color: '#28a745', bgColor: '#d4edda' },
-    cancelled: { label: 'Đã hủy', color: '#dc3545', bgColor: '#f8d7da' }
+    cancelled: { label: 'Đã hủy', color: '#dc3545', bgColor: '#f8d7da' },
+    rejected: { label: 'Từ chối', color: '#721c24', bgColor: '#f8d7da' }
   };
 
   // Sync with preloaded data
@@ -35,13 +40,24 @@ const MeetingList = () => {
   }, [preloadedMeetings, meetingsLoading]);
 
   const showNotification = (type, message) => {
-    setNotification({ type, message });
-    const timer = setTimeout(() => setNotification(null), 5000);
-    return () => clearTimeout(timer);
+    setConfirmModal({
+      isOpen: true,
+      type: type,
+      title: type === 'success' ? 'Thành công' : 'Lỗi',
+      message: message,
+      onConfirm: () => setConfirmModal({ ...confirmModal, isOpen: false }),
+      onCancel: null
+    });
   };
 
   const handleCancelMeeting = async (meeting) => {
-    if (window.confirm(`Bạn có chắc chắn muốn hủy cuộc họp "${meeting.title}"?`)) {
+    setConfirmModal({
+      isOpen: true,
+      type: 'warning',
+      title: 'Xác nhận hủy cuộc họp',
+      message: `Bạn có chắc chắn muốn hủy cuộc họp "${meeting.title}"?`,
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, isOpen: false });
       try {
         setCancellingId(meeting.meetingId);
         console.log('Full meeting object:', meeting);
@@ -88,7 +104,9 @@ const MeetingList = () => {
       } finally {
         setCancellingId(null);
       }
-    }
+      },
+      onCancel: () => setConfirmModal({ ...confirmModal, isOpen: false })
+    });
   };
 
   const handleViewDetail = (meeting) => {
@@ -99,7 +117,15 @@ const MeetingList = () => {
   // Filter meetings by status first, then by search term
   const statusFilteredMeetings = filterStatus === 'all' 
     ? allMeetings 
-    : allMeetings.filter(meeting => meeting.bookingStatus?.toLowerCase() === filterStatus.toLowerCase());
+    : allMeetings.filter(meeting => {
+        const meetingStatus = meeting.bookingStatus?.toLowerCase();
+        const targetStatus = filterStatus.toLowerCase();
+        // Map BOOKED to PENDING for filtering
+        if (targetStatus === 'pending' && (meetingStatus === 'pending' || meetingStatus === 'booked')) {
+          return true;
+        }
+        return meetingStatus === targetStatus;
+      });
 
   const filteredMeetings = statusFilteredMeetings.filter(meeting => {
     if (!searchTerm) return true;
@@ -162,36 +188,17 @@ const MeetingList = () => {
         </p>
       </div>
 
-      {/* Notification */}
-      {notification && (
-        <div style={{
-          padding: '16px 20px',
-          marginBottom: '20px',
-          borderRadius: '8px',
-          backgroundColor: notification.type === 'success' ? '#d4edda' : '#f8d7da',
-          color: notification.type === 'success' ? '#155724' : '#721c24',
-          border: `1px solid ${notification.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
-        }}>
-          <span style={{ fontSize: '20px' }}>{notification.type === 'success' ? '✅' : '❌'}</span>
-          <span style={{ flex: 1 }}>{notification.message}</span>
-          <button
-            onClick={() => setNotification(null)}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '20px',
-              cursor: 'pointer',
-              padding: '0',
-              color: 'inherit'
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        type={confirmModal.type}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={confirmModal.onCancel}
+        confirmText="OK"
+        cancelText="Hủy"
+      />
 
       {/* Search and Filter */}
       <MeetingFilters

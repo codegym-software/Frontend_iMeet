@@ -7,14 +7,14 @@ import { MdSettings } from 'react-icons/md';
 import { IoSunny, IoMoon } from 'react-icons/io5';
 import { FaPlus } from 'react-icons/fa';
 import calendarLogo from '../../assets/calendar-logo.png';
-import MeetingForm from './MeetingForm'; // Import MeetingForm
+// MeetingForm will be rendered in Home component instead
 
-const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, toggleTheme, onCreateEvent, onMeetingCreated }) => {
+const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, viewMode, theme, toggleTheme, onCreateEvent, onMeetingCreated, onOpenMeetingForm, isSidebarOpen, onToggleSidebar }) => {
   const { logout, user } = useAuth();
   const history = useHistory();
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [showMeetingForm, setShowMeetingForm] = useState(false); // Thay thế create dropdown
+  // Removed showMeetingForm state - form will be managed in Home component
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
@@ -40,7 +40,8 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
         fullName: oauth2User.name || oauth2User.fullName,
         email: oauth2User.email,
         username: oauth2User.username || oauth2User.email?.split('@')[0],
-        avatarUrl: oauth2User.picture || oauth2User.avatarUrl
+        picture: oauth2User.picture, // Giữ picture riêng
+        avatarUrl: oauth2User.picture || oauth2User.avatarUrl // Fallback
       };
     }
 
@@ -58,7 +59,8 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
     displayName = userData.username;
   }
 
-  const avatarUrl = userData?.avatarUrl;
+  // Ưu tiên picture từ OAuth2, sau đó avatarUrl
+  const avatarUrl = userData?.picture || userData?.avatarUrl;
   const isGooglePicture = avatarUrl && avatarUrl.startsWith('https://');
   const isBase64Data = avatarUrl && avatarUrl.startsWith('data:');
 
@@ -189,37 +191,25 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
 
   // Xử lý Create button - mở form trực tiếp
   const handleCreateClick = () => {
-    setShowMeetingForm(true);
-  };
-
-  const handleMeetingFormClose = () => {
-    setShowMeetingForm(false);
-  };
-
-  const handleMeetingFormSubmit = (meetingData) => {
-    setShowMeetingForm(false);
-    
-    // Gọi callback để refresh meetings
-    if (onMeetingCreated) {
-      onMeetingCreated();
-    }
-    
-    // Legacy callback
-    if (onCreateEvent) {
-      onCreateEvent('Event', selectedDate, meetingData);
+    if (onOpenMeetingForm) {
+      onOpenMeetingForm();
     }
   };
+
+  // Removed handleMeetingFormClose and handleMeetingFormSubmit - handled in Home component
 
   return (
     <div className="top-bar">
       <div className="top-bar-content">
-        {/* Left Section - Menu, Logo, Date Navigation */}
+        {/* Left Section - Menu toggle + Date Navigation */}
         <div className="top-bar-left">
-          <div className="logo-section">
-            <div className="app-logo">
-              <img src={calendarLogo} alt="iMeet Logo" className="logo-image" />
-            </div>
-          </div>
+          <button 
+            className="menu-toggle-btn" 
+            aria-label="Toggle sidebar"
+            onClick={onToggleSidebar}
+          >
+            <span className="menu-toggle-icon">≡</span>
+          </button>
 
           <div className="date-navigation">
             <button className="nav-btn" onClick={goToToday}>
@@ -297,30 +287,34 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
                   {viewType === 'week' && <span className="checkmark">✓</span>}
                 </button>
 
-                <button
-                  className={`dropdown-item ${viewType === 'month' ? 'active' : ''}`}
-                  onClick={() => handleViewSelect('month')}
-                >
-                  <span className="dropdown-item-text">Month</span>
-                  {viewType === 'month' && <span className="checkmark">✓</span>}
-                </button>
+                {/* Chỉ hiển thị Month/Year/Schedule khi ở Calendar mode */}
+                {viewMode !== 'room' && (
+                  <>
+                    <button
+                      className={`dropdown-item ${viewType === 'month' ? 'active' : ''}`}
+                      onClick={() => handleViewSelect('month')}
+                    >
+                      <span className="dropdown-item-text">Month</span>
+                      {viewType === 'month' && <span className="checkmark">✓</span>}
+                    </button>
 
-                <button
-                  className={`dropdown-item ${viewType === 'year' ? 'active' : ''}`}
-                  onClick={() => handleViewSelect('year')}
-                >
-                  <span className="dropdown-item-text">Year</span>
-                  {viewType === 'year' && <span className="checkmark">✓</span>}
-                </button>
+                    <button
+                      className={`dropdown-item ${viewType === 'year' ? 'active' : ''}`}
+                      onClick={() => handleViewSelect('year')}
+                    >
+                      <span className="dropdown-item-text">Year</span>
+                      {viewType === 'year' && <span className="checkmark">✓</span>}
+                    </button>
 
-                {/* Thêm Schedule option */}
-                <button
-                  className={`dropdown-item ${viewType === 'schedule' ? 'active' : ''}`}
-                  onClick={() => handleViewSelect('schedule')}
-                >
-                  <span className="dropdown-item-text">Schedule</span>
-                  {viewType === 'schedule' && <span className="checkmark">✓</span>}
-                </button>
+                    <button
+                      className={`dropdown-item ${viewType === 'schedule' ? 'active' : ''}`}
+                      onClick={() => handleViewSelect('schedule')}
+                    >
+                      <span className="dropdown-item-text">Schedule</span>
+                      {viewType === 'schedule' && <span className="checkmark">✓</span>}
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -381,14 +375,7 @@ const TopBar = ({ selectedDate, onDateChange, viewType, onViewChange, theme, tog
         </div>
       </div>
 
-      {/* Render Meeting Form Modal */}
-      {showMeetingForm && (
-        <MeetingForm
-          selectedDate={selectedDate}
-          onClose={handleMeetingFormClose}
-          onSubmit={handleMeetingFormSubmit}
-        />
-      )}
+      {/* Meeting Form is now rendered in Home component */}
     </div>
   );
 };
